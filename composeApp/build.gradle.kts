@@ -12,33 +12,29 @@ plugins {
     alias(libs.plugins.kotlinSerialization)
 }
 
-// Load API Key from local.properties
+// Load API Key from local.properties and generate BuildConfig
+val localPropertiesFile = rootProject.file("local.properties")
 val localProperties = Properties().apply {
-    val localPropertiesFile = rootProject.file("local.properties")
     if (localPropertiesFile.exists()) {
         load(localPropertiesFile.inputStream())
     }
 }
 val newsApiKey: String = localProperties.getProperty("NEWS_API_KEY") ?: "YOUR_API_KEY_HERE"
 
-// Generate BuildConfig for KMP
-val generateBuildConfig by tasks.registering {
-    val outputDir = layout.buildDirectory.dir("generated/buildconfig/commonMain/kotlin")
-    outputs.dir(outputDir)
-    doLast {
-        val dir = outputDir.get().asFile.resolve("org/example/newsshorts")
-        dir.mkdirs()
-        dir.resolve("BuildConfig.kt").writeText(
-            """
-            |package org.example.newsshorts
-            |
-            |object BuildConfig {
-            |    const val NEWS_API_KEY: String = "$newsApiKey"
-            |}
-            """.trimMargin()
-        )
-    }
-}
+// Generate BuildConfig.kt file
+val buildConfigDir = file("src/commonMain/kotlin/org/example/newsshorts/config")
+val buildConfigFile = file("src/commonMain/kotlin/org/example/newsshorts/config/BuildConfig.kt")
+
+buildConfigDir.mkdirs()
+buildConfigFile.writeText(
+    """
+    |package org.example.newsshorts.config
+    |
+    |object BuildConfig {
+    |    const val NEWS_API_KEY: String = "$newsApiKey"
+    |}
+    """.trimMargin()
+)
 
 kotlin {
     // Suppress expect/actual class warnings for all targets
@@ -48,7 +44,6 @@ kotlin {
                 compilerOptions {
                     freeCompilerArgs.add("-Xexpect-actual-classes")
                 }
-                dependsOn(generateBuildConfig)
             }
         }
     }
@@ -83,9 +78,6 @@ kotlin {
     }
     
     sourceSets {
-        commonMain {
-            kotlin.srcDir(layout.buildDirectory.dir("generated/buildconfig/commonMain/kotlin"))
-        }
         commonMain.dependencies {
             implementation(compose.runtime)
             implementation(compose.foundation)

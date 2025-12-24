@@ -4,7 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
-import org.example.newsshorts.BuildConfig
+import org.example.newsshorts.config.BuildConfig
 import org.example.newsshorts.domain.model.NewsCategory
 import org.example.newsshorts.domain.model.NewsError
 import org.example.newsshorts.domain.model.NewsResult
