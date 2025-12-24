@@ -101,25 +101,6 @@ The app uses [NewsAPI.org](https://newsapi.org/) for fetching real news. To use 
 
 **Note**: The app includes mock data that works without an API key for demo purposes.
 
-## 🎨 Design System
-
-### Color Palette (Midnight Ocean Theme)
-
-| Color | Hex | Usage |
-|-------|-----|-------|
-| Midnight Blue | `#0D1B2A` | Background |
-| Deep Navy | `#1B263B` | Surface |
-| Neon Mint | `#4ECDC4` | Primary |
-| Electric Coral | `#FF6B6B` | Secondary |
-| Golden Amber | `#FFBE0B` | Tertiary |
-| Vivid Violet | `#9B5DE5` | Accent |
-
-### Typography
-
-- Headlines: Extra Bold
-- Body: Regular
-- Labels: Semi Bold
-
 ## 📁 Project Structure
 
 ```
@@ -137,10 +118,6 @@ StartComposeMultiplatform/
 ├── gradle/                 # Gradle configuration
 └── build.gradle.kts        # Root build file
 ```
-
-## 📜 License
-
-This project is available under the MIT License.
 
 ## 🤝 Contributing
 
