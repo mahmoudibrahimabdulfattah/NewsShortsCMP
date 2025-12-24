@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
+import org.example.newsshorts.BuildConfig
 import org.example.newsshorts.domain.model.NewsCategory
 import org.example.newsshorts.domain.model.NewsError
 import org.example.newsshorts.domain.model.NewsResult
@@ -135,8 +136,7 @@ class NewsApiClient(
     }
 
     companion object {
-        // Note: In production, this should be stored securely using BuildConfig or environment variables
-        private const val API_KEY: String = "YOUR_API_KEY_HERE"
+        private val API_KEY: String = BuildConfig.NEWS_API_KEY
         private const val PARAM_API_KEY: String = "apiKey"
         private const val PARAM_COUNTRY: String = "country"
         private const val PARAM_CATEGORY: String = "category"
