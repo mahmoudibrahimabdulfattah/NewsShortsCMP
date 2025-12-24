@@ -136,7 +136,7 @@ class NewsApiClient(
 
     companion object {
         // Note: In production, this should be stored securely using BuildConfig or environment variables
-        private const val API_KEY: String = "22e6a1a962eb42519f47eb018cc95bc9"
+        private const val API_KEY: String = "YOUR_API_KEY_HERE"
         private const val PARAM_API_KEY: String = "apiKey"
         private const val PARAM_COUNTRY: String = "country"
         private const val PARAM_CATEGORY: String = "category"
