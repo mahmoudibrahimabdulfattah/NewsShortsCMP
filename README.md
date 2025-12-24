@@ -97,7 +97,7 @@ The app uses [NewsAPI.org](https://newsapi.org/) for fetching real news. To use 
 
 1. Get a free API key from [NewsAPI.org](https://newsapi.org/register)
 2. Open `composeApp/src/commonMain/kotlin/org/example/newsshorts/data/remote/NewsApiClient.kt`
-3. Replace `YOUR_NEWS_API_KEY` with your actual API key
+3. Replace `BuildConfig.NEWS_API_KEY` with your actual API key
 
 **Note**: The app includes mock data that works without an API key for demo purposes.
 
