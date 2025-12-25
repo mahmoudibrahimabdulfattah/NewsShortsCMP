@@ -47,8 +47,9 @@ A beautiful **Compose Multiplatform** news reader app with a TikTok-style vertic
 ## 📸 Screenshots
 
 | For You | Countries | Profile |
-|---------|-----------|---------|
-| Vertical news feed | News by country | Settings & saved |
+|:-------:|:---------:|:-------:|
+| <img width="250" alt="Vertical news feed" src="https://github.com/user-attachments/assets/c7ad4e78-c503-421f-8ef7-f0b3f20c882b" /> | <img width="250" alt="News by country" src="https://github.com/user-attachments/assets/c4a57c88-44be-4647-b747-242f3ef578ef" /> | <img width="250" alt="Settings & saved" src="https://github.com/user-attachments/assets/df653ff3-3ab1-4dab-a151-4c0e32f8bffe" /> |
+
 
 ---
 
