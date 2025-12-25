@@ -48,7 +48,7 @@ A beautiful **Compose Multiplatform** news reader app with a TikTok-style vertic
 
 | For You | Countries | Profile |
 |:-------:|:---------:|:-------:|
-| <img width="290" height="643" alt="For You" src="https://github.com/user-attachments/assets/5ce51ae0-c95a-41fe-abb1-b66e755204c1" /> | <img width="290" height="643" alt="Country" src="https://github.com/user-attachments/assets/5a6572c1-096b-4d5f-85d5-2705da828a4f" /> | <img width="250" alt="Settings & saved" src="https://github.com/user-attachments/assets/df653ff3-3ab1-4dab-a151-4c0e32f8bffe" /> |
+| <img width="290" height="643" alt="For You" src="https://github.com/user-attachments/assets/5ce51ae0-c95a-41fe-abb1-b66e755204c1" /> | <img width="290" height="643" alt="Country" src="https://github.com/user-attachments/assets/5a6572c1-096b-4d5f-85d5-2705da828a4f" /> | <img width="290" height="643" alt="Profile" src="https://github.com/user-attachments/assets/30677026-4ebb-463c-ae57-704537c6eff8" /> |
 
 
 ---
