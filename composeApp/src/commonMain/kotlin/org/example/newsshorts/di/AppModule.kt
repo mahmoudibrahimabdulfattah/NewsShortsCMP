@@ -12,10 +12,8 @@ fun initializeKoin(
     return startKoin {
         appDeclaration()
         modules(
-            dataModule,
-            domainModule,
-            presentationModule,
-            *platformModules.toTypedArray()
+            platformModules +
+            listOf(dataModule, domainModule, presentationModule)
         )
     }
 }

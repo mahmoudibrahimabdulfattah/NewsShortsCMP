@@ -8,4 +8,3 @@ val domainModule = module {
     factory { GetTopHeadlinesUseCase(newsRepository = get()) }
     factory { SearchNewsUseCase(newsRepository = get()) }
 }
-

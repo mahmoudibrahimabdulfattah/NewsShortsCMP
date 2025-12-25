@@ -39,13 +39,13 @@ class NewsViewModel(
 
     private fun loadSavedSettings() {
         viewModelScope.launch {
-            val savedNewsLanguage = settingsManager.newsLanguageFlow.first()
-            val savedAppLocale = settingsManager.appLocaleFlow.first()
-            val savedCountry = settingsManager.selectedCountryFlow.first()
-            val newsLanguage = LanguageOption.entries.find { it.code == savedNewsLanguage }
+            val savedNewsLanguage: String = settingsManager.newsLanguageFlow.first()
+            val savedAppLocale: String = settingsManager.appLocaleFlow.first()
+            val savedCountry: String = settingsManager.selectedCountryFlow.first()
+            val newsLanguage: LanguageOption = LanguageOption.entries.find { it.code == savedNewsLanguage }
                 ?: LanguageOption.ENGLISH
-            val appLocale = AppLocale.fromCode(savedAppLocale)
-            val country = CountryOption.entries.find { it.code == savedCountry }
+            val appLocale: AppLocale = AppLocale.fromCode(savedAppLocale)
+            val country: CountryOption = CountryOption.entries.find { it.code == savedCountry }
                 ?: CountryOption.UNITED_STATES
             mutableState.update { state ->
                 state.copy(
@@ -55,7 +55,7 @@ class NewsViewModel(
                     isFirstLaunch = false
                 )
             }
-            loadNews()
+            loadNewsWithCache()
         }
     }
 
@@ -84,13 +84,11 @@ class NewsViewModel(
         mutableState.update { state ->
             state.copy(
                 selectedCategory = category,
-                isLoading = true,
-                articles = emptyList(),
                 currentArticleIndex = 0,
                 errorMessage = null
             )
         }
-        loadNews()
+        loadNewsWithCache()
     }
 
     private fun handleSelectCountry(country: CountryOption) {
@@ -98,8 +96,6 @@ class NewsViewModel(
         mutableState.update { state ->
             state.copy(
                 selectedCountry = country,
-                isLoading = true,
-                articles = emptyList(),
                 currentArticleIndex = 0,
                 errorMessage = null
             )
@@ -107,36 +103,35 @@ class NewsViewModel(
         viewModelScope.launch {
             settingsManager.saveSelectedCountry(country.code)
         }
-        loadNewsForCountry(country)
+        loadNewsForCountryWithCache(country)
     }
 
-    private fun loadNewsForCountry(country: CountryOption) {
-        viewModelScope.launch {
-            val currentState = mutableState.value
-            val request = GetTopHeadlinesRequest(
-                category = currentState.selectedCategory,
-                country = country.code,
-                countryName = country.displayName,
-                language = currentState.selectedLanguage.code,
-                useCountry = true
-            )
-            when (val result = getTopHeadlinesUseCase.execute(request)) {
-                is NewsResult.Success -> {
-                    mutableState.update { state ->
-                        state.copy(
-                            isLoading = false,
-                            isRefreshing = false,
-                            articles = result.data,
-                            errorMessage = null,
-                            currentArticleIndex = 0,
-                            isOfflineMode = false
-                        )
-                    }
-                }
-                is NewsResult.Error -> {
-                    handleNewsError(result.error.message)
-                }
+    private fun loadNewsForCountryWithCache(country: CountryOption) {
+        val currentState: NewsUiState = mutableState.value
+        val request = GetTopHeadlinesRequest(
+            category = currentState.selectedCategory,
+            country = country.code,
+            countryName = country.displayName,
+            language = currentState.selectedLanguage.code,
+            useCountry = true
+        )
+        val cachedResult = getTopHeadlinesUseCase.getCached(request)
+        if (cachedResult is NewsResult.Success && cachedResult.data.isNotEmpty()) {
+            mutableState.update { state ->
+                state.copy(
+                    isLoading = false,
+                    articles = cachedResult.data,
+                    errorMessage = null,
+                    isBackgroundRefreshing = true
+                )
             }
+        } else {
+            mutableState.update { state ->
+                state.copy(isLoading = true, articles = emptyList())
+            }
+        }
+        viewModelScope.launch {
+            fetchNewsInBackground(request)
         }
     }
 
@@ -145,8 +140,6 @@ class NewsViewModel(
         mutableState.update { state ->
             state.copy(
                 selectedLanguage = language,
-                isLoading = true,
-                articles = emptyList(),
                 currentArticleIndex = 0,
                 errorMessage = null
             )
@@ -155,7 +148,7 @@ class NewsViewModel(
             settingsManager.saveNewsLanguage(language.code)
             mutableEffect.emit(NewsUiEffect.ShowToast("${language.displayName}"))
         }
-        loadNews()
+        loadNewsWithCache()
     }
 
     private fun handleSelectAppLocale(locale: AppLocale) {
@@ -165,7 +158,7 @@ class NewsViewModel(
         }
         viewModelScope.launch {
             settingsManager.saveAppLocale(locale.code)
-            val message = if (locale == AppLocale.ARABIC) {
+            val message: String = if (locale == AppLocale.ARABIC) {
                 "تم تغيير اللغة إلى العربية"
             } else {
                 "Language changed to English"
@@ -180,8 +173,6 @@ class NewsViewModel(
         mutableState.update { state ->
             state.copy(
                 currentTab = tab,
-                isLoading = needsLoading,
-                articles = if (needsLoading) emptyList() else state.articles,
                 currentArticleIndex = 0,
                 errorMessage = null
             )
@@ -189,10 +180,10 @@ class NewsViewModel(
         if (needsLoading) {
             when (tab) {
                 NavigationTab.COUNTRIES -> {
-                    loadNewsForCountry(mutableState.value.selectedCountry)
+                    loadNewsForCountryWithCache(mutableState.value.selectedCountry)
                 }
                 NavigationTab.FOR_YOU -> {
-                    loadNews()
+                    loadNewsWithCache()
                 }
                 NavigationTab.PROFILE -> {
                     // No loading needed
@@ -229,8 +220,8 @@ class NewsViewModel(
     private fun handleSaveArticle(articleIndex: Int) {
         val article = mutableState.value.articles.getOrNull(articleIndex) ?: return
         val currentSaved = mutableState.value.savedArticles.toMutableList()
-        val savedIndex = currentSaved.indexOfFirst { it.articleUrl == article.articleUrl }
-        val isAlreadySaved = savedIndex != -1
+        val savedIndex: Int = currentSaved.indexOfFirst { it.articleUrl == article.articleUrl }
+        val isAlreadySaved: Boolean = savedIndex != -1
         if (isAlreadySaved) {
             currentSaved.removeAt(savedIndex)
             mutableState.update { state ->
@@ -296,15 +287,79 @@ class NewsViewModel(
             state.copy(
                 isLoading = false,
                 isRefreshing = false,
+                isBackgroundRefreshing = false,
                 errorMessage = errorMessage,
                 isOfflineMode = true
             )
         }
     }
 
+    private fun loadNewsWithCache() {
+        val currentState: NewsUiState = mutableState.value
+        val isCountriesTab: Boolean = currentState.currentTab == NavigationTab.COUNTRIES
+        val request = GetTopHeadlinesRequest(
+            category = currentState.selectedCategory,
+            country = currentState.selectedCountry.code,
+            countryName = currentState.selectedCountry.displayName,
+            language = currentState.selectedLanguage.code,
+            useCountry = isCountriesTab
+        )
+        val cachedResult = getTopHeadlinesUseCase.getCached(request)
+        if (cachedResult is NewsResult.Success && cachedResult.data.isNotEmpty()) {
+            mutableState.update { state ->
+                state.copy(
+                    isLoading = false,
+                    articles = cachedResult.data,
+                    errorMessage = null,
+                    isBackgroundRefreshing = true
+                )
+            }
+        } else {
+            mutableState.update { state ->
+                state.copy(isLoading = true, articles = emptyList())
+            }
+        }
+        viewModelScope.launch {
+            fetchNewsInBackground(request)
+        }
+    }
+
+    private suspend fun fetchNewsInBackground(request: GetTopHeadlinesRequest) {
+        when (val result = getTopHeadlinesUseCase.execute(request)) {
+            is NewsResult.Success -> {
+                mutableState.update { state ->
+                    state.copy(
+                        isLoading = false,
+                        isRefreshing = false,
+                        isBackgroundRefreshing = false,
+                        articles = result.data,
+                        errorMessage = null,
+                        currentArticleIndex = 0,
+                        isOfflineMode = false
+                    )
+                }
+            }
+            is NewsResult.Error -> {
+                val hasArticles: Boolean = mutableState.value.articles.isNotEmpty()
+                if (hasArticles) {
+                    mutableState.update { state ->
+                        state.copy(
+                            isLoading = false,
+                            isRefreshing = false,
+                            isBackgroundRefreshing = false,
+                            isOfflineMode = true
+                        )
+                    }
+                } else {
+                    handleNewsError(result.error.message)
+                }
+            }
+        }
+    }
+
     private fun loadNews() {
         viewModelScope.launch {
-            val currentState = mutableState.value
+            val currentState: NewsUiState = mutableState.value
             val isCountriesTab: Boolean = currentState.currentTab == NavigationTab.COUNTRIES
             val request = GetTopHeadlinesRequest(
                 category = currentState.selectedCategory,

@@ -39,7 +39,7 @@ class MainActivity : ComponentActivity() {
 
     private fun openUrl(url: String) {
         try {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            val intent: Intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
             startActivity(intent)
         } catch (exception: Exception) {
             showToast("Unable to open link")
@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun shareContent(title: String, url: String) {
-        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+        val shareIntent: Intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_SUBJECT, title)
             putExtra(Intent.EXTRA_TEXT, "$title\n\nRead more: $url")

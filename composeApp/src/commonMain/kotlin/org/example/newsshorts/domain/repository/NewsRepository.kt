@@ -25,5 +25,21 @@ interface NewsRepository {
     ): NewsResult<List<NewsArticle>>
 
     suspend fun fetchNewsByQuery(query: String): NewsResult<List<NewsArticle>>
-}
 
+    fun getCachedTopHeadlines(
+        category: NewsCategory,
+        country: String
+    ): NewsResult<List<NewsArticle>>?
+
+    fun getCachedNewsByLanguage(
+        category: NewsCategory,
+        language: String
+    ): NewsResult<List<NewsArticle>>?
+
+    fun getCachedNewsByCountryAndLanguage(
+        countryName: String,
+        language: String
+    ): NewsResult<List<NewsArticle>>?
+
+    fun hasCachedNews(cacheKey: String): Boolean
+}

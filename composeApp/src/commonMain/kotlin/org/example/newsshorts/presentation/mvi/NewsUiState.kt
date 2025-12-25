@@ -11,6 +11,7 @@ data class NewsUiState(
     val currentArticleIndex: Int = 0,
     val errorMessage: String? = null,
     val isRefreshing: Boolean = false,
+    val isBackgroundRefreshing: Boolean = false,
     val selectedCountry: CountryOption = CountryOption.UNITED_STATES,
     val selectedLanguage: LanguageOption = LanguageOption.ENGLISH,
     val appLocale: AppLocale = AppLocale.ENGLISH,

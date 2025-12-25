@@ -19,8 +19,10 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -232,7 +234,7 @@ private fun getHeaderSubtitle(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun NewsArticlesPager(
     uiState: NewsUiState,
@@ -253,19 +255,25 @@ private fun NewsArticlesPager(
             pagerState.scrollToPage(0)
         }
     }
-    VerticalPager(
-        state = pagerState,
-        modifier = modifier.fillMaxSize(),
-        beyondViewportPageCount = 2
-    ) { pageIndex ->
-        val article = uiState.articles[pageIndex]
-        val isArticleSaved = uiState.savedArticles.any { it.articleUrl == article.articleUrl }
-        NewsCard(
-            article = article,
-            isSaved = isArticleSaved,
-            onOpenArticle = { onEvent(NewsUiEvent.OpenArticle(pageIndex)) },
-            onShareArticle = { onEvent(NewsUiEvent.ShareArticle(pageIndex)) },
-            onSaveArticle = { onEvent(NewsUiEvent.SaveArticle(pageIndex)) }
-        )
+    PullToRefreshBox(
+        isRefreshing = uiState.isRefreshing,
+        onRefresh = { onEvent(NewsUiEvent.RefreshNews) },
+        modifier = modifier.fillMaxSize()
+    ) {
+        VerticalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+            beyondViewportPageCount = 2
+        ) { pageIndex ->
+            val article = uiState.articles[pageIndex]
+            val isArticleSaved: Boolean = uiState.savedArticles.any { it.articleUrl == article.articleUrl }
+            NewsCard(
+                article = article,
+                isSaved = isArticleSaved,
+                onOpenArticle = { onEvent(NewsUiEvent.OpenArticle(pageIndex)) },
+                onShareArticle = { onEvent(NewsUiEvent.ShareArticle(pageIndex)) },
+                onSaveArticle = { onEvent(NewsUiEvent.SaveArticle(pageIndex)) }
+            )
+        }
     }
 }

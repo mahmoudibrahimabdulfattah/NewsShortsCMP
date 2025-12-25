@@ -4,7 +4,7 @@ import org.example.newsshorts.presentation.viewmodel.NewsViewModel
 import org.koin.dsl.module
 
 val presentationModule = module {
-    single {
+    single(createdAtStart = false) {
         NewsViewModel(
             getTopHeadlinesUseCase = get(),
             settingsManager = get()

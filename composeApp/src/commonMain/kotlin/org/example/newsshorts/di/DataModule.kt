@@ -9,11 +9,11 @@ import org.example.newsshorts.domain.repository.NewsRepository
 import org.koin.dsl.module
 
 val dataModule = module {
-    single { createHttpClient() }
-    single { NewsApiClient(httpClient = get()) }
-    single { NewsLocalDataSource() }
-    single { SettingsManager(settingsStorage = get()) }
-    single<NewsRepository> {
+    single(createdAtStart = false) { createHttpClient() }
+    single(createdAtStart = false) { NewsApiClient(httpClient = get()) }
+    single(createdAtStart = false) { NewsLocalDataSource(settingsStorage = get()) }
+    single(createdAtStart = false) { SettingsManager(settingsStorage = get()) }
+    single<NewsRepository>(createdAtStart = false) {
         NewsRepositoryImpl(
             newsApiClient = get(),
             localDataSource = get()

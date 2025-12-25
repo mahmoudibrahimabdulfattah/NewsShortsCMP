@@ -38,6 +38,37 @@ class GetTopHeadlinesUseCase(
         }
     }
 
+    fun getCached(
+        request: GetTopHeadlinesRequest = GetTopHeadlinesRequest()
+    ): NewsResult<List<NewsArticle>>? {
+        return when {
+            request.useCountry && request.language != null && request.language != DEFAULT_LANGUAGE -> {
+                newsRepository.getCachedNewsByCountryAndLanguage(
+                    countryName = request.countryName,
+                    language = request.language
+                )
+            }
+            request.useCountry -> {
+                newsRepository.getCachedNewsByCountryAndLanguage(
+                    countryName = request.countryName,
+                    language = DEFAULT_LANGUAGE
+                )
+            }
+            request.language != null && request.language != DEFAULT_LANGUAGE -> {
+                newsRepository.getCachedNewsByLanguage(
+                    category = request.category,
+                    language = request.language
+                )
+            }
+            else -> {
+                newsRepository.getCachedTopHeadlines(
+                    category = request.category,
+                    country = request.country
+                )
+            }
+        }
+    }
+
     companion object {
         private const val DEFAULT_LANGUAGE: String = "en"
     }
@@ -50,4 +81,3 @@ data class GetTopHeadlinesRequest(
     val language: String? = null,
     val useCountry: Boolean = false
 )
-
