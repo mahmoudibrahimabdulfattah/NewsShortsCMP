@@ -3,7 +3,6 @@ package org.example.newsshorts.data.remote
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
-import io.ktor.client.request.parameter
 import org.example.newsshorts.domain.model.NewsCategory
 import org.example.newsshorts.domain.model.NewsError
 import org.example.newsshorts.domain.model.NewsResult
@@ -57,11 +56,8 @@ class NewsApiClient(
         category: String?,
     ): NewsResult<NewsApiResponse> {
         return try {
-            val response: BackendFeedResponse = httpClient.get(ApiConfig.feedUrl()) {
-                language?.let { parameter("lang", it) }
-                category?.let { parameter("category", it) }
-                parameter("limit", DEFAULT_PAGE_SIZE)
-            }.body()
+            val response: BackendFeedResponse =
+                httpClient.get(ApiConfig.feedUrl(language, category)).body()
             NewsResult.Success(response.toNewsApiResponse())
         } catch (exception: Exception) {
             val error: NewsError = when {
@@ -132,8 +128,4 @@ class NewsApiClient(
         (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
 
     private fun pad(value: Long): String = if (value < 10) "0$value" else "$value"
-
-    companion object {
-        private const val DEFAULT_PAGE_SIZE: Int = 50
-    }
 }

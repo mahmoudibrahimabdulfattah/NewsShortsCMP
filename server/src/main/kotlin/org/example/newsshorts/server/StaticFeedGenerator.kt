@@ -1,0 +1,73 @@
+package org.example.newsshorts.server
+
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import org.example.newsshorts.server.config.FeedCatalog
+import org.example.newsshorts.server.ingest.IngestionPipeline
+import org.example.newsshorts.server.ingest.RssFetcher
+import org.example.newsshorts.server.model.FeedResponse
+import org.example.newsshorts.server.store.ArticleStore
+import org.example.newsshorts.server.summarize.buildSummarizer
+import org.slf4j.LoggerFactory
+import java.io.File
+
+/**
+ * Runs one ingestion cycle and writes the feed as static JSON files.
+ *
+ * This is what CI publishes to GitHub Pages: the feed is read-only and
+ * refreshed on a schedule, so a CDN serves it better (and cheaper) than a
+ * long-running server. The Ktor server in [main] stays for local development.
+ *
+ * Layout mirrors the live API's query parameters:
+ *   v1/feed/{lang}.json              — all categories
+ *   v1/feed/{lang}-{category}.json   — one category
+ *   v1/meta.json                     — available languages and categories
+ */
+object StaticFeedGenerator {
+
+    private val log = LoggerFactory.getLogger(StaticFeedGenerator::class.java)
+    private val json = Json { prettyPrint = false; encodeDefaults = true }
+
+    private const val ARTICLES_PER_FILE = 100
+
+    fun generate(outputDir: File, dbPath: String) = runBlocking {
+        val store = ArticleStore(dbPath)
+        IngestionPipeline(store, RssFetcher(), buildSummarizer()).runCycle()
+
+        val feedDir = File(outputDir, "v1/feed").apply { mkdirs() }
+        var filesWritten = 0
+
+        FeedCatalog.languages.forEach { language ->
+            write(File(feedDir, "$language.json"), store, language, category = null)
+            filesWritten++
+
+            FeedCatalog.categories.forEach { category ->
+                write(File(feedDir, "$language-$category.json"), store, language, category)
+                filesWritten++
+            }
+        }
+
+        File(outputDir, "v1/meta.json").writeText(
+            json.encodeToString(
+                MetaResponse(
+                    languages = FeedCatalog.languages.toList(),
+                    categories = FeedCatalog.categories.toList(),
+                )
+            )
+        )
+        filesWritten++
+
+        // Without this, GitHub Pages runs the output through Jekyll.
+        File(outputDir, ".nojekyll").writeText("")
+
+        log.info("Wrote $filesWritten JSON files to ${outputDir.absolutePath}")
+    }
+
+    private fun write(target: File, store: ArticleStore, language: String, category: String?) {
+        val (articles, total) = store.feed(language, category, ARTICLES_PER_FILE, offset = 0)
+        target.writeText(json.encodeToString(FeedResponse(articles = articles, total = total)))
+    }
+}
+
+@kotlinx.serialization.Serializable
+private data class MetaResponse(val languages: List<String>, val categories: List<String>)

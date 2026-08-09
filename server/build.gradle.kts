@@ -11,6 +11,15 @@ application {
     mainClass.set("org.example.newsshorts.server.ApplicationKt")
 }
 
+/** Runs one ingestion cycle and writes the feed as static JSON for GitHub Pages. */
+tasks.register<JavaExec>("generateStaticFeed") {
+    group = "application"
+    description = "Fetches, summarizes, and writes the news feed as static JSON files."
+    mainClass.set("org.example.newsshorts.server.ApplicationKt")
+    classpath = sourceSets["main"].runtimeClasspath
+    args("--generate-static", project.findProperty("outputDir")?.toString() ?: "build/site")
+}
+
 kotlin {
     jvmToolchain(17)
 }

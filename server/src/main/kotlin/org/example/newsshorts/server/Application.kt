@@ -22,7 +22,19 @@ import org.example.newsshorts.server.model.FeedResponse
 import org.example.newsshorts.server.store.ArticleStore
 import org.example.newsshorts.server.summarize.buildSummarizer
 
-fun main() {
+fun main(args: Array<String>) {
+    val dbPath = System.getenv("DB_PATH") ?: "news.db"
+
+    // `--generate-static <dir>` runs one ingestion cycle and exits, writing the
+    // feed as JSON files (used by CI to publish to GitHub Pages).
+    val staticIndex = args.indexOf("--generate-static")
+    if (staticIndex >= 0) {
+        val outputDir = args.getOrNull(staticIndex + 1)
+            ?: error("--generate-static requires an output directory")
+        StaticFeedGenerator.generate(java.io.File(outputDir), dbPath)
+        return
+    }
+
     val port = (System.getenv("PORT") ?: "8080").toInt()
     embeddedServer(Netty, port = port, host = "0.0.0.0", module = Application::module).start(wait = true)
 }

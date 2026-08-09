@@ -1,0 +1,64 @@
+name: Publish news feed
+
+# Fetches RSS sources, summarizes new articles with Gemini, and publishes the
+# result as static JSON to GitHub Pages. The feed is read-only and refreshed on
+# a schedule, so a CDN serves it better than a long-running server — and it
+# costs nothing on a public repository.
+on:
+  schedule:
+    - cron: "0,30 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "server/**"
+      - ".github/workflows/publish-feed.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running publish finish rather than cancelling it — a half-written feed
+# is worse than a slightly stale one.
+concurrency:
+  group: publish-feed
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Carries summaries between runs so already-summarized articles don't
+      # spend Gemini quota again.
+      - name: Restore article database
+        uses: actions/cache@v4
+        with:
+          path: news.db
+          key: news-db-${{ github.run_id }}
+          restore-keys: news-db-
+
+      - name: Generate feed
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DB_PATH: news.db
+          MAX_SUMMARIES_PER_CYCLE: "60"
+        run: ./gradlew :server:generateStaticFeed -PoutputDir=build/site --no-daemon
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
