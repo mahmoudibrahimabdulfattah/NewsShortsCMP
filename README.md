@@ -116,41 +116,46 @@ export GEMINI_API_KEY=your_key_here
 ./gradlew :server:run   # starts on http://localhost:8091
 ```
 
-By default the app points at `http://localhost:8091`. Override in
-`local.properties`:
+### Published feed
 
-```properties
-BACKEND_BASE_URL=https://your-deployed-server.example.com
+The feed is read-only and refreshed on a schedule, so instead of running a
+server around the clock,
+[`.github/workflows/publish-feed.yml`](.github/workflows/publish-feed.yml) runs
+the ingestion cycle every 30 minutes and publishes the result as static JSON to
+GitHub Pages:
+
+```
+https://<user>.github.io/<repo>/v1/feed/{lang}.json
+https://<user>.github.io/<repo>/v1/feed/{lang}-{category}.json
+https://<user>.github.io/<repo>/v1/meta.json
 ```
 
-Notes on `BACKEND_BASE_URL`:
+The local Ktor server serves the same paths, so `BACKEND_BASE_URL` can point at
+either one.
 
-- The Android emulator reaches the host machine automatically (`localhost` is
-  rewritten to `10.0.2.2`).
-- A **physical device on the same Wi-Fi** needs your machine's LAN IP, e.g.
-  `http://192.168.1.3:8091`.
-- Devices on mobile data need a deployed backend — see below.
+To publish from a fork:
 
-### Deploying the backend (free)
+1. **Settings → Pages → Source: GitHub Actions**.
+2. Add a `GEMINI_API_KEY` repository secret (without it the workflow falls back
+   to trimming RSS descriptions instead of summarizing):
+   ```bash
+   gh secret set GEMINI_API_KEY
+   ```
+3. Point the app at the resulting URL in `local.properties`.
 
-[`render.yaml`](render.yaml) deploys the server to Render's free plan from
-[`server/Dockerfile`](server/Dockerfile) (a slim, server-only Gradle build that
-does not need the Android SDK).
+The article database is cached between workflow runs so already-summarized
+articles don't spend Gemini quota again; losing it only costs one re-summarize
+pass, since every article originates from RSS.
 
-1. Push this repo to GitHub.
-2. On [render.com](https://render.com) → **New → Blueprint** → pick the repo.
-   Render reads `render.yaml` and creates the service.
-3. Add `GEMINI_API_KEY` under the service's **Environment** tab.
-4. Put the resulting URL in `local.properties` as `BACKEND_BASE_URL` and rebuild
-   the app.
+### Pointing the app somewhere else
 
-The free plan spins the service down after 15 minutes of inactivity (~1 minute
-cold start). [`.github/workflows/keep-alive.yml`](.github/workflows/keep-alive.yml)
-pings it every 10 minutes to prevent that — set a repository variable named
-`BACKEND_URL` to your Render URL to enable it.
+`BACKEND_BASE_URL` in `local.properties` accepts any of these:
 
-SQLite storage is intentionally ephemeral: all articles come from RSS, so a
-restart rebuilds the feed on the next ingestion cycle.
+- The published Pages URL (works everywhere, including mobile data).
+- `http://localhost:8091` for the local server — the Android emulator rewrites
+  `localhost` to `10.0.2.2` automatically.
+- Your machine's LAN IP (e.g. `http://192.168.1.3:8091`) for a physical device
+  on the same Wi-Fi.
 
 ### Android
 
