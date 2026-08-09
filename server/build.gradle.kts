@@ -17,6 +17,9 @@ tasks.register<JavaExec>("generateStaticFeed") {
     description = "Fetches, summarizes, and writes the news feed as static JSON files."
     mainClass.set("org.example.newsshorts.server.ApplicationKt")
     classpath = sourceSets["main"].runtimeClasspath
+    // Run from the repository root so -PoutputDir and DB_PATH are relative to
+    // it rather than to server/, matching what CI passes in.
+    workingDir = rootProject.projectDir
     args("--generate-static", project.findProperty("outputDir")?.toString() ?: "build/site")
 }
 
