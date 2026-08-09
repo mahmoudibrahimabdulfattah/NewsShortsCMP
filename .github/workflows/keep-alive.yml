@@ -1,0 +1,22 @@
+name: Keep backend awake
+
+# Render's free plan spins a service down after 15 minutes without traffic,
+# and a cold start takes ~1 minute. Pinging every 10 minutes keeps the API
+# warm and its in-memory news cache populated.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: |
+          if [ -z "${{ vars.BACKEND_URL }}" ]; then
+            echo "BACKEND_URL repository variable is not set — skipping."
+            exit 0
+          fi
+          curl -fsS --max-time 90 --retry 3 --retry-delay 20 \
+            "${{ vars.BACKEND_URL }}/health" && echo " — backend awake"

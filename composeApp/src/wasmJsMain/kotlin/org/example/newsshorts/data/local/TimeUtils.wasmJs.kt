@@ -1,6 +1,5 @@
 package org.example.newsshorts.data.local
 
-import kotlin.js.Date
+private fun jsDateNow(): Double = js("Date.now()")
 
-actual fun currentTimeMillis(): Long = Date.now().toLong()
-
+actual fun currentTimeMillis(): Long = jsDateNow().toLong()

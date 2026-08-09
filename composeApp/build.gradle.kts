@@ -12,14 +12,14 @@ plugins {
     alias(libs.plugins.kotlinSerialization)
 }
 
-// Load API Key from local.properties and generate BuildConfig
+// Load backend base URL from local.properties and generate BuildConfig
 val localPropertiesFile = rootProject.file("local.properties")
 val localProperties = Properties().apply {
     if (localPropertiesFile.exists()) {
         load(localPropertiesFile.inputStream())
     }
 }
-val newsApiKey: String = localProperties.getProperty("NEWS_API_KEY") ?: "YOUR_API_KEY_HERE"
+val backendBaseUrl: String = localProperties.getProperty("BACKEND_BASE_URL") ?: "http://localhost:8091"
 
 // Generate BuildConfig.kt file
 val buildConfigDir = file("src/commonMain/kotlin/org/example/newsshorts/config")
@@ -31,7 +31,7 @@ buildConfigFile.writeText(
     |package org.example.newsshorts.config
     |
     |object BuildConfig {
-    |    const val NEWS_API_KEY: String = "$newsApiKey"
+    |    const val BACKEND_BASE_URL: String = "$backendBaseUrl"
     |}
     """.trimMargin()
 )

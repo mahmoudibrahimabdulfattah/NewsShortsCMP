@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: news-shorts-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      # Set this in the Render dashboard (Environment -> Add Secret File/Variable).
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: REFRESH_MINUTES
+        value: "20"
+      - key: MAX_SUMMARIES_PER_CYCLE
+        value: "60"

@@ -4,149 +4,136 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
-import org.example.newsshorts.config.BuildConfig
 import org.example.newsshorts.domain.model.NewsCategory
 import org.example.newsshorts.domain.model.NewsError
 import org.example.newsshorts.domain.model.NewsResult
 
+/**
+ * Client for the News Shorts backend. The backend aggregates RSS sources and
+ * serves AI-summarized articles — no third-party API keys on the client.
+ *
+ * Responses are adapted to [NewsApiResponse] so the existing cache, mapper,
+ * and ViewModel layers stay unchanged.
+ */
 class NewsApiClient(
     private val httpClient: HttpClient
 ) {
     suspend fun fetchTopHeadlines(
         category: NewsCategory?,
         country: String
-    ): NewsResult<NewsApiResponse> {
-        return executeRequest {
-            httpClient.get(ApiConfig.getTopHeadlinesUrl()) {
-                parameter(PARAM_API_KEY, API_KEY)
-                parameter(PARAM_COUNTRY, country)
-                if (category != null) {
-                    parameter(PARAM_CATEGORY, category.apiValue)
-                }
-                parameter(PARAM_PAGE_SIZE, DEFAULT_PAGE_SIZE)
-            }.body()
-        }
-    }
+    ): NewsResult<NewsApiResponse> = fetchFeed(
+        language = countryCodeToLanguage(country),
+        category = category?.apiValue,
+    )
 
     suspend fun fetchTopHeadlinesByCountry(
         country: String
-    ): NewsResult<NewsApiResponse> {
-        return executeRequest {
-            httpClient.get(ApiConfig.getTopHeadlinesUrl()) {
-                parameter(PARAM_API_KEY, API_KEY)
-                parameter(PARAM_COUNTRY, country)
-                parameter(PARAM_PAGE_SIZE, DEFAULT_PAGE_SIZE)
-            }.body()
-        }
-    }
+    ): NewsResult<NewsApiResponse> = fetchFeed(
+        language = countryCodeToLanguage(country),
+        category = null,
+    )
 
     suspend fun fetchNewsByLanguage(
         category: NewsCategory,
         language: String
-    ): NewsResult<NewsApiResponse> {
-        val query: String = getCategoryQuery(category)
-        return executeRequest {
-            httpClient.get(ApiConfig.getEverythingUrl()) {
-                parameter(PARAM_API_KEY, API_KEY)
-                parameter(PARAM_QUERY, query)
-                parameter(PARAM_LANGUAGE, language)
-                parameter(PARAM_PAGE_SIZE, DEFAULT_PAGE_SIZE)
-                parameter(PARAM_SORT_BY, SORT_BY_PUBLISHED_AT)
-            }.body()
-        }
-    }
-
-    suspend fun fetchNewsByQuery(query: String): NewsResult<NewsApiResponse> {
-        return executeRequest {
-            httpClient.get(ApiConfig.getEverythingUrl()) {
-                parameter(PARAM_API_KEY, API_KEY)
-                parameter(PARAM_QUERY, query)
-                parameter(PARAM_PAGE_SIZE, DEFAULT_PAGE_SIZE)
-                parameter(PARAM_SORT_BY, SORT_BY_PUBLISHED_AT)
-            }.body()
-        }
-    }
+    ): NewsResult<NewsApiResponse> = fetchFeed(
+        language = language,
+        category = category.apiValue,
+    )
 
     suspend fun fetchNewsByCountryAndLanguage(
         countryName: String,
         language: String
-    ): NewsResult<NewsApiResponse> {
-        val query: String = getCountryQuery(countryName)
-        return executeRequest {
-            httpClient.get(ApiConfig.getEverythingUrl()) {
-                parameter(PARAM_API_KEY, API_KEY)
-                parameter(PARAM_QUERY, query)
-                parameter(PARAM_LANGUAGE, language)
-                parameter(PARAM_PAGE_SIZE, DEFAULT_PAGE_SIZE)
-                parameter(PARAM_SORT_BY, SORT_BY_PUBLISHED_AT)
-            }.body()
-        }
-    }
+    ): NewsResult<NewsApiResponse> = fetchFeed(
+        language = language,
+        category = null,
+    )
 
-    private fun getCountryQuery(countryName: String): String {
-        return when (countryName.lowercase()) {
-            "united states" -> "USA OR \"United States\" OR America OR Washington"
-            "united kingdom" -> "UK OR \"United Kingdom\" OR Britain OR London"
-            "egypt" -> "Egypt OR Cairo OR مصر"
-            "saudi arabia" -> "\"Saudi Arabia\" OR Riyadh OR السعودية"
-            "uae" -> "UAE OR \"United Arab Emirates\" OR Dubai OR الإمارات"
-            "germany" -> "Germany OR Berlin OR Deutschland"
-            "france" -> "France OR Paris"
-            "india" -> "India OR Delhi OR Mumbai"
-            "china" -> "China OR Beijing OR 中国"
-            "japan" -> "Japan OR Tokyo OR 日本"
-            "australia" -> "Australia OR Sydney OR Melbourne"
-            "canada" -> "Canada OR Toronto OR Ottawa"
-            "brazil" -> "Brazil OR Brasilia OR Brasil"
-            else -> countryName
-        }
-    }
+    suspend fun fetchNewsByQuery(query: String): NewsResult<NewsApiResponse> =
+        fetchFeed(language = null, category = null)
 
-    private fun getCategoryQuery(category: NewsCategory): String {
-        return when (category) {
-            NewsCategory.GENERAL -> "news OR world OR breaking"
-            NewsCategory.TECHNOLOGY -> "technology OR tech OR software OR AI"
-            NewsCategory.BUSINESS -> "business OR economy OR finance OR market"
-            NewsCategory.SPORTS -> "sports OR football OR basketball OR soccer"
-            NewsCategory.ENTERTAINMENT -> "entertainment OR movies OR music OR celebrity"
-            NewsCategory.HEALTH -> "health OR medical OR wellness OR fitness"
-            NewsCategory.SCIENCE -> "science OR research OR discovery OR space"
-        }
-    }
-
-    private suspend fun executeRequest(
-        request: suspend () -> NewsApiResponse
+    private suspend fun fetchFeed(
+        language: String?,
+        category: String?,
     ): NewsResult<NewsApiResponse> {
         return try {
-            val response: NewsApiResponse = request()
-            if (response.status == STATUS_OK) {
-                NewsResult.Success(response)
-            } else {
-                NewsResult.Error(NewsError.ServerError)
-            }
+            val response: BackendFeedResponse = httpClient.get(ApiConfig.feedUrl()) {
+                language?.let { parameter("lang", it) }
+                category?.let { parameter("category", it) }
+                parameter("limit", DEFAULT_PAGE_SIZE)
+            }.body()
+            NewsResult.Success(response.toNewsApiResponse())
         } catch (exception: Exception) {
             val error: NewsError = when {
                 exception.message?.contains("Unable to resolve host") == true -> NewsError.NetworkError
                 exception.message?.contains("timeout") == true -> NewsError.NetworkError
-                exception.message?.contains("connect") == true -> NewsError.NetworkError
+                exception.message?.contains("connect", ignoreCase = true) == true -> NewsError.NetworkError
                 else -> NewsError.UnknownError(exception.message ?: "Unknown error occurred")
             }
             NewsResult.Error(error)
         }
     }
 
+    private fun BackendFeedResponse.toNewsApiResponse(): NewsApiResponse =
+        NewsApiResponse(
+            status = "ok",
+            totalResults = total.toInt(),
+            articles = articles.map { article ->
+                ArticleDto(
+                    source = SourceDto(
+                        id = article.sourceName.lowercase().replace(" ", "-"),
+                        name = article.sourceName,
+                    ),
+                    author = article.sourceName,
+                    title = article.title,
+                    description = article.summary,
+                    url = article.url,
+                    urlToImage = article.imageUrl,
+                    publishedAt = epochMillisToIso8601(article.publishedAt),
+                    content = article.summary,
+                )
+            },
+        )
+
+    /** Countries the app offers -> feed language served by the backend. */
+    private fun countryCodeToLanguage(country: String): String =
+        when (country.lowercase()) {
+            "eg", "sa", "ae", "egypt", "saudi arabia", "uae" -> "ar"
+            else -> "en"
+        }
+
+    private fun epochMillisToIso8601(epochMillis: Long): String {
+        var remainingDays: Long = epochMillis / 86_400_000L
+        val secondsOfDay: Long = (epochMillis % 86_400_000L) / 1000L
+        var year = 1970
+        while (true) {
+            val daysInYear = if (isLeapYear(year)) 366 else 365
+            if (remainingDays < daysInYear) break
+            remainingDays -= daysInYear
+            year++
+        }
+        val daysInMonth = intArrayOf(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+        var month = 1
+        for (m in 0 until 12) {
+            var dim = daysInMonth[m]
+            if (m == 1 && isLeapYear(year)) dim++
+            if (remainingDays < dim) break
+            remainingDays -= dim
+            month++
+        }
+        val day = remainingDays + 1
+        val hour = secondsOfDay / 3600
+        val minute = (secondsOfDay % 3600) / 60
+        val second = secondsOfDay % 60
+        return "$year-${pad(month.toLong())}-${pad(day)}T${pad(hour)}:${pad(minute)}:${pad(second)}Z"
+    }
+
+    private fun isLeapYear(year: Int): Boolean =
+        (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+
+    private fun pad(value: Long): String = if (value < 10) "0$value" else "$value"
+
     companion object {
-        private val API_KEY: String = BuildConfig.NEWS_API_KEY
-        private const val PARAM_API_KEY: String = "apiKey"
-        private const val PARAM_COUNTRY: String = "country"
-        private const val PARAM_CATEGORY: String = "category"
-        private const val PARAM_LANGUAGE: String = "language"
-        private const val PARAM_QUERY: String = "q"
-        private const val PARAM_PAGE_SIZE: String = "pageSize"
-        private const val PARAM_SORT_BY: String = "sortBy"
-        private const val DEFAULT_PAGE_SIZE: Int = 20
-        private const val SORT_BY_PUBLISHED_AT: String = "publishedAt"
-        private const val STATUS_OK: String = "ok"
+        private const val DEFAULT_PAGE_SIZE: Int = 50
     }
 }
-

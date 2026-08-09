@@ -62,7 +62,7 @@ composeApp/src/commonMain/kotlin/org/example/newsshorts/
 │   ├── repository/     # NewsRepository interface
 │   └── use_case/       # GetTopHeadlinesUseCase (with caching)
 ├── data/
-│   ├── remote/         # NewsApiClient, Ktor HTTP client
+│   ├── remote/         # Backend feed client, Ktor HTTP client
 │   ├── local/          # NewsLocalDataSource (persistent cache)
 │   ├── mapper/         # DTO to Domain mappers
 │   └── repository/     # Offline-first implementation
@@ -102,15 +102,55 @@ composeApp/src/commonMain/kotlin/org/example/newsshorts/
 - JDK 17 or later
 - Android Studio Ladybug / IntelliJ IDEA
 - Xcode 15+ (for iOS)
-- News API Key from [newsapi.org](https://newsapi.org/)
 
-### Setup API Key
+### Backend Server
 
-1. Get a free API key from [NewsAPI.org](https://newsapi.org/register)
-2. Create/edit `local.properties` in the project root:
-```properties
-NEWS_API_KEY=your_api_key_here
+The app is powered by its own backend (`:server` module) — a Ktor service that
+aggregates RSS sources and serves AI-summarized articles (Gemini). No
+third-party news API keys are needed on the client.
+
+```bash
+# Optional: enable AI summaries (free key from https://aistudio.google.com/apikey)
+export GEMINI_API_KEY=your_key_here
+
+./gradlew :server:run   # starts on http://localhost:8091
 ```
+
+By default the app points at `http://localhost:8091`. Override in
+`local.properties`:
+
+```properties
+BACKEND_BASE_URL=https://your-deployed-server.example.com
+```
+
+Notes on `BACKEND_BASE_URL`:
+
+- The Android emulator reaches the host machine automatically (`localhost` is
+  rewritten to `10.0.2.2`).
+- A **physical device on the same Wi-Fi** needs your machine's LAN IP, e.g.
+  `http://192.168.1.3:8091`.
+- Devices on mobile data need a deployed backend — see below.
+
+### Deploying the backend (free)
+
+[`render.yaml`](render.yaml) deploys the server to Render's free plan from
+[`server/Dockerfile`](server/Dockerfile) (a slim, server-only Gradle build that
+does not need the Android SDK).
+
+1. Push this repo to GitHub.
+2. On [render.com](https://render.com) → **New → Blueprint** → pick the repo.
+   Render reads `render.yaml` and creates the service.
+3. Add `GEMINI_API_KEY` under the service's **Environment** tab.
+4. Put the resulting URL in `local.properties` as `BACKEND_BASE_URL` and rebuild
+   the app.
+
+The free plan spins the service down after 15 minutes of inactivity (~1 minute
+cold start). [`.github/workflows/keep-alive.yml`](.github/workflows/keep-alive.yml)
+pings it every 10 minutes to prevent that — set a repository variable named
+`BACKEND_URL` to your Render URL to enable it.
+
+SQLite storage is intentionally ephemeral: all articles come from RSS, so a
+restart rebuilds the feed on the next ingestion cycle.
 
 ### Android
 

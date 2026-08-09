@@ -1,0 +1,66 @@
+package org.example.newsshorts.server
+
+import io.ktor.http.HttpStatusCode
+import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.application.Application
+import io.ktor.server.application.install
+import io.ktor.server.engine.embeddedServer
+import io.ktor.server.netty.Netty
+import io.ktor.server.plugins.calllogging.CallLogging
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.cors.routing.CORS
+import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
+import io.ktor.server.routing.routing
+import kotlinx.serialization.json.Json
+import org.example.newsshorts.server.config.FeedCatalog
+import org.example.newsshorts.server.ingest.IngestionPipeline
+import org.example.newsshorts.server.ingest.RssFetcher
+import org.example.newsshorts.server.model.FeedResponse
+import org.example.newsshorts.server.store.ArticleStore
+import org.example.newsshorts.server.summarize.buildSummarizer
+
+fun main() {
+    val port = (System.getenv("PORT") ?: "8080").toInt()
+    embeddedServer(Netty, port = port, host = "0.0.0.0", module = Application::module).start(wait = true)
+}
+
+fun Application.module() {
+    val store = ArticleStore(System.getenv("DB_PATH") ?: "news.db")
+    val pipeline = IngestionPipeline(store, RssFetcher(), buildSummarizer())
+    pipeline.start(this)
+
+    install(ContentNegotiation) { json(Json { encodeDefaults = true }) }
+    install(CallLogging)
+    install(CORS) { anyHost() }
+    install(StatusPages) {
+        exception<Throwable> { call, cause ->
+            call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (cause.message ?: "internal error")))
+        }
+    }
+
+    routing {
+        get("/health") { call.respondText("ok") }
+
+        get("/v1/meta") {
+            call.respond(
+                mapOf(
+                    "languages" to FeedCatalog.languages.toList(),
+                    "categories" to FeedCatalog.categories.toList(),
+                )
+            )
+        }
+
+        get("/v1/feed") {
+            val language = call.request.queryParameters["lang"]
+            val category = call.request.queryParameters["category"]
+            val limit = (call.request.queryParameters["limit"]?.toIntOrNull() ?: 50).coerceIn(1, 100)
+            val offset = (call.request.queryParameters["offset"]?.toLongOrNull() ?: 0L).coerceAtLeast(0)
+
+            val (articles, total) = store.feed(language, category, limit, offset)
+            call.respond(FeedResponse(articles = articles, total = total))
+        }
+    }
+}
