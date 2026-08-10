@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import org.example.newsshorts.presentation.localization.appStrings
 
 private const val ANIMATION_DURATION_MS: Int = 400
 private const val TEXT_ANIMATION_DURATION_MS: Int = 300
@@ -82,7 +83,7 @@ fun SplashScreen(
                     .alpha(alpha)
             )
             Text(
-                text = "News Shorts",
+                text = appStrings().appName,
                 style = TextStyle(
                     fontWeight = FontWeight.Bold,
                     fontSize = 32.sp,
@@ -94,7 +95,7 @@ fun SplashScreen(
                     .alpha(alpha)
             )
             Text(
-                text = "Stay informed, stay brief",
+                text = appStrings().appTagline,
                 style = TextStyle(
                     fontSize = 16.sp,
                     letterSpacing = 0.5.sp

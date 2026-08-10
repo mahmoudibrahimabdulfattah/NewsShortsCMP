@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import org.example.newsshorts.domain.model.NewsArticle
 import org.example.newsshorts.presentation.localization.AppLocale
 import org.example.newsshorts.presentation.localization.appStrings
+import org.example.newsshorts.presentation.localization.languageName
 import org.example.newsshorts.presentation.mvi.LanguageOption
 import org.example.newsshorts.presentation.mvi.NewsUiState
 
@@ -246,7 +247,7 @@ private fun AppLocaleChip(
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = locale.displayName,
+                    text = languageName(locale.code, locale.displayName),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                     color = Color.White
@@ -337,7 +338,7 @@ private fun LanguageChip(
             )
             Column {
                 Text(
-                    text = language.displayName,
+                    text = languageName(language.code, language.displayName),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                     color = Color.White

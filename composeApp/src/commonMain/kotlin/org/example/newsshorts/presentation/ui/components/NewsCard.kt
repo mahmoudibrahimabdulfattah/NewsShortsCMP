@@ -47,6 +47,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.example.newsshorts.domain.model.NewsArticle
 import org.example.newsshorts.domain.model.PublishedTimestamp
+import org.example.newsshorts.presentation.localization.appStrings
+import org.example.newsshorts.presentation.localization.categoryName
 
 private const val GRADIENT_START_ALPHA: Float = 0f
 private const val GRADIENT_END_ALPHA: Float = 0.95f
@@ -171,7 +173,7 @@ private fun NewsCardContent(
     ) {
         NewsCardCategoryBadge(
             categoryEmoji = article.category.emoji,
-            categoryName = article.category.displayName
+            categoryName = categoryName(article.category.apiValue, article.category.displayName)
         )
         Spacer(modifier = Modifier.height(16.dp))
         NewsCardTitle(title = article.title.value)
@@ -264,7 +266,9 @@ private fun NewsCardMetadata(
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = sourceName,
+            // Isolated so a Latin source name keeps its own punctuation order
+            // inside an RTL layout ("NYT U.S." rendering as ".NYT U.S").
+            text = "⁨$sourceName⁩",
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
             color = Color.White.copy(alpha = 0.9f)
@@ -277,7 +281,7 @@ private fun NewsCardMetadata(
         )
         Spacer(modifier = Modifier.width(12.dp))
         Text(
-            text = formatPublishedTime(publishedAt),
+            text = formatPublishedTime(publishedAt, appStrings().monthNames, appStrings().recently),
             style = MaterialTheme.typography.labelMedium,
             color = Color.White.copy(alpha = 0.7f)
         )
@@ -315,7 +319,7 @@ private fun NewsCardActions(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = "Read Article",
+                text = appStrings().readFullArticle,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -357,7 +361,11 @@ private fun NewsCardActions(
     }
 }
 
-private fun formatPublishedTime(timestamp: PublishedTimestamp): String {
+private fun formatPublishedTime(
+    timestamp: PublishedTimestamp,
+    monthNames: List<String>,
+    recentlyLabel: String,
+): String {
     return try {
         val epochMillis: Long = timestamp.epochMillis
         val totalDays: Long = epochMillis / (1000 * 60 * 60 * 24)
@@ -381,10 +389,9 @@ private fun formatPublishedTime(timestamp: PublishedTimestamp): String {
             month++
         }
         val day: Int = remainingDays + 1
-        val monthNames: Array<String> = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
         "$day ${monthNames[month]} $year"
     } catch (exception: Exception) {
-        "Recently"
+        recentlyLabel
     }
 }
 

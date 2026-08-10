@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.example.newsshorts.presentation.localization.appStrings
+import org.example.newsshorts.presentation.localization.countryName
 import org.example.newsshorts.presentation.mvi.NavigationTab
 import org.example.newsshorts.presentation.mvi.NewsUiEffect
 import org.example.newsshorts.presentation.mvi.NewsUiEvent
@@ -110,7 +111,7 @@ private fun NewsScreenContent(
                     }
                     uiState.isError && !uiState.hasArticles -> {
                         ErrorScreen(
-                            errorMessage = uiState.errorMessage ?: "Unknown error",
+                            errorMessage = uiState.errorMessage ?: appStrings().unknownError,
                             onRetry = { onEvent(NewsUiEvent.RetryLoading) }
                         )
                     }
@@ -223,13 +224,15 @@ private fun NewsScreenHeader(
     }
 }
 
+@Composable
 private fun getHeaderSubtitle(
     uiState: NewsUiState,
     strings: org.example.newsshorts.presentation.localization.AppStrings
 ): String {
     return when (uiState.currentTab) {
         NavigationTab.FOR_YOU -> strings.swipeUpForMore
-        NavigationTab.COUNTRIES -> "${strings.newsFromCountry} ${uiState.selectedCountry.displayName}"
+        NavigationTab.COUNTRIES ->
+            "${strings.newsFromCountry} ${countryName(uiState.selectedCountry.code, uiState.selectedCountry.displayName)}"
         NavigationTab.PROFILE -> strings.settingsPreferences
     }
 }

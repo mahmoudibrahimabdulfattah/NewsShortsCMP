@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import org.example.newsshorts.presentation.localization.appStrings
 
 @Composable
 fun ErrorScreen(
@@ -62,7 +63,7 @@ fun ErrorScreen(
             }
             Spacer(modifier = Modifier.height(32.dp))
             Text(
-                text = "Oops! Something went wrong",
+                text = appStrings().errorTitle,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground,
@@ -86,7 +87,7 @@ fun ErrorScreen(
                 modifier = Modifier.height(52.dp)
             ) {
                 Text(
-                    text = "🔄 Try Again",
+                    text = "🔄 ${appStrings().tryAgain}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(horizontal = 16.dp)

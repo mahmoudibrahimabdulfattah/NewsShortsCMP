@@ -39,6 +39,23 @@ interface AppStrings {
     val arabic: String
     val personalizeExperience: String
     val newsReader: String
+    val recently: String
+    val loadingNews: String
+    val fetchingLatestStories: String
+    val appTagline: String
+    val unknownError: String
+
+    /** Keyed by [org.example.newsshorts.domain.model.NewsCategory.apiValue]. */
+    val categoryNames: Map<String, String>
+
+    /** Keyed by [org.example.newsshorts.presentation.mvi.CountryOption.code]. */
+    val countryNames: Map<String, String>
+
+    /** Keyed by [org.example.newsshorts.presentation.mvi.LanguageOption.code]. */
+    val languageNames: Map<String, String>
+
+    /** Twelve abbreviated month names, January first. */
+    val monthNames: List<String>
 }
 
 object EnglishStrings : AppStrings {
@@ -80,6 +97,57 @@ object EnglishStrings : AppStrings {
     override val arabic: String = "Arabic"
     override val personalizeExperience: String = "Personalize your news experience"
     override val newsReader: String = "News Reader"
+    override val recently: String = "Recently"
+    override val loadingNews: String = "Loading News..."
+    override val fetchingLatestStories: String = "Fetching the latest stories"
+    override val appTagline: String = "Stay informed, stay brief"
+    override val unknownError: String = "Unknown error"
+
+    override val categoryNames: Map<String, String> = mapOf(
+        "general" to "General",
+        "technology" to "Technology",
+        "business" to "Business",
+        "entertainment" to "Entertainment",
+        "sports" to "Sports",
+        "science" to "Science",
+        "health" to "Health",
+    )
+
+    override val countryNames: Map<String, String> = mapOf(
+        "us" to "United States",
+        "gb" to "United Kingdom",
+        "eg" to "Egypt",
+        "sa" to "Saudi Arabia",
+        "ae" to "UAE",
+        "de" to "Germany",
+        "fr" to "France",
+        "in" to "India",
+        "cn" to "China",
+        "jp" to "Japan",
+        "au" to "Australia",
+        "ca" to "Canada",
+        "br" to "Brazil",
+    )
+
+    override val languageNames: Map<String, String> = mapOf(
+        "en" to "English",
+        "ar" to "Arabic",
+        "de" to "German",
+        "es" to "Spanish",
+        "fr" to "French",
+        "it" to "Italian",
+        "nl" to "Dutch",
+        "no" to "Norwegian",
+        "pt" to "Portuguese",
+        "ru" to "Russian",
+        "zh" to "Chinese",
+        "he" to "Hebrew",
+    )
+
+    override val monthNames: List<String> = listOf(
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    )
 }
 
 object ArabicStrings : AppStrings {
@@ -121,6 +189,57 @@ object ArabicStrings : AppStrings {
     override val arabic: String = "العربية"
     override val personalizeExperience: String = "خصص تجربتك الإخبارية"
     override val newsReader: String = "قارئ الأخبار"
+    override val recently: String = "مؤخراً"
+    override val loadingNews: String = "جاري تحميل الأخبار..."
+    override val fetchingLatestStories: String = "جلب آخر الأخبار"
+    override val appTagline: String = "ابق على اطلاع، باختصار"
+    override val unknownError: String = "خطأ غير معروف"
+
+    override val categoryNames: Map<String, String> = mapOf(
+        "general" to "عام",
+        "technology" to "تكنولوجيا",
+        "business" to "اقتصاد",
+        "entertainment" to "منوعات",
+        "sports" to "رياضة",
+        "science" to "علوم",
+        "health" to "صحة",
+    )
+
+    override val countryNames: Map<String, String> = mapOf(
+        "us" to "الولايات المتحدة",
+        "gb" to "المملكة المتحدة",
+        "eg" to "مصر",
+        "sa" to "السعودية",
+        "ae" to "الإمارات",
+        "de" to "ألمانيا",
+        "fr" to "فرنسا",
+        "in" to "الهند",
+        "cn" to "الصين",
+        "jp" to "اليابان",
+        "au" to "أستراليا",
+        "ca" to "كندا",
+        "br" to "البرازيل",
+    )
+
+    override val languageNames: Map<String, String> = mapOf(
+        "en" to "الإنجليزية",
+        "ar" to "العربية",
+        "de" to "الألمانية",
+        "es" to "الإسبانية",
+        "fr" to "الفرنسية",
+        "it" to "الإيطالية",
+        "nl" to "الهولندية",
+        "no" to "النرويجية",
+        "pt" to "البرتغالية",
+        "ru" to "الروسية",
+        "zh" to "الصينية",
+        "he" to "العبرية",
+    )
+
+    override val monthNames: List<String> = listOf(
+        "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+        "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
+    )
 }
 
 fun getStrings(locale: AppLocale): AppStrings {

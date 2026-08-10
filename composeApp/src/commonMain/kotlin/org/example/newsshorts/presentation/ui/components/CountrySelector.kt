@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.example.newsshorts.presentation.localization.countryName
 import org.example.newsshorts.presentation.mvi.CountryOption
 
 private const val ANIMATION_DURATION_MILLIS: Int = 200
@@ -110,7 +111,7 @@ private fun CountryChip(
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = country.displayName,
+            text = countryName(country.code, country.displayName),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
             color = textColor,

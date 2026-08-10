@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.example.newsshorts.presentation.localization.appStrings
 
 private const val ANIMATION_DURATION_MILLIS: Int = 1000
 private const val INITIAL_SCALE: Float = 0.8f
@@ -84,14 +85,14 @@ fun LoadingScreen(
             }
             Spacer(modifier = Modifier.height(24.dp))
             Text(
-                text = "Loading News...",
+                text = appStrings().loadingNews,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Fetching the latest stories",
+                text = appStrings().fetchingLatestStories,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

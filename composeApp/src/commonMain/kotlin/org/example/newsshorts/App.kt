@@ -37,57 +37,46 @@ fun App(
 ) {
     var showSplash: Boolean by remember { mutableStateOf(true) }
     val logoPainter: Painter = painterResource(Res.drawable.logo)
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF0D1B2A),
-                        Color(0xFF1B263B)
-                    )
-                )
-            )
-    ) {
-        Crossfade(
-            targetState = showSplash,
-            animationSpec = tween(CROSSFADE_DURATION_MS),
-            label = "SplashTransition"
-        ) { isSplashVisible: Boolean ->
-            if (isSplashVisible) {
-                SplashScreen(
-                    logoPainter = logoPainter,
-                    onSplashComplete = { showSplash = false },
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                MainContent(
-                    onOpenUrl = onOpenUrl,
-                    onShareContent = onShareContent,
-                    onShowToast = onShowToast
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun MainContent(
-    onOpenUrl: (String) -> Unit,
-    onShareContent: (String, String) -> Unit,
-    onShowToast: (String) -> Unit
-) {
+    // The ViewModel is read here rather than inside MainContent so the splash
+    // is inside LocaleProvider too — otherwise it always renders in English.
     val viewModel = provideNewsViewModel()
     val uiState: NewsUiState by viewModel.uiState.collectAsState()
     LocaleProvider(locale = uiState.appLocale) {
-        NewsShortsTheme(isDarkTheme = true) {
-            NewsScreen(
-                viewModel = viewModel,
-                onOpenUrl = onOpenUrl,
-                onShareContent = onShareContent,
-                onShowToast = onShowToast,
-                modifier = Modifier.fillMaxSize()
-            )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF0D1B2A),
+                            Color(0xFF1B263B)
+                        )
+                    )
+                )
+        ) {
+            Crossfade(
+                targetState = showSplash,
+                animationSpec = tween(CROSSFADE_DURATION_MS),
+                label = "SplashTransition"
+            ) { isSplashVisible: Boolean ->
+                if (isSplashVisible) {
+                    SplashScreen(
+                        logoPainter = logoPainter,
+                        onSplashComplete = { showSplash = false },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    NewsShortsTheme(isDarkTheme = true) {
+                        NewsScreen(
+                            viewModel = viewModel,
+                            onOpenUrl = onOpenUrl,
+                            onShareContent = onShareContent,
+                            onShowToast = onShowToast,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+            }
         }
     }
 }

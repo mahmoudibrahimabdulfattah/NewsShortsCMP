@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.example.newsshorts.domain.model.NewsCategory
+import org.example.newsshorts.presentation.localization.categoryName
 
 private const val ANIMATION_DURATION_MILLIS: Int = 300
 private val UNSELECTED_BACKGROUND_COLOR: Color = Color.White.copy(alpha = 0.15f)
@@ -69,7 +70,7 @@ fun CategoryChip(
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = "${category.emoji} ${category.displayName}",
+            text = "${category.emoji} ${categoryName(category.apiValue, category.displayName)}",
             style = MaterialTheme.typography.labelLarge,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
             color = contentColor

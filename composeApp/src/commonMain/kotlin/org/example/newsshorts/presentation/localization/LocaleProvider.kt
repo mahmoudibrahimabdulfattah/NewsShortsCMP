@@ -39,3 +39,19 @@ fun appLocale(): AppLocale = LocalAppLocale.current
 @Composable
 fun isRtl(): Boolean = LocalAppLocale.current.isRtl
 
+/**
+ * Localized display names. Each falls back to the key's own English name so an
+ * entry added to the enums but not yet translated still renders something.
+ */
+@Composable
+fun categoryName(apiValue: String, fallback: String): String =
+    LocalAppStrings.current.categoryNames[apiValue] ?: fallback
+
+@Composable
+fun countryName(code: String, fallback: String): String =
+    LocalAppStrings.current.countryNames[code] ?: fallback
+
+@Composable
+fun languageName(code: String, fallback: String): String =
+    LocalAppStrings.current.languageNames[code] ?: fallback
+

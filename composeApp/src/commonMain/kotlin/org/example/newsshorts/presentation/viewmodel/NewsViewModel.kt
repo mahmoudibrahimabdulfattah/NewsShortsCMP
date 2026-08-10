@@ -15,6 +15,8 @@ import org.example.newsshorts.domain.model.NewsResult
 import org.example.newsshorts.domain.use_case.GetTopHeadlinesRequest
 import org.example.newsshorts.domain.use_case.GetTopHeadlinesUseCase
 import org.example.newsshorts.presentation.localization.AppLocale
+import org.example.newsshorts.presentation.localization.AppStrings
+import org.example.newsshorts.presentation.localization.getStrings
 import org.example.newsshorts.presentation.mvi.CountryOption
 import org.example.newsshorts.presentation.mvi.LanguageOption
 import org.example.newsshorts.presentation.mvi.NavigationTab
@@ -32,6 +34,9 @@ class NewsViewModel(
 
     private val mutableEffect: MutableSharedFlow<NewsUiEffect> = MutableSharedFlow()
     val uiEffect: SharedFlow<NewsUiEffect> = mutableEffect.asSharedFlow()
+
+    /** Toast text is built here rather than in the UI, so it needs the locale too. */
+    private fun strings(): AppStrings = getStrings(mutableState.value.appLocale)
 
     init {
         loadSavedSettings()
@@ -146,7 +151,7 @@ class NewsViewModel(
         }
         viewModelScope.launch {
             settingsManager.saveNewsLanguage(language.code)
-            mutableEffect.emit(NewsUiEffect.ShowToast("${language.displayName}"))
+            mutableEffect.emit(NewsUiEffect.ShowToast(strings().languageNames[language.code] ?: language.displayName))
         }
         loadNewsWithCache()
     }
@@ -158,12 +163,11 @@ class NewsViewModel(
         }
         viewModelScope.launch {
             settingsManager.saveAppLocale(locale.code)
-            val message: String = if (locale == AppLocale.ARABIC) {
-                "تم تغيير اللغة إلى العربية"
-            } else {
-                "Language changed to English"
-            }
-            mutableEffect.emit(NewsUiEffect.ShowToast(message))
+            val newStrings = getStrings(locale)
+            val languageName = newStrings.languageNames[locale.code] ?: locale.displayName
+            mutableEffect.emit(
+                NewsUiEffect.ShowToast("${newStrings.languageChangedTo} $languageName")
+            )
         }
     }
 
@@ -228,7 +232,7 @@ class NewsViewModel(
                 state.copy(savedArticles = currentSaved)
             }
             viewModelScope.launch {
-                mutableEffect.emit(NewsUiEffect.ShowToast("Article removed"))
+                mutableEffect.emit(NewsUiEffect.ShowToast(strings().articleRemoved))
             }
         } else {
             currentSaved.add(0, article)
@@ -236,7 +240,7 @@ class NewsViewModel(
                 state.copy(savedArticles = currentSaved)
             }
             viewModelScope.launch {
-                mutableEffect.emit(NewsUiEffect.ShowToast("Article saved!"))
+                mutableEffect.emit(NewsUiEffect.ShowToast(strings().articleSaved))
             }
         }
     }
@@ -249,7 +253,7 @@ class NewsViewModel(
                 state.copy(savedArticles = currentSaved)
             }
             viewModelScope.launch {
-                mutableEffect.emit(NewsUiEffect.ShowToast("Article removed"))
+                mutableEffect.emit(NewsUiEffect.ShowToast(strings().articleRemoved))
             }
         }
     }
