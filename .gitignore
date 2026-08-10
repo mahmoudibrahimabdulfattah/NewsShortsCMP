@@ -23,3 +23,9 @@ node_modules/
 
 # BuildConfig (contains API keys)
 **/config/BuildConfig.kt
+
+# Firebase project config. Not a credential — security comes from Firebase
+# rules — but on a public repository it lets anyone point a build at this
+# project and spend its free-tier quota. See README for local setup.
+google-services.json
+GoogleService-Info.plist

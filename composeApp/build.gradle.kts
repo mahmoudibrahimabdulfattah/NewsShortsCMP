@@ -12,6 +12,15 @@ plugins {
     alias(libs.plugins.kotlinSerialization)
 }
 
+// google-services.json is not in version control, so the Firebase plugins are
+// applied only when it is present. A clone without it still builds; reporting
+// just stays off (see AnalyticsReporter).
+val hasFirebaseConfig: Boolean = file("google-services.json").exists()
+if (hasFirebaseConfig) {
+    apply(plugin = libs.plugins.googleServices.get().pluginId)
+    apply(plugin = libs.plugins.firebaseCrashlytics.get().pluginId)
+}
+
 // Load backend base URL from local.properties and generate BuildConfig
 val localPropertiesFile = rootProject.file("local.properties")
 val localProperties = Properties().apply {
@@ -113,6 +122,9 @@ kotlin {
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(libs.koin.composeViewModel)
+            implementation(project.dependencies.platform(libs.firebase.bom))
+            implementation(libs.firebase.analytics)
+            implementation(libs.firebase.crashlytics)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

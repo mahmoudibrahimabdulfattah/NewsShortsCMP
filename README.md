@@ -163,6 +163,24 @@ pass, since every article originates from RSS.
 - Your machine's LAN IP (e.g. `http://192.168.1.3:8091`) for a physical device
   on the same Wi-Fi.
 
+### Analytics and crash reporting (optional)
+
+Firebase Analytics and Crashlytics report on Android. `google-services.json` is
+deliberately not in version control — it is not a credential, but on a public
+repository it would let anyone point a build at the project and spend its
+free-tier quota.
+
+To enable reporting, download the config for your own Firebase project and put
+it at `composeApp/google-services.json`. The Gradle plugins are applied only
+when that file exists, so a clone without it still builds and runs — reporting
+is simply off (`NoOpAnalyticsReporter`).
+
+Events are declared in
+[`AnalyticsReporter.kt`](composeApp/src/commonMain/kotlin/org/example/newsshorts/analytics/AnalyticsReporter.kt).
+The ones worth watching are `article_viewed` vs `article_skipped`, split by how
+long a card stayed on screen, and `feed_depth_reached` — together they say
+whether ranking is working and whether the feed needs pagination.
+
 ### Android
 
 ```bash

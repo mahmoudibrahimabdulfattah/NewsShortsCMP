@@ -10,10 +10,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.example.newsshorts.data.local.SettingsManager
+import org.example.newsshorts.data.local.currentTimeMillis
 import org.example.newsshorts.domain.model.NewsCategory
 import org.example.newsshorts.domain.model.NewsResult
 import org.example.newsshorts.domain.use_case.GetTopHeadlinesRequest
 import org.example.newsshorts.domain.use_case.GetTopHeadlinesUseCase
+import org.example.newsshorts.analytics.AnalyticsEvent
+import org.example.newsshorts.analytics.AnalyticsReporter
 import org.example.newsshorts.presentation.localization.AppLocale
 import org.example.newsshorts.presentation.localization.AppStrings
 import org.example.newsshorts.presentation.localization.getStrings
@@ -26,7 +29,8 @@ import org.example.newsshorts.presentation.mvi.NewsUiState
 
 class NewsViewModel(
     private val getTopHeadlinesUseCase: GetTopHeadlinesUseCase,
-    private val settingsManager: SettingsManager
+    private val settingsManager: SettingsManager,
+    private val analytics: AnalyticsReporter,
 ) : BaseViewModel() {
 
     private val mutableState: MutableStateFlow<NewsUiState> = MutableStateFlow(NewsUiState())
@@ -93,6 +97,8 @@ class NewsViewModel(
                 errorMessage = null
             )
         }
+        analytics.logEvent(AnalyticsEvent.CategorySelected(category.apiValue))
+        resetArticleTracking()
         loadNewsWithCache()
     }
 
@@ -105,6 +111,8 @@ class NewsViewModel(
                 errorMessage = null
             )
         }
+        analytics.logEvent(AnalyticsEvent.CountrySelected(country.code))
+        resetArticleTracking()
         viewModelScope.launch {
             settingsManager.saveSelectedCountry(country.code)
         }
@@ -150,6 +158,8 @@ class NewsViewModel(
             )
         }
         viewModelScope.launch {
+            analytics.logEvent(AnalyticsEvent.NewsLanguageChanged(language.code))
+            analytics.setProperty("news_language", language.code)
             settingsManager.saveNewsLanguage(language.code)
             mutableEffect.emit(NewsUiEffect.ShowToast(strings().languageNames[language.code] ?: language.displayName))
         }
@@ -162,6 +172,8 @@ class NewsViewModel(
             state.copy(appLocale = locale)
         }
         viewModelScope.launch {
+            analytics.logEvent(AnalyticsEvent.AppLanguageChanged(locale.code))
+            analytics.setProperty("app_language", locale.code)
             settingsManager.saveAppLocale(locale.code)
             val newStrings = getStrings(locale)
             val languageName = newStrings.languageNames[locale.code] ?: locale.displayName
@@ -196,14 +208,64 @@ class NewsViewModel(
         }
     }
 
+    /** Start of the current card's time on screen, for the viewed/skipped split. */
+    private var articleShownAtMillis: Long = currentTimeMillis()
+    private var deepestArticleIndex: Int = 0
+
     private fun handleScrollToArticle(index: Int) {
-        mutableState.update { state ->
-            state.copy(currentArticleIndex = index.coerceIn(0, state.articles.lastIndex.coerceAtLeast(0)))
-        }
+        val previousIndex: Int = mutableState.value.currentArticleIndex
+        val target: Int = index.coerceIn(0, mutableState.value.articles.lastIndex.coerceAtLeast(0))
+        if (target != previousIndex) reportArticleLeft(previousIndex)
+        mutableState.update { state -> state.copy(currentArticleIndex = target) }
+        reportDepth(target)
+    }
+
+    /**
+     * A card left the screen: report it as read or skipped by how long it was
+     * visible. The ratio is what says whether the ranking is any good.
+     */
+    private fun reportArticleLeft(index: Int) {
+        val now: Long = currentTimeMillis()
+        val visibleMillis: Long = now - articleShownAtMillis
+        articleShownAtMillis = now
+
+        val article = mutableState.value.articles.getOrNull(index) ?: return
+        val category: String = article.category.apiValue
+        val source: String = article.source.name.value
+        analytics.logEvent(
+            if (visibleMillis >= READ_THRESHOLD_MILLIS) {
+                AnalyticsEvent.ArticleViewed(
+                    category = category,
+                    source = source,
+                    language = mutableState.value.selectedLanguage.code,
+                )
+            } else {
+                AnalyticsEvent.ArticleSkipped(category = category, source = source)
+            }
+        )
+    }
+
+    /**
+     * Reports how far a session gets, at milestones rather than every card —
+     * this is the number that decides whether pagination is worth building.
+     */
+    private fun reportDepth(index: Int) {
+        if (index <= deepestArticleIndex) return
+        deepestArticleIndex = index
+        if (index % DEPTH_MILESTONE != 0) return
+        analytics.logEvent(
+            AnalyticsEvent.FeedDepthReached(
+                depth = index,
+                category = mutableState.value.selectedCategory.apiValue,
+            )
+        )
     }
 
     private fun handleOpenArticle(articleIndex: Int) {
         val article = mutableState.value.articles.getOrNull(articleIndex) ?: return
+        analytics.logEvent(
+            AnalyticsEvent.ArticleOpened(article.category.apiValue, article.source.name.value)
+        )
         viewModelScope.launch {
             mutableEffect.emit(NewsUiEffect.OpenUrl(article.articleUrl.value))
         }
@@ -211,6 +273,7 @@ class NewsViewModel(
 
     private fun handleShareArticle(articleIndex: Int) {
         val article = mutableState.value.articles.getOrNull(articleIndex) ?: return
+        analytics.logEvent(AnalyticsEvent.ArticleShared(article.category.apiValue))
         viewModelScope.launch {
             mutableEffect.emit(
                 NewsUiEffect.ShareContent(
@@ -239,6 +302,7 @@ class NewsViewModel(
             mutableState.update { state ->
                 state.copy(savedArticles = currentSaved)
             }
+            analytics.logEvent(AnalyticsEvent.ArticleSaved(article.category.apiValue))
             viewModelScope.launch {
                 mutableEffect.emit(NewsUiEffect.ShowToast(strings().articleSaved))
             }
@@ -287,6 +351,9 @@ class NewsViewModel(
     }
 
     private fun handleNewsError(errorMessage: String) {
+        val servedFromCache: Boolean = mutableState.value.articles.isNotEmpty()
+        analytics.logEvent(AnalyticsEvent.FeedLoadFailed(errorMessage, servedFromCache))
+        if (!servedFromCache) analytics.recordError("Feed load failed: $errorMessage")
         mutableState.update { state ->
             state.copy(
                 isLoading = false,
@@ -390,5 +457,19 @@ class NewsViewModel(
                 }
             }
         }
+    }
+
+    /** A new feed is a new session for depth purposes. */
+    private fun resetArticleTracking() {
+        articleShownAtMillis = currentTimeMillis()
+        deepestArticleIndex = 0
+    }
+
+    private companion object {
+        /** Below this, a card counts as skipped rather than read. */
+        const val READ_THRESHOLD_MILLIS: Long = 3_000
+
+        /** Depth is reported every this many cards, not on every swipe. */
+        const val DEPTH_MILESTONE: Int = 10
     }
 }

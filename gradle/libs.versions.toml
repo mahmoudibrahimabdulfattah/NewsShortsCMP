@@ -21,6 +21,9 @@ coil = "3.2.0"
 kotlinx-datetime = "0.6.2"
 sqldelight = "2.0.2"
 datastore = "1.1.7"
+googleServices = "4.4.2"
+firebaseBom = "33.7.0"
+firebaseCrashlyticsPlugin = "3.0.2"
 rome = "2.1.0"
 exposed = "0.61.0"
 sqliteJdbc = "3.49.1.0"
@@ -89,6 +92,11 @@ sqldelight-js = { module = "app.cash.sqldelight:web-worker-driver", version.ref 
 # DataStore
 datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "datastore" }
 
+# Firebase (Android only — the BoM pins the individual artifact versions)
+firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
+firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
+firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
+
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
 androidLibrary = { id = "com.android.library", version.ref = "agp" }
@@ -99,3 +107,5 @@ kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref =
 kotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
+googleServices = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+firebaseCrashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlyticsPlugin" }
