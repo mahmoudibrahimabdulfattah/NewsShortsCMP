@@ -131,7 +131,12 @@ class GeminiSummarizer(
     }
 
     companion object {
-        const val BATCH_SIZE = 10
+        /**
+         * Articles per request. The free tier caps requests per day, not tokens
+         * per request, so a larger batch buys throughput at no cost — the limit
+         * is how much output stays reliable in one response.
+         */
+        const val BATCH_SIZE = 20
 
         fun languageName(code: String): String = when (code) {
             "ar" -> "Arabic"

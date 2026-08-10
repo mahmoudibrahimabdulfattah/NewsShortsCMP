@@ -41,8 +41,12 @@ class IngestionPipeline(
 
     suspend fun runCycle() {
         var inserted = 0
+        val emptySources = mutableListOf<String>()
         FeedCatalog.sources.forEach { source ->
             val articles = fetcher.fetch(source)
+            // Sites behind bot protection answer 200 with an HTML challenge, so
+            // a dead source looks identical to a quiet one unless it is named.
+            if (articles.isEmpty()) emptySources += source.name
             articles.forEach { article ->
                 val id = store.insertIfNew(
                     title = article.title,
@@ -59,6 +63,9 @@ class IngestionPipeline(
             }
         }
         log.info("Fetched ${FeedCatalog.sources.size} feeds, $inserted new articles")
+        if (emptySources.isNotEmpty()) {
+            log.warn("${emptySources.size} feeds returned nothing: ${emptySources.joinToString()}")
+        }
 
         val pruned = store.prune(System.currentTimeMillis() - retentionDays * MILLIS_PER_DAY)
         if (pruned > 0) log.info("Pruned $pruned articles older than $retentionDays days")

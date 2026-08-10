@@ -53,7 +53,13 @@ jobs:
           DB_PATH: news.db
           # 20 Gemini requests per run (batches of 10) x 48 runs/day stays
           # inside the free tier's ~1,500 requests/day.
-          MAX_SUMMARIES_PER_CYCLE: "200"
+          # 400 renders is 20 Gemini requests per run at BATCH_SIZE=20; at two
+          # runs an hour that stays well inside the free tier's daily cap.
+          MAX_SUMMARIES_PER_CYCLE: "400"
+          # A week of history gives the thinner categories enough depth to
+          # scroll through; older articles are pruned before rendering so the
+          # budget never goes to stale news.
+          RETENTION_DAYS: "7"
         run: ./gradlew :server:generateStaticFeed -PoutputDir=build/site --no-daemon
 
       - uses: actions/configure-pages@v5

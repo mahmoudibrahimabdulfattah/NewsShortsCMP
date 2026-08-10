@@ -49,7 +49,11 @@ class RssFetcher {
     private fun SyndEntry.toRawArticle(source: FeedSource): RawArticle? {
         val link = link?.trim().takeUnless { it.isNullOrEmpty() } ?: return null
         val title = title?.trim().takeUnless { it.isNullOrEmpty() } ?: return null
-        val descriptionHtml = description?.value
+        // Some feeds leave <description> empty and put the article body in
+        // <content:encoded> instead; without it those entries reach the
+        // summarizer with nothing but a headline.
+        val descriptionHtml = description?.value?.takeUnless { it.isBlank() }
+            ?: contents.firstOrNull { !it.value.isNullOrBlank() }?.value
         return RawArticle(
             title = title,
             url = link,

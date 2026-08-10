@@ -131,9 +131,12 @@ class ArticleStore(dbPath: String) {
             .map { it[ArticleTexts.articleId] to it[ArticleTexts.language] }
             .toSet()
 
-        val candidates = Articles.selectAll()
+        // Every article missing text is grouped first and truncated only by the
+        // round-robin below. Taking the newest N up front instead would let a
+        // high-volume general source fill the whole window, leaving the smaller
+        // category feeds permanently unrendered.
+        val queues = Articles.selectAll()
             .orderBy(Articles.publishedAt, SortOrder.DESC)
-            .limit(limit * 6)
             .flatMap { row ->
                 val id = row[Articles.id]
                 val sourceLanguage = row[Articles.language]
@@ -154,14 +157,13 @@ class ArticleStore(dbPath: String) {
                     )
                 }
             }
-
-        val groups = candidates
             .groupBy { Triple(it.targetLanguage, it.category, it.country) }
             .values.map { it.iterator() }
+
         val interleaved = ArrayList<PendingText>(limit)
-        while (interleaved.size < limit && groups.any { it.hasNext() }) {
-            groups.forEach { group ->
-                if (interleaved.size < limit && group.hasNext()) interleaved.add(group.next())
+        while (interleaved.size < limit && queues.any { it.hasNext() }) {
+            queues.forEach { queue ->
+                if (interleaved.size < limit && queue.hasNext()) interleaved.add(queue.next())
             }
         }
         interleaved

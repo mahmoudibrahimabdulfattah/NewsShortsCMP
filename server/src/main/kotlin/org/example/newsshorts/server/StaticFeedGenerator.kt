@@ -29,7 +29,9 @@ object StaticFeedGenerator {
     private val log = LoggerFactory.getLogger(StaticFeedGenerator::class.java)
     private val json = Json { prettyPrint = false; encodeDefaults = true }
 
-    private const val ARTICLES_PER_FILE = 100
+    // Deep enough that a reader reaches the end of a session, not the end of
+    // the feed. One file keeps it a single request on the client.
+    private const val ARTICLES_PER_FILE = 200
 
     fun generate(outputDir: File, dbPath: String) = runBlocking {
         val store = ArticleStore(dbPath)

@@ -14,8 +14,7 @@ object FeedCatalog {
     val sources: List<FeedSource> = listOf(
         // ---- Arabic: general ----
         FeedSource("BBC عربي", "https://feeds.bbci.co.uk/arabic/rss.xml", "ar", "general"),
-        FeedSource("الجزيرة", "https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9", "ar", "general"),
-        FeedSource("سكاي نيوز عربية", "https://www.skynewsarabia.com/rss/latest", "ar", "general", country = "ae"),
+        FeedSource("اندبندنت عربية", "https://www.independentarabia.com/rss.xml", "ar", "general"),
         FeedSource("RT Arabic", "https://arabic.rt.com/rss/", "ar", "general"),
         FeedSource("CNN بالعربية", "https://arabic.cnn.com/api/v1/rss/rss.xml", "ar", "general"),
 
@@ -30,6 +29,17 @@ object FeedCatalog {
         FeedSource("CNN بالعربية رياضة", "https://arabic.cnn.com/api/v1/rss/sport/rss.xml", "ar", "sports"),
         FeedSource("CNN بالعربية صحة", "https://arabic.cnn.com/api/v1/rss/health/rss.xml", "ar", "health"),
         FeedSource("CNN بالعربية منوعات", "https://arabic.cnn.com/api/v1/rss/entertainment/rss.xml", "ar", "entertainment"),
+        FeedSource("CNN بالعربية تكنولوجيا", "https://arabic.cnn.com/api/v1/rss/tech/rss.xml", "ar", "technology"),
+        FeedSource("CNN بالعربية ستايل", "https://arabic.cnn.com/api/v1/rss/style/rss.xml", "ar", "entertainment"),
+        FeedSource("RT Arabic صحة", "https://arabic.rt.com/rss/health/", "ar", "health"),
+        // Independent Arabia is the only Arabic outlet with a feed for every
+        // category, which keeps the thinner tabs from sitting empty.
+        FeedSource("اندبندنت عربية علوم", "https://www.independentarabia.com/rss/science", "ar", "science"),
+        FeedSource("اندبندنت عربية صحة", "https://www.independentarabia.com/rss/health", "ar", "health"),
+        FeedSource("اندبندنت عربية تكنولوجيا", "https://www.independentarabia.com/rss/technology", "ar", "technology"),
+        FeedSource("اندبندنت عربية رياضة", "https://www.independentarabia.com/rss/sport", "ar", "sports"),
+        FeedSource("اندبندنت عربية اقتصاد", "https://www.independentarabia.com/rss/economy", "ar", "business"),
+        FeedSource("اندبندنت عربية ثقافة", "https://www.independentarabia.com/rss/culture", "ar", "entertainment"),
 
         // ---- Arabic: countries ----
         FeedSource("اليوم السابع", "https://www.youm7.com/rss/SectionRss?SectionID=65", "ar", "general", country = "eg"),
@@ -48,6 +58,11 @@ object FeedCatalog {
         FeedSource("BBC Entertainment", "https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml", "en", "entertainment"),
         FeedSource("Sky Sports", "https://www.skysports.com/rss/12040", "en", "sports"),
         FeedSource("TechCrunch", "https://techcrunch.com/feed/", "en", "technology"),
+        FeedSource("The Guardian Science", "https://www.theguardian.com/science/rss", "en", "science"),
+        FeedSource("The Guardian Sport", "https://www.theguardian.com/uk/sport/rss", "en", "sports"),
+        FeedSource("The Guardian Culture", "https://www.theguardian.com/uk/culture/rss", "en", "entertainment"),
+        FeedSource("The Guardian Technology", "https://www.theguardian.com/uk/technology/rss", "en", "technology"),
+        FeedSource("The Guardian Business", "https://www.theguardian.com/uk/business/rss", "en", "business"),
 
         // ---- English: countries ----
         // Every country the app offers needs at least one source; readers who
