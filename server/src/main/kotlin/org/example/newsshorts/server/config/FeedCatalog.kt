@@ -50,11 +50,33 @@ object FeedCatalog {
         FeedSource("TechCrunch", "https://techcrunch.com/feed/", "en", "technology"),
 
         // ---- English: countries ----
+        // Every country the app offers needs at least one source; readers who
+        // picked the other language get these translated.
         FeedSource("NYT U.S.", "https://rss.nytimes.com/services/xml/rss/nyt/US.xml", "en", "general", country = "us"),
         FeedSource("BBC UK", "https://feeds.bbci.co.uk/news/uk/rss.xml", "en", "general", country = "gb"),
+        FeedSource("Egypt Independent", "https://www.egyptindependent.com/feed/", "en", "general", country = "eg"),
+        FeedSource("Saudi Gazette", "https://saudigazette.com.sa/rssFeed/74", "en", "general", country = "sa"),
+        FeedSource("The National", "https://www.thenationalnews.com/arc/outboundfeeds/rss/?outputType=xml", "en", "general", country = "ae"),
+        FeedSource("DW", "https://rss.dw.com/rdf/rss-en-all", "en", "general", country = "de"),
+        FeedSource("The Local Germany", "https://www.thelocal.de/feeds/rss.php", "en", "general", country = "de"),
+        FeedSource("France 24", "https://www.france24.com/en/rss", "en", "general", country = "fr"),
+        FeedSource("RFI", "https://www.rfi.fr/en/rss", "en", "general", country = "fr"),
+        FeedSource("BBC India", "https://feeds.bbci.co.uk/news/world/asia/india/rss.xml", "en", "general", country = "in"),
+        FeedSource("South China Morning Post", "https://www.scmp.com/rss/91/feed", "en", "general", country = "cn"),
+        FeedSource("The Japan Times", "https://www.japantimes.co.jp/feed/", "en", "general", country = "jp"),
+        FeedSource("ABC News Australia", "https://www.abc.net.au/news/feed/51120/rss.xml", "en", "general", country = "au"),
+        FeedSource("Global News", "https://globalnews.ca/feed/", "en", "general", country = "ca"),
+        FeedSource("The Rio Times", "https://riotimesonline.com/feed/", "en", "general", country = "br"),
     )
 
     val languages: Set<String> = sources.map { it.language }.toSet()
     val categories: Set<String> = sources.map { it.category }.toSet()
     val countries: Set<String> = sources.mapNotNull { it.country }.toSet()
+
+    /**
+     * Every country feed is offered in all of these, translating where a
+     * country has no source in a given language — a reader who picked English
+     * should get Egypt in English, not in Arabic.
+     */
+    val countryLanguages: Set<String> = languages
 }

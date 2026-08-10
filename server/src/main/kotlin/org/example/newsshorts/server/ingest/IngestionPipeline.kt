@@ -21,6 +21,7 @@ class IngestionPipeline(
     private val summarizer: Summarizer,
     private val refreshMinutes: Int = (System.getenv("REFRESH_MINUTES") ?: "20").toInt(),
     private val maxSummariesPerCycle: Int = (System.getenv("MAX_SUMMARIES_PER_CYCLE") ?: "60").toInt(),
+    private val retentionDays: Long = (System.getenv("RETENTION_DAYS") ?: "4").toLong(),
 ) {
 
     private val log = LoggerFactory.getLogger(IngestionPipeline::class.java)
@@ -58,25 +59,40 @@ class IngestionPipeline(
             }
         }
         log.info("Fetched ${FeedCatalog.sources.size} feeds, $inserted new articles")
+
+        val pruned = store.prune(System.currentTimeMillis() - retentionDays * MILLIS_PER_DAY)
+        if (pruned > 0) log.info("Pruned $pruned articles older than $retentionDays days")
+
         summarizePending()
     }
 
     private suspend fun summarizePending() {
-        val pending = store.pendingSummaries(maxSummariesPerCycle)
+        val pending = store.pendingTexts(maxSummariesPerCycle, FeedCatalog.countryLanguages)
         if (pending.isEmpty()) return
-        log.info("Summarizing ${pending.size} articles")
+        log.info("Rendering ${pending.size} article texts")
 
-        // Batch per language, sequential requests with a gap to respect
+        // Batch per target language, sequential requests with a gap to respect
         // the Gemini free tier's ~15 RPM limit.
         pending
-            .map { SummaryInput(it.id, it.title, it.description, it.language) }
-            .groupBy { it.language }
-            .forEach { (_, articles) ->
+            .groupBy { it.targetLanguage }
+            .forEach { (targetLanguage, articles) ->
                 articles.chunked(GeminiSummarizer.BATCH_SIZE).forEach { chunk ->
-                    val summaries = summarizer.summarize(chunk)
-                    summaries.forEach { (id, summary) -> store.setSummary(id, summary) }
+                    val rendered = summarizer.summarize(
+                        chunk.map { SummaryInput(it.id, it.title, it.description, targetLanguage) }
+                    )
+                    // The fallback can't translate, so only keep what it
+                    // produced when the article is already in this language.
+                    chunk.forEach { article ->
+                        val text = rendered[article.id] ?: return@forEach
+                        if (text.title == article.title && article.sourceLanguage != targetLanguage) return@forEach
+                        store.putText(article.id, targetLanguage, text.title, text.summary)
+                    }
                     delay(5.seconds)
                 }
             }
+    }
+
+    private companion object {
+        const val MILLIS_PER_DAY = 24 * 60 * 60 * 1000L
     }
 }

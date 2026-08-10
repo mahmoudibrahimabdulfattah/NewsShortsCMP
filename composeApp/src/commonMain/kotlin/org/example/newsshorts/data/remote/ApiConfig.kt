@@ -28,8 +28,8 @@ object ApiConfig {
         return "$baseUrl/v1/feed/$name.json"
     }
 
-    fun countryFeedUrl(countryCode: String): String =
-        "$baseUrl/v1/feed/country-$countryCode.json"
+    fun countryFeedUrl(countryCode: String, language: String): String =
+        "$baseUrl/v1/feed/country-$countryCode-$language.json"
 
     private const val DEFAULT_LANGUAGE: String = "en"
 }

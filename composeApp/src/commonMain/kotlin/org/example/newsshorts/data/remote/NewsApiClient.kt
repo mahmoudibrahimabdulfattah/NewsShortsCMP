@@ -21,40 +21,39 @@ class NewsApiClient(
         category: NewsCategory?,
         country: String
     ): NewsResult<NewsApiResponse> = fetchFeed(
-        language = countryCodeToLanguage(country),
+        language = DEFAULT_LANGUAGE,
         category = category?.apiValue,
     )
 
     suspend fun fetchTopHeadlinesByCountry(
         country: String
-    ): NewsResult<NewsApiResponse> {
-        val code = countryToCode(country)
-        return if (code != null) {
-            fetchUrl(ApiConfig.countryFeedUrl(code))
-        } else {
-            fetchFeed(language = countryCodeToLanguage(country), category = null)
-        }
-    }
+    ): NewsResult<NewsApiResponse> = fetchCountry(country, DEFAULT_LANGUAGE)
 
     suspend fun fetchNewsByLanguage(
         category: NewsCategory,
         language: String
     ): NewsResult<NewsApiResponse> = fetchFeed(
-        language = language,
+        language = supportedLanguage(language),
         category = category.apiValue,
     )
 
     suspend fun fetchNewsByCountryAndLanguage(
         countryName: String,
         language: String
-    ): NewsResult<NewsApiResponse> {
-        val code = countryToCode(countryName)
-        return if (code != null) {
-            fetchUrl(ApiConfig.countryFeedUrl(code))
-        } else {
-            fetchFeed(language = language, category = null)
-        }
+    ): NewsResult<NewsApiResponse> = fetchCountry(countryName, language)
+
+    /**
+     * A country's news in the language the reader picked. Languages the backend
+     * doesn't publish fall back to English rather than to the country's own
+     * language, so the feed never mixes scripts.
+     */
+    private suspend fun fetchCountry(country: String, language: String): NewsResult<NewsApiResponse> {
+        val code = countryToCode(country) ?: return fetchFeed(supportedLanguage(language), category = null)
+        return fetchUrl(ApiConfig.countryFeedUrl(code, supportedLanguage(language)))
     }
+
+    private fun supportedLanguage(language: String): String =
+        if (language in SUPPORTED_LANGUAGES) language else DEFAULT_LANGUAGE
 
     suspend fun fetchNewsByQuery(query: String): NewsResult<NewsApiResponse> =
         fetchFeed(language = null, category = null)
@@ -100,13 +99,6 @@ class NewsApiClient(
             },
         )
 
-    /** Countries the app offers -> feed language served by the backend. */
-    private fun countryCodeToLanguage(country: String): String =
-        when (country.lowercase()) {
-            "eg", "sa", "ae", "egypt", "saudi arabia", "uae" -> "ar"
-            else -> "en"
-        }
-
     /**
      * Countries with dedicated sources in the backend catalog. Anything else
      * returns null and falls back to the language-wide feed.
@@ -118,6 +110,14 @@ class NewsApiClient(
             "ae", "uae" -> "ae"
             "us", "united states" -> "us"
             "gb", "uk", "united kingdom" -> "gb"
+            "de", "germany" -> "de"
+            "fr", "france" -> "fr"
+            "in", "india" -> "in"
+            "cn", "china" -> "cn"
+            "jp", "japan" -> "jp"
+            "au", "australia" -> "au"
+            "ca", "canada" -> "ca"
+            "br", "brazil" -> "br"
             else -> null
         }
 
@@ -151,4 +151,10 @@ class NewsApiClient(
         (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
 
     private fun pad(value: Long): String = if (value < 10) "0$value" else "$value"
+
+    companion object {
+        /** Languages the backend publishes; the UI offers more than these. */
+        private val SUPPORTED_LANGUAGES: Set<String> = setOf("en", "ar")
+        private const val DEFAULT_LANGUAGE: String = "en"
+    }
 }

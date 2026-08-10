@@ -19,12 +19,23 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import org.slf4j.LoggerFactory
 
-/** One article awaiting a summary. */
-data class SummaryInput(val id: Long, val title: String, val description: String?, val language: String)
+/**
+ * One article awaiting rendering. [targetLanguage] is the language the reader
+ * will see, which is not always the language the article was published in.
+ */
+data class SummaryInput(
+    val id: Long,
+    val title: String,
+    val description: String?,
+    val targetLanguage: String,
+)
+
+/** An article's title and summary in the requested language. */
+data class SummaryOutput(val title: String, val summary: String)
 
 interface Summarizer {
-    /** Returns article id -> summary. Missing ids mean the summary failed. */
-    suspend fun summarize(batch: List<SummaryInput>): Map<Long, String>
+    /** Returns article id -> rendered text. Missing ids mean rendering failed. */
+    suspend fun summarize(batch: List<SummaryInput>): Map<Long, SummaryOutput>
 }
 
 /**
@@ -43,16 +54,18 @@ class GeminiSummarizer(
     private val json = Json { ignoreUnknownKeys = true }
     private val http = HttpClient(OkHttp)
 
-    override suspend fun summarize(batch: List<SummaryInput>): Map<Long, String> {
+    override suspend fun summarize(batch: List<SummaryInput>): Map<Long, SummaryOutput> {
         if (batch.isEmpty()) return emptyMap()
-        val languageName = if (batch.first().language == "ar") "Arabic" else "English"
+        val languageName = languageName(batch.first().targetLanguage)
 
         val prompt = buildString {
             appendLine(
-                "You summarize news articles for a shorts-style news app. For EACH article below, " +
-                    "write a neutral, factual summary of 50-70 words in $languageName. " +
-                    "No opinions, no clickbait. " +
-                    "Respond ONLY with a JSON array of objects: [{\"id\": <number>, \"summary\": \"<text>\"}]."
+                "You prepare news articles for a shorts-style news app. For EACH article below, " +
+                    "write its headline and a neutral, factual summary of 50-70 words, both in " +
+                    "$languageName. Translate them if the article is in another language. " +
+                    "Keep the headline under 15 words. No opinions, no clickbait. " +
+                    "Respond ONLY with a JSON array of objects: " +
+                    "[{\"id\": <number>, \"title\": \"<text>\", \"summary\": \"<text>\"}]."
             )
             batch.forEach { article ->
                 appendLine()
@@ -93,7 +106,7 @@ class GeminiSummarizer(
         }
     }
 
-    private fun parseSummaries(responseBody: String): Map<Long, String> {
+    private fun parseSummaries(responseBody: String): Map<Long, SummaryOutput> {
         val text = json.parseToJsonElement(responseBody).jsonObject["candidates"]
             ?.jsonArray?.firstOrNull()?.jsonObject
             ?.get("content")?.jsonObject
@@ -107,7 +120,9 @@ class GeminiSummarizer(
                 val id = obj["id"]?.jsonPrimitive?.content?.toLongOrNull() ?: return@mapNotNull null
                 val summary = obj["summary"]?.jsonPrimitive?.content?.trim()
                     ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                id to summary
+                val title = obj["title"]?.jsonPrimitive?.content?.trim()
+                    ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                id to SummaryOutput(title = title, summary = summary)
             }.toMap()
         } catch (e: Exception) {
             log.warn("Gemini JSON parse failed: ${e.message}")
@@ -117,23 +132,32 @@ class GeminiSummarizer(
 
     companion object {
         const val BATCH_SIZE = 10
+
+        fun languageName(code: String): String = when (code) {
+            "ar" -> "Arabic"
+            else -> "English"
+        }
     }
 }
 
-/** No AI: trims the RSS description to ~70 words. Keeps the pipeline alive in dev. */
+/**
+ * No AI: trims the RSS description to ~70 words and keeps the original title.
+ * Keeps the pipeline alive in dev, but cannot translate — so it only applies
+ * when the article is already in the target language.
+ */
 class FallbackSummarizer : Summarizer {
-    override suspend fun summarize(batch: List<SummaryInput>): Map<Long, String> =
+    override suspend fun summarize(batch: List<SummaryInput>): Map<Long, SummaryOutput> =
         batch.mapNotNull { article ->
             val text = article.description?.trim().takeUnless { it.isNullOrEmpty() } ?: return@mapNotNull null
             val words = text.split(" ")
             val summary = if (words.size <= 70) text else words.take(70).joinToString(" ") + "…"
-            article.id to summary
+            article.id to SummaryOutput(title = article.title, summary = summary)
         }.toMap()
 }
 
 /** Primary summarizer with per-article fallback for anything it missed. */
 class ChainedSummarizer(private val primary: Summarizer, private val fallback: Summarizer) : Summarizer {
-    override suspend fun summarize(batch: List<SummaryInput>): Map<Long, String> {
+    override suspend fun summarize(batch: List<SummaryInput>): Map<Long, SummaryOutput> {
         val fromPrimary = primary.summarize(batch)
         val missing = batch.filter { it.id !in fromPrimary }
         if (missing.isEmpty()) return fromPrimary

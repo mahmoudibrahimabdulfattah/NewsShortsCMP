@@ -21,7 +21,7 @@ import java.io.File
  * Layout mirrors the live API's query parameters:
  *   v1/feed/{lang}.json              — all categories
  *   v1/feed/{lang}-{category}.json   — one category
- *   v1/feed/country-{code}.json      — one country's sources
+ *   v1/feed/country-{code}-{lang}.json — one country, in one language
  *   v1/meta.json                     — available languages, categories, countries
  */
 object StaticFeedGenerator {
@@ -49,13 +49,15 @@ object StaticFeedGenerator {
         }
 
         FeedCatalog.countries.forEach { country ->
-            val (articles, total) = store.feed(
-                language = null, category = null,
-                limit = ARTICLES_PER_FILE, offset = 0, country = country,
-            )
-            File(feedDir, "country-$country.json")
-                .writeText(json.encodeToString(FeedResponse(articles = articles, total = total)))
-            filesWritten++
+            FeedCatalog.countryLanguages.forEach { language ->
+                val (articles, total) = store.feed(
+                    language = language, category = null,
+                    limit = ARTICLES_PER_FILE, offset = 0, country = country,
+                )
+                File(feedDir, "country-$country-$language.json")
+                    .writeText(json.encodeToString(FeedResponse(articles = articles, total = total)))
+                filesWritten++
+            }
         }
 
         File(outputDir, "v1/meta.json").writeText(

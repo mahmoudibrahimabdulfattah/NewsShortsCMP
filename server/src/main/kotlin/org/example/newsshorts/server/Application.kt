@@ -82,8 +82,10 @@ fun Application.module() {
         get("/v1/feed/{name}.json") {
             val name = call.parameters["name"] ?: return@get call.respond(HttpStatusCode.NotFound)
             val (articles, total) = when {
-                name.startsWith("country-") ->
-                    store.feed(null, null, 100, 0, country = name.removePrefix("country-"))
+                name.startsWith("country-") -> {
+                    val (country, language) = name.removePrefix("country-").split("-", limit = 2)
+                    store.feed(language, null, 100, 0, country = country)
+                }
                 "-" in name -> {
                     val (language, category) = name.split("-", limit = 2)
                     store.feed(language, category, 100, 0)
