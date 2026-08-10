@@ -61,6 +61,7 @@ fun Application.module() {
                 mapOf(
                     "languages" to FeedCatalog.languages.toList(),
                     "categories" to FeedCatalog.categories.toList(),
+                    "countries" to FeedCatalog.countries.toList(),
                 )
             )
         }
@@ -68,10 +69,27 @@ fun Application.module() {
         get("/v1/feed") {
             val language = call.request.queryParameters["lang"]
             val category = call.request.queryParameters["category"]
+            val country = call.request.queryParameters["country"]
             val limit = (call.request.queryParameters["limit"]?.toIntOrNull() ?: 50).coerceIn(1, 100)
             val offset = (call.request.queryParameters["offset"]?.toLongOrNull() ?: 0L).coerceAtLeast(0)
 
-            val (articles, total) = store.feed(language, category, limit, offset)
+            val (articles, total) = store.feed(language, category, limit, offset, country)
+            call.respond(FeedResponse(articles = articles, total = total))
+        }
+
+        // Same paths the static (GitHub Pages) publish serves, so one client
+        // config works against either backend.
+        get("/v1/feed/{name}.json") {
+            val name = call.parameters["name"] ?: return@get call.respond(HttpStatusCode.NotFound)
+            val (articles, total) = when {
+                name.startsWith("country-") ->
+                    store.feed(null, null, 100, 0, country = name.removePrefix("country-"))
+                "-" in name -> {
+                    val (language, category) = name.split("-", limit = 2)
+                    store.feed(language, category, 100, 0)
+                }
+                else -> store.feed(name, null, 100, 0)
+            }
             call.respond(FeedResponse(articles = articles, total = total))
         }
     }

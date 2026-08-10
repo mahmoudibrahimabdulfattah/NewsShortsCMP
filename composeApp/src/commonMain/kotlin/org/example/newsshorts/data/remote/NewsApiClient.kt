@@ -27,10 +27,14 @@ class NewsApiClient(
 
     suspend fun fetchTopHeadlinesByCountry(
         country: String
-    ): NewsResult<NewsApiResponse> = fetchFeed(
-        language = countryCodeToLanguage(country),
-        category = null,
-    )
+    ): NewsResult<NewsApiResponse> {
+        val code = countryToCode(country)
+        return if (code != null) {
+            fetchUrl(ApiConfig.countryFeedUrl(code))
+        } else {
+            fetchFeed(language = countryCodeToLanguage(country), category = null)
+        }
+    }
 
     suspend fun fetchNewsByLanguage(
         category: NewsCategory,
@@ -43,10 +47,14 @@ class NewsApiClient(
     suspend fun fetchNewsByCountryAndLanguage(
         countryName: String,
         language: String
-    ): NewsResult<NewsApiResponse> = fetchFeed(
-        language = language,
-        category = null,
-    )
+    ): NewsResult<NewsApiResponse> {
+        val code = countryToCode(countryName)
+        return if (code != null) {
+            fetchUrl(ApiConfig.countryFeedUrl(code))
+        } else {
+            fetchFeed(language = language, category = null)
+        }
+    }
 
     suspend fun fetchNewsByQuery(query: String): NewsResult<NewsApiResponse> =
         fetchFeed(language = null, category = null)
@@ -54,10 +62,11 @@ class NewsApiClient(
     private suspend fun fetchFeed(
         language: String?,
         category: String?,
-    ): NewsResult<NewsApiResponse> {
+    ): NewsResult<NewsApiResponse> = fetchUrl(ApiConfig.feedUrl(language, category))
+
+    private suspend fun fetchUrl(url: String): NewsResult<NewsApiResponse> {
         return try {
-            val response: BackendFeedResponse =
-                httpClient.get(ApiConfig.feedUrl(language, category)).body()
+            val response: BackendFeedResponse = httpClient.get(url).body()
             NewsResult.Success(response.toNewsApiResponse())
         } catch (exception: Exception) {
             val error: NewsError = when {
@@ -96,6 +105,20 @@ class NewsApiClient(
         when (country.lowercase()) {
             "eg", "sa", "ae", "egypt", "saudi arabia", "uae" -> "ar"
             else -> "en"
+        }
+
+    /**
+     * Countries with dedicated sources in the backend catalog. Anything else
+     * returns null and falls back to the language-wide feed.
+     */
+    private fun countryToCode(country: String): String? =
+        when (country.lowercase()) {
+            "eg", "egypt" -> "eg"
+            "sa", "saudi arabia" -> "sa"
+            "ae", "uae" -> "ae"
+            "us", "united states" -> "us"
+            "gb", "uk", "united kingdom" -> "gb"
+            else -> null
         }
 
     private fun epochMillisToIso8601(epochMillis: Long): String {

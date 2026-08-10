@@ -51,6 +51,7 @@ class IngestionPipeline(
                     sourceName = source.name,
                     language = source.language,
                     category = source.category,
+                    country = source.country,
                     publishedAt = article.publishedAtMillis,
                 )
                 if (id != null) inserted++

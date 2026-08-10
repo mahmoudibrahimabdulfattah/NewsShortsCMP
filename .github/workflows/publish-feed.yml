@@ -51,7 +51,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DB_PATH: news.db
-          MAX_SUMMARIES_PER_CYCLE: "60"
+          MAX_SUMMARIES_PER_CYCLE: "300"
         run: ./gradlew :server:generateStaticFeed -PoutputDir=build/site --no-daemon
 
       - uses: actions/configure-pages@v5

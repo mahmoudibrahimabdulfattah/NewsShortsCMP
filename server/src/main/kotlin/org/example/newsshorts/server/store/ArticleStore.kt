@@ -22,6 +22,7 @@ object Articles : Table("articles") {
     val sourceName = text("source_name")
     val language = varchar("language", 8).index()
     val category = varchar("category", 32).index()
+    val country = varchar("country", 8).nullable().index()
     val publishedAt = long("published_at").index()
     val createdAt = long("created_at")
 
@@ -32,7 +33,9 @@ class ArticleStore(dbPath: String) {
 
     init {
         Database.connect("jdbc:sqlite:$dbPath", driver = "org.sqlite.JDBC")
-        transaction { SchemaUtils.create(Articles) }
+        // createMissingTablesAndColumns so a cached database from before a
+        // column was added (CI restores it between runs) migrates in place.
+        transaction { SchemaUtils.createMissingTablesAndColumns(Articles) }
     }
 
     /** Inserts if the URL is new. Returns the new row id, or null if it already existed. */
@@ -44,6 +47,7 @@ class ArticleStore(dbPath: String) {
         sourceName: String,
         language: String,
         category: String,
+        country: String?,
         publishedAt: Long,
     ): Long? = transaction {
         val result = Articles.insertIgnore {
@@ -54,6 +58,7 @@ class ArticleStore(dbPath: String) {
             it[Articles.sourceName] = sourceName
             it[Articles.language] = language
             it[Articles.category] = category
+            it[Articles.country] = country
             it[Articles.publishedAt] = publishedAt
             it[createdAt] = System.currentTimeMillis()
         }
@@ -66,30 +71,61 @@ class ArticleStore(dbPath: String) {
         }
     }
 
-    data class PendingArticle(val id: Long, val title: String, val description: String?, val language: String)
+    data class PendingArticle(
+        val id: Long,
+        val title: String,
+        val description: String?,
+        val language: String,
+        val category: String,
+        val country: String?,
+    )
 
-    /** Articles inserted but not yet summarized. */
+    /**
+     * Articles inserted but not yet summarized, interleaved round-robin across
+     * (language, category, country) groups so a burst from one source can't
+     * starve the other feeds of the per-cycle summary budget.
+     */
     fun pendingSummaries(limit: Int): List<PendingArticle> = transaction {
-        Articles.selectAll()
+        val newestFirst = Articles.selectAll()
             .andWhere { Articles.summary.isNull() }
             .orderBy(Articles.publishedAt, SortOrder.DESC)
-            .limit(limit)
+            .limit(limit * 4)
             .map {
                 PendingArticle(
                     id = it[Articles.id],
                     title = it[Articles.title],
                     description = it[Articles.description],
                     language = it[Articles.language],
+                    category = it[Articles.category],
+                    country = it[Articles.country],
                 )
             }
+
+        val groups = newestFirst
+            .groupBy { Triple(it.language, it.category, it.country) }
+            .values.map { it.iterator() }
+        val interleaved = ArrayList<PendingArticle>(limit)
+        while (interleaved.size < limit && groups.any { it.hasNext() }) {
+            groups.forEach { group ->
+                if (interleaved.size < limit && group.hasNext()) interleaved.add(group.next())
+            }
+        }
+        interleaved
     }
 
     /** Ready-to-serve feed: only articles that have a summary. */
-    fun feed(language: String?, category: String?, limit: Int, offset: Long): Pair<List<FeedArticleDto>, Long> =
+    fun feed(
+        language: String?,
+        category: String?,
+        limit: Int,
+        offset: Long,
+        country: String? = null,
+    ): Pair<List<FeedArticleDto>, Long> =
         transaction {
             fun base() = Articles.selectAll().andWhere { Articles.summary.isNotNull() }.also { query ->
                 language?.let { query.andWhere { Articles.language eq it } }
                 category?.let { query.andWhere { Articles.category eq it } }
+                country?.let { query.andWhere { Articles.country eq it } }
             }
 
             val total = base().count()

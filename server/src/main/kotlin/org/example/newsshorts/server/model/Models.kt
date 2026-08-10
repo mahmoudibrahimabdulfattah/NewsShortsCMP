@@ -26,6 +26,8 @@ data class FeedSource(
     val url: String,
     val language: String,
     val category: String,
+    /** ISO country code when the source covers one country's news (e.g. "eg"). */
+    val country: String? = null,
 )
 
 data class RawArticle(

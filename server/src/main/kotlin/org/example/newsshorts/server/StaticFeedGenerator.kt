@@ -21,7 +21,8 @@ import java.io.File
  * Layout mirrors the live API's query parameters:
  *   v1/feed/{lang}.json              — all categories
  *   v1/feed/{lang}-{category}.json   — one category
- *   v1/meta.json                     — available languages and categories
+ *   v1/feed/country-{code}.json      — one country's sources
+ *   v1/meta.json                     — available languages, categories, countries
  */
 object StaticFeedGenerator {
 
@@ -47,11 +48,22 @@ object StaticFeedGenerator {
             }
         }
 
+        FeedCatalog.countries.forEach { country ->
+            val (articles, total) = store.feed(
+                language = null, category = null,
+                limit = ARTICLES_PER_FILE, offset = 0, country = country,
+            )
+            File(feedDir, "country-$country.json")
+                .writeText(json.encodeToString(FeedResponse(articles = articles, total = total)))
+            filesWritten++
+        }
+
         File(outputDir, "v1/meta.json").writeText(
             json.encodeToString(
                 MetaResponse(
                     languages = FeedCatalog.languages.toList(),
                     categories = FeedCatalog.categories.toList(),
+                    countries = FeedCatalog.countries.toList(),
                 )
             )
         )
@@ -70,4 +82,8 @@ object StaticFeedGenerator {
 }
 
 @kotlinx.serialization.Serializable
-private data class MetaResponse(val languages: List<String>, val categories: List<String>)
+private data class MetaResponse(
+    val languages: List<String>,
+    val categories: List<String>,
+    val countries: List<String>,
+)
