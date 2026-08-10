@@ -127,8 +127,14 @@ GitHub Pages:
 ```
 https://<user>.github.io/<repo>/v1/feed/{lang}.json
 https://<user>.github.io/<repo>/v1/feed/{lang}-{category}.json
+https://<user>.github.io/<repo>/v1/feed/country-{code}-{lang}.json
 https://<user>.github.io/<repo>/v1/meta.json
 ```
+
+Most countries only have sources in one language, so an article is rendered
+into every language its feeds are published in — the summarizer translates the
+headline along with the summary. A reader who picked English gets Egypt in
+English even though the sources are Arabic.
 
 The local Ktor server serves the same paths, so `BACKEND_BASE_URL` can point at
 either one.
