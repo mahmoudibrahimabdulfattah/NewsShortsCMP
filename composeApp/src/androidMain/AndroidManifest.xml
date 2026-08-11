@@ -35,6 +35,24 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="newsshorts" android:host="article" />
             </intent-filter>
+
+            <!--
+                A shared link opens the app directly instead of bouncing through
+                a browser. autoVerify makes Android fetch
+                https://${shareLinkHost}/.well-known/assetlinks.json at install
+                time and, when the signing fingerprint matches, hand these links
+                straight here with no chooser. Without verification the same
+                link still works — it just lands on the web page instead.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="${shareLinkHost}"
+                    android:pathPrefix="${shareLinkPathPrefix}" />
+            </intent-filter>
         </activity>
 
         <service

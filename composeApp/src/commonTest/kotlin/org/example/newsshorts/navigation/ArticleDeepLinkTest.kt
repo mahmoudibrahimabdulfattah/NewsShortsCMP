@@ -131,6 +131,30 @@ class ArticleDeepLinkTest {
     }
 
     @Test
+    fun `accepts the https share link the app itself produces`() {
+        // This is the App Links path: Android hands the https URL to the app,
+        // so the parser must read it exactly as it reads the custom scheme.
+        val article = ArticleDeepLinks.parse(validLink)!!.toNewsArticle()!!
+        val shared = ArticleDeepLinks.shareUrl(
+            article, "https://mahmoudibrahimabdulfattah.github.io/NewsShortsCMP", "ar"
+        )
+
+        val parsed = ArticleDeepLinks.parse(shared)!!
+        assertEquals(article.articleUrl.value, parsed.url)
+        assertEquals(article.title.value, parsed.title)
+    }
+
+    @Test
+    fun `ignores https urls that are not the landing page`() {
+        assertNull(
+            ArticleDeepLinks.parse(
+                "https://mahmoudibrahimabdulfattah.github.io/NewsShortsCMP/v1/feed/ar.json?url=https%3A%2F%2Fx.com"
+            )
+        )
+        assertNull(ArticleDeepLinks.parse("https://evil.example.com/b/?url=https%3A%2F%2Fx.com&title=x"))
+    }
+
+    @Test
     fun `a missing timestamp stays zero rather than becoming 1970`() {
         val article = ArticleDeepLinks
             .parse("newsshorts://article?url=https%3A%2F%2Fexample.com%2Fa&title=x")!!

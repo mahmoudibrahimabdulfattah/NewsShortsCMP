@@ -35,6 +35,18 @@ val backendBaseUrl: String = localProperties.getProperty("BACKEND_BASE_URL") ?: 
 val shareBaseUrl: String = localProperties.getProperty("SHARE_BASE_URL")
     ?: "https://mahmoudibrahimabdulfattah.github.io/NewsShortsCMP"
 
+// The App Links filter has to match the links the app actually produces, so
+// both are derived from the one value rather than repeated in the manifest.
+val shareLinkHost: String = shareBaseUrl
+    .substringAfter("://")
+    .substringBefore('/')
+    .substringBefore(':')
+val shareLinkPathPrefix: String = shareBaseUrl
+    .substringAfter("://")
+    .substringAfter('/', missingDelimiterValue = "")
+    .trimEnd('/')
+    .let { path -> if (path.isEmpty()) "/a/" else "/$path/a/" }
+
 // Generate BuildConfig.kt file
 val buildConfigDir = file("src/commonMain/kotlin/org/example/newsshorts/config")
 val buildConfigFile = file("src/commonMain/kotlin/org/example/newsshorts/config/BuildConfig.kt")
@@ -173,6 +185,8 @@ android {
         // `namespace` stays on the Kotlin package so R and the manifest's
         // relative class names keep resolving; the two are allowed to differ.
         applicationId = "com.mk.newsshorts"
+        manifestPlaceholders["shareLinkHost"] = shareLinkHost
+        manifestPlaceholders["shareLinkPathPrefix"] = shareLinkPathPrefix
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1

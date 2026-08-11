@@ -45,6 +45,9 @@ object ArticleDeepLinks {
     /** Value of `src` that the landing page adds when it hands off to the app. */
     const val SHARE_REFERRER: String = "share"
 
+    /** Last path segment of a shared link, and of the published landing page. */
+    const val LANDING_PATH: String = "a"
+
     private const val MAX_URL = 2000
     private const val MAX_TITLE = 300
     private const val MAX_SUMMARY = 4000
@@ -55,8 +58,7 @@ object ArticleDeepLinks {
     fun parse(raw: String?): ArticleDeepLink? {
         if (raw.isNullOrBlank()) return null
         val url = runCatching { Url(raw) }.getOrNull() ?: return null
-        if (!url.protocol.name.equals(SCHEME, ignoreCase = true)) return null
-        if (!url.host.equals(HOST, ignoreCase = true)) return null
+        if (!url.isArticleLink()) return null
 
         val parameters = url.parameters
         // Without this the link could hand javascript:, file:, intent: or
@@ -73,6 +75,21 @@ object ArticleDeepLinks {
             publishedAtMillis = parameters["published"]?.toLongOrNull()?.takeIf { it > 0 },
             referrer = parameters["src"].clean(MAX_TITLE),
         )
+    }
+
+    /**
+     * Accepts both forms of the same link: the private `newsshorts://article`
+     * scheme a notification uses, and the public `https://…/a/` landing page a
+     * reader shares.
+     *
+     * The https form is what makes a shared link open the app directly — Android
+     * only verifies https App Links, never a custom scheme — and the landing
+     * page stays the fallback for anyone without the app.
+     */
+    private fun Url.isArticleLink(): Boolean = when {
+        protocol.name.equals(SCHEME, ignoreCase = true) -> host.equals(HOST, ignoreCase = true)
+        protocol.name.equals("https", ignoreCase = true) -> encodedPath.trimEnd('/').endsWith("/$LANDING_PATH")
+        else -> false
     }
 
     /** Trims, drops blanks, and caps length so an oversized field cannot stall layout. */
