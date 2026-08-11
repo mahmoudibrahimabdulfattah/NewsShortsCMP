@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.mk.newsshorts.data.local.SavedArticlesStore
 import com.mk.newsshorts.data.local.SettingsManager
 import com.mk.newsshorts.data.local.currentTimeMillis
 import com.mk.newsshorts.domain.model.FeedLanguage
@@ -43,6 +44,7 @@ class NewsViewModel(
     private val analytics: AnalyticsReporter,
     private val pushSubscriber: PushSubscriber,
     private val deepLinkBus: DeepLinkBus,
+    private val savedArticlesStore: SavedArticlesStore,
 ) : BaseViewModel() {
 
     private val mutableState: MutableStateFlow<NewsUiState> = MutableStateFlow(NewsUiState())
@@ -89,6 +91,7 @@ class NewsViewModel(
                     isFirstLaunch = false
                 )
             }
+            mutableState.update { state -> state.copy(savedArticles = savedArticlesStore.load()) }
             pushSubscriber.subscribeToLanguage(FeedLanguage.resolve(newsLanguage.code))
             loadNewsWithCache()
         }
@@ -366,6 +369,11 @@ class NewsViewModel(
         }
     }
 
+    /** Bookmarks are only useful if they outlive the session. */
+    private fun persistSavedArticles(articles: List<NewsArticle>) {
+        savedArticlesStore.save(articles)
+    }
+
     private fun handleSaveArticle(article: NewsArticle) {
         val currentSaved = mutableState.value.savedArticles.toMutableList()
         val savedIndex: Int = currentSaved.indexOfFirst { it.articleUrl == article.articleUrl }
@@ -375,6 +383,7 @@ class NewsViewModel(
             mutableState.update { state ->
                 state.copy(savedArticles = currentSaved)
             }
+            persistSavedArticles(currentSaved)
             viewModelScope.launch {
                 mutableEffect.emit(NewsUiEffect.ShowToast(strings().articleRemoved))
             }
@@ -383,6 +392,7 @@ class NewsViewModel(
             mutableState.update { state ->
                 state.copy(savedArticles = currentSaved)
             }
+            persistSavedArticles(currentSaved)
             analytics.logEvent(AnalyticsEvent.ArticleSaved(article.category.apiValue))
             viewModelScope.launch {
                 mutableEffect.emit(NewsUiEffect.ShowToast(strings().articleSaved))
@@ -399,6 +409,7 @@ class NewsViewModel(
         mutableState.update { state ->
             state.copy(savedArticles = currentSaved)
         }
+        persistSavedArticles(currentSaved)
         viewModelScope.launch {
             mutableEffect.emit(NewsUiEffect.ShowToast(strings().articleRemoved))
         }

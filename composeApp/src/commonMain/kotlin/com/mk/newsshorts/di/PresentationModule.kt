@@ -10,7 +10,8 @@ val presentationModule = module {
             settingsManager = get(),
             analytics = get(),
             pushSubscriber = get(),
-            deepLinkBus = get()
+            deepLinkBus = get(),
+            savedArticlesStore = get()
         )
     }
 }
