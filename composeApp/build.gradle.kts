@@ -48,13 +48,13 @@ val shareLinkPathPrefix: String = shareBaseUrl
     .let { path -> if (path.isEmpty()) "/a/" else "/$path/a/" }
 
 // Generate BuildConfig.kt file
-val buildConfigDir = file("src/commonMain/kotlin/org/example/newsshorts/config")
-val buildConfigFile = file("src/commonMain/kotlin/org/example/newsshorts/config/BuildConfig.kt")
+val buildConfigDir = file("src/commonMain/kotlin/com/mk/newsshorts/config")
+val buildConfigFile = file("src/commonMain/kotlin/com/mk/newsshorts/config/BuildConfig.kt")
 
 buildConfigDir.mkdirs()
 buildConfigFile.writeText(
     """
-    |package org.example.newsshorts.config
+    |package com.mk.newsshorts.config
     |
     |object BuildConfig {
     |    const val BACKEND_BASE_URL: String = "$backendBaseUrl"
@@ -175,15 +175,12 @@ kotlin {
 }
 
 android {
-    namespace = "org.example.newsshorts"
+    namespace = "com.mk.newsshorts"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {
         // The identity Play and Firebase use, and the one baked into every
-        // share link. It can never be changed once the app is published, so it
-        // is deliberately not the org.example placeholder.
-        // `namespace` stays on the Kotlin package so R and the manifest's
-        // relative class names keep resolving; the two are allowed to differ.
+        // share link. It can never be changed once the app is published.
         applicationId = "com.mk.newsshorts"
         manifestPlaceholders["shareLinkHost"] = shareLinkHost
         manifestPlaceholders["shareLinkPathPrefix"] = shareLinkPathPrefix
@@ -214,7 +211,7 @@ dependencies {
 
 compose.desktop {
     application {
-        mainClass = "org.example.newsshorts.MainKt"
+        mainClass = "com.mk.newsshorts.MainKt"
         
         buildTypes.release.proguard {
             isEnabled = false
@@ -228,7 +225,7 @@ compose.desktop {
             
             macOS {
                 iconFile.set(project.file("src/jvmMain/resources/icons/icon-512.png"))
-                bundleID = "org.example.newsshorts"
+                bundleID = "com.mk.newsshorts"
             }
             
             windows {

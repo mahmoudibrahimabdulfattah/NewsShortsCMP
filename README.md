@@ -56,7 +56,7 @@ A beautiful **Compose Multiplatform** news reader app with a TikTok-style vertic
 ## 🏛️ Architecture
 
 ```
-composeApp/src/commonMain/kotlin/org/example/newsshorts/
+composeApp/src/commonMain/kotlin/com/mk/newsshorts/
 ├── domain/
 │   ├── model/          # NewsArticle, NewsCategory, NewsResult
 │   ├── repository/     # NewsRepository interface
@@ -196,7 +196,7 @@ gh secret set FIREBASE_SERVICE_ACCOUNT < path/to/service-account.json
 Without it the workflow still publishes the feed and simply sends nothing.
 
 Events are declared in
-[`AnalyticsReporter.kt`](composeApp/src/commonMain/kotlin/org/example/newsshorts/analytics/AnalyticsReporter.kt).
+[`AnalyticsReporter.kt`](composeApp/src/commonMain/kotlin/com/mk/newsshorts/analytics/AnalyticsReporter.kt).
 The ones worth watching are `article_viewed` vs `article_skipped`, split by how
 long a card stayed on screen, and `feed_depth_reached` — together they say
 whether ranking is working and whether the feed needs pagination.

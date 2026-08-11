@@ -4,18 +4,18 @@ plugins {
     application
 }
 
-group = "org.example.newsshorts"
+group = "com.mk.newsshorts"
 version = "0.1.0"
 
 application {
-    mainClass.set("org.example.newsshorts.server.ApplicationKt")
+    mainClass.set("com.mk.newsshorts.server.ApplicationKt")
 }
 
 /** Runs one ingestion cycle and writes the feed as static JSON for GitHub Pages. */
 tasks.register<JavaExec>("generateStaticFeed") {
     group = "application"
     description = "Fetches, summarizes, and writes the news feed as static JSON files."
-    mainClass.set("org.example.newsshorts.server.ApplicationKt")
+    mainClass.set("com.mk.newsshorts.server.ApplicationKt")
     classpath = sourceSets["main"].runtimeClasspath
     // Run from the repository root so -PoutputDir and DB_PATH are relative to
     // it rather than to server/, matching what CI passes in.
