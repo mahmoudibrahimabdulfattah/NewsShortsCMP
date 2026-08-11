@@ -1,6 +1,7 @@
 package org.example.newsshorts.navigation
 
 import io.ktor.http.Url
+import io.ktor.http.encodeURLParameter
 import org.example.newsshorts.domain.model.ArticleAuthor
 import org.example.newsshorts.domain.model.ArticleContent
 import org.example.newsshorts.domain.model.ArticleDescription
@@ -24,6 +25,8 @@ data class ArticleDeepLink(
     val sourceName: String?,
     val category: String?,
     val publishedAtMillis: Long?,
+    /** `share` when the landing page handed this over, absent for a push. */
+    val referrer: String? = null,
 )
 
 /**
@@ -39,9 +42,15 @@ object ArticleDeepLinks {
     const val SCHEME: String = "newsshorts"
     const val HOST: String = "article"
 
+    /** Value of `src` that the landing page adds when it hands off to the app. */
+    const val SHARE_REFERRER: String = "share"
+
     private const val MAX_URL = 2000
     private const val MAX_TITLE = 300
     private const val MAX_SUMMARY = 4000
+
+    /** Short enough to survive a chat bubble without being truncated. */
+    private const val MAX_SHARE_URL = 1200
 
     fun parse(raw: String?): ArticleDeepLink? {
         if (raw.isNullOrBlank()) return null
@@ -62,6 +71,7 @@ object ArticleDeepLinks {
             sourceName = parameters["source"].clean(MAX_TITLE),
             category = parameters["category"].clean(MAX_TITLE),
             publishedAtMillis = parameters["published"]?.toLongOrNull()?.takeIf { it > 0 },
+            referrer = parameters["src"].clean(MAX_TITLE),
         )
     }
 
@@ -71,6 +81,47 @@ object ArticleDeepLinks {
 
     private fun String.isWebUrl(): Boolean =
         startsWith("http://", ignoreCase = true) || startsWith("https://", ignoreCase = true)
+
+    /**
+     * The link put into a share sheet.
+     *
+     * Deliberately https and not `newsshorts://`: a custom scheme is not
+     * clickable in most messaging apps and does nothing at all for a recipient
+     * who hasn't installed the app. This points at a page on the published site
+     * that hands off to the app when it is present and offers the store when it
+     * is not — and it carries the same query as [parse] reads, so once the app
+     * is on Play and the domain is verified, the same link can open the app
+     * directly with no page in between.
+     */
+    fun shareUrl(article: NewsArticle, baseUrl: String, language: String): String {
+        // Trimmed the same way the server trims its push link. Percent-encoded
+        // Arabic runs about nine bytes a character, so an untrimmed summary
+        // produces a link long enough for chat apps to cut off mid-URL.
+        var summary = article.description.value.trim()
+        while (true) {
+            val candidate = compose(article, baseUrl, language, summary)
+            if (candidate.length <= MAX_SHARE_URL || summary.isEmpty()) return candidate
+            summary = summary.take((summary.length * 3) / 4).trimEnd()
+        }
+    }
+
+    private fun compose(
+        article: NewsArticle,
+        baseUrl: String,
+        language: String,
+        summary: String,
+    ): String = buildString {
+        append(baseUrl.trimEnd('/')).append("/a/?")
+        append("url=").append(article.articleUrl.value.encodeURLParameter())
+        append("&title=").append(article.title.value.encodeURLParameter())
+        summary.takeIf { it.isNotBlank() }
+            ?.let { append("&summary=").append(it.encodeURLParameter()) }
+        article.imageUrl?.value?.let { append("&image=").append(it.encodeURLParameter()) }
+        append("&source=").append(article.source.name.value.encodeURLParameter())
+        append("&category=").append(article.category.apiValue.encodeURLParameter())
+        append("&published=").append(article.publishedAt.epochMillis)
+        append("&lang=").append(language.encodeURLParameter())
+    }
 }
 
 /**

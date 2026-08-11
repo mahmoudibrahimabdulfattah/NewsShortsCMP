@@ -1,5 +1,6 @@
 package org.example.newsshorts.navigation
 
+import org.example.newsshorts.domain.model.ArticleDescription
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -86,6 +87,47 @@ class ArticleDeepLinkTest {
     fun `refuses to build an article with no headline`() {
         val link = ArticleDeepLinks.parse("newsshorts://article?url=https%3A%2F%2Fexample.com%2Fa")!!
         assertNull(link.toNewsArticle())
+    }
+
+    @Test
+    fun `a share link stays short enough for a chat bubble`() {
+        // Arabic is the worst case: percent-encoding costs ~9 bytes a character,
+        // and chat clients truncate long URLs mid-string.
+        val article = ArticleDeepLinks.parse(validLink)!!.toNewsArticle()!!.copy(
+            description = ArticleDescription("ملخص طويل جدا ".repeat(300)),
+        )
+        val shared = ArticleDeepLinks.shareUrl(article, "https://example.com/site", "ar")
+
+        assertTrue(shared.length <= 1200, "share link was ${shared.length} characters")
+        assertTrue(shared.startsWith("https://example.com/site/a/?"))
+        assertTrue(shared.contains("lang=ar"))
+    }
+
+    @Test
+    fun `a share link keeps a short summary intact`() {
+        val article = ArticleDeepLinks.parse(validLink)!!.toNewsArticle()!!
+        val shared = ArticleDeepLinks.shareUrl(article, "https://example.com/site/", "en")
+
+        // Trailing slash on the base must not double up.
+        assertTrue(shared.startsWith("https://example.com/site/a/?"))
+        assertTrue(shared.contains("lang=en"))
+        // Round-trips through the parser the landing page hands back to the app.
+        val roundTripped = ArticleDeepLinks.parse(
+            "newsshorts://article?" + shared.substringAfter("/a/?")
+        )!!
+        assertEquals(article.articleUrl.value, roundTripped.url)
+        assertEquals(article.title.value, roundTripped.title)
+        assertEquals(article.description.value, roundTripped.summary)
+    }
+
+    @Test
+    fun `a link marked by the landing page is recognised as a share`() {
+        val link = ArticleDeepLinks.parse(
+            "newsshorts://article?url=https%3A%2F%2Fexample.com%2Fa&title=x&src=share"
+        )!!
+        assertEquals(ArticleDeepLinks.SHARE_REFERRER, link.referrer)
+        // A push carries no marker, which is how the two are told apart.
+        assertNull(ArticleDeepLinks.parse(validLink)!!.referrer)
     }
 
     @Test

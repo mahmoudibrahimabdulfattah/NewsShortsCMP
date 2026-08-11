@@ -75,6 +75,8 @@ object StaticFeedGenerator {
         )
         filesWritten++
 
+        if (writeSharePage(outputDir)) filesWritten++
+
         // Without this, GitHub Pages runs the output through Jekyll.
         File(outputDir, ".nojekyll").writeText("")
 
@@ -86,6 +88,31 @@ object StaticFeedGenerator {
         val notifier = PushNotifier.fromEnvironment()
         if (notifier == null) log.info("Push is not configured — skipping")
         else BreakingNewsPusher(store, notifier).run()
+    }
+
+    /**
+     * The page a shared link lands on. It hands off to the app when installed
+     * and otherwise shows the story with a link to the store and the source, so
+     * a recipient without the app still gets something useful.
+     *
+     * Returns whether it was written. A missing template is reported and skipped
+     * rather than thrown: publishing the feed is this job's purpose, and the
+     * share page is an extra that must not be able to stop ingestion, generation
+     * and notifications.
+     */
+    private fun writeSharePage(outputDir: File): Boolean {
+        val template = javaClass.getResourceAsStream("/share.html")
+            ?.bufferedReader()?.readText()
+        if (template == null) {
+            log.warn("share.html is missing from server resources — shared links will 404")
+            return false
+        }
+        // Empty until the app is published; the page then hides the store button.
+        val storeUrl = System.getenv("PLAY_STORE_URL").orEmpty()
+        File(outputDir, "a").apply { mkdirs() }
+            .resolve("index.html")
+            .writeText(template.replace("__PLAY_STORE_URL__", storeUrl))
+        return true
     }
 
     private fun write(target: File, store: ArticleStore, language: String, category: String?) {

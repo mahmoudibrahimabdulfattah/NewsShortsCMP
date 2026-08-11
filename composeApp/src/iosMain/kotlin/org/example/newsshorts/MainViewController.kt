@@ -16,7 +16,7 @@ fun MainViewController() = ComposeUIViewController(
 ) {
     App(
         onOpenUrl = { url -> openUrlIOS(url) },
-        onShareContent = { title, url -> shareContentIOS(title, url) },
+        onShareContent = { title, url, _ -> shareContentIOS(title, url) },
         onShowToast = { /* iOS doesn't have toast, could show alert */ }
     )
 }

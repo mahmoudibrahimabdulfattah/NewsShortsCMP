@@ -19,7 +19,9 @@ import org.example.newsshorts.domain.use_case.GetTopHeadlinesRequest
 import org.example.newsshorts.domain.use_case.GetTopHeadlinesUseCase
 import org.example.newsshorts.analytics.AnalyticsEvent
 import org.example.newsshorts.analytics.AnalyticsReporter
+import org.example.newsshorts.config.BuildConfig
 import org.example.newsshorts.navigation.ArticleDeepLink
+import org.example.newsshorts.navigation.ArticleDeepLinks
 import org.example.newsshorts.navigation.DeepLinkBus
 import org.example.newsshorts.navigation.toNewsArticle
 import org.example.newsshorts.notifications.PushSubscriber
@@ -327,10 +329,18 @@ class NewsViewModel(
             ?: state.savedArticles.firstOrNull { it.articleUrl.value == link.url }
             ?: link.toNewsArticle()
             ?: return
-        analytics.logEvent(
-            AnalyticsEvent.NotificationOpened(article.category.apiValue, article.source.name.value)
+        // A shared link marks itself, so notification_opened stays a count of
+        // notifications rather than of every way into the details screen.
+        val fromShare = link.referrer == ArticleDeepLinks.SHARE_REFERRER
+        if (!fromShare) {
+            analytics.logEvent(
+                AnalyticsEvent.NotificationOpened(article.category.apiValue, article.source.name.value)
+            )
+        }
+        handleOpenArticleDetails(
+            article,
+            if (fromShare) ArticleOpenOrigin.SHARE else ArticleOpenOrigin.PUSH,
         )
-        handleOpenArticleDetails(article, ArticleOpenOrigin.PUSH)
     }
 
     private fun handleShareArticle(article: NewsArticle) {
@@ -339,7 +349,18 @@ class NewsViewModel(
             mutableEffect.emit(
                 NewsUiEffect.ShareContent(
                     title = article.title.value,
-                    url = article.articleUrl.value
+                    // The share link opens the app rather than the publisher,
+                    // so a shared story brings the reader back here.
+                    url = ArticleDeepLinks.shareUrl(
+                        article = article,
+                        baseUrl = BuildConfig.SHARE_BASE_URL,
+                        // The article's language, so the landing page matches it
+                        // rather than defaulting to Arabic.
+                        language = FeedLanguage.resolve(
+                            mutableState.value.selectedLanguage.code
+                        ),
+                    ),
+                    chooserTitle = strings().shareArticle,
                 )
             )
         }

@@ -49,6 +49,7 @@ interface AppStrings {
     val back: String
     val summaryDisclaimer: String
     val unableToOpenLink: String
+    val shareArticle: String
 
     /** Keyed by [org.example.newsshorts.domain.model.NewsCategory.apiValue]. */
     val categoryNames: Map<String, String>
@@ -113,6 +114,7 @@ object EnglishStrings : AppStrings {
     override val summaryDisclaimer: String =
         "AI-generated summary. Open the source for the full story."
     override val unableToOpenLink: String = "Unable to open link"
+    override val shareArticle: String = "Share article"
 
     override val categoryNames: Map<String, String> = mapOf(
         "general" to "General",
@@ -211,6 +213,7 @@ object ArabicStrings : AppStrings {
     override val summaryDisclaimer: String =
         "ملخص مُولَّد بالذكاء الاصطناعي. افتح المصدر لقراءة الخبر كاملاً."
     override val unableToOpenLink: String = "تعذّر فتح الرابط"
+    override val shareArticle: String = "مشاركة المقال"
 
     override val categoryNames: Map<String, String> = mapOf(
         "general" to "عام",

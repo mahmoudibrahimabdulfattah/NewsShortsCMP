@@ -51,7 +51,9 @@ data class ArticleDetails(
 enum class ArticleOpenOrigin(val analyticsValue: String) {
     FEED("feed"),
     SAVED("saved"),
-    PUSH("push")
+    PUSH("push"),
+    /** A shared link. Kept apart from PUSH so the two can be compared. */
+    SHARE("share")
 }
 
 enum class NavigationTab(

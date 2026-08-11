@@ -51,7 +51,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             App(
                 onOpenUrl = { url -> openUrl(url) },
-                onShareContent = { title, url -> shareContent(title, url) },
+                onShareContent = { title, url, chooserTitle -> shareContent(title, url, chooserTitle) },
                 onShowToast = { message -> showToast(message) }
             )
         }
@@ -110,18 +110,23 @@ class MainActivity : ComponentActivity() {
             try {
                 startActivity(Intent(Intent.ACTION_VIEW, uri))
             } catch (fallbackFailure: Exception) {
-                showToast("Unable to open link")
+                // A device with no browser at all. Uses the platform resource
+                // rather than AppStrings because the failure is discovered here,
+                // outside composition — so it follows the system language.
+                showToast(getString(R.string.unable_to_open_link))
             }
         }
     }
 
-    private fun shareContent(title: String, url: String) {
+    private fun shareContent(title: String, url: String, chooserTitle: String) {
         val shareIntent: Intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_SUBJECT, title)
-            putExtra(Intent.EXTRA_TEXT, "$title\n\nRead more: $url")
+            // No prose around the link: any wording here would be a hardcoded
+            // language, and the landing page already explains itself.
+            putExtra(Intent.EXTRA_TEXT, "$title\n\n$url")
         }
-        startActivity(Intent.createChooser(shareIntent, "Share Article"))
+        startActivity(Intent.createChooser(shareIntent, chooserTitle))
     }
 
     private fun showToast(message: String) {

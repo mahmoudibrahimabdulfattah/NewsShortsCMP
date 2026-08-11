@@ -32,7 +32,7 @@ private const val CROSSFADE_DURATION_MS: Int = 150
 @Preview
 fun App(
     onOpenUrl: (String) -> Unit = {},
-    onShareContent: (String, String) -> Unit = { _, _ -> },
+    onShareContent: (String, String, String) -> Unit = { _, _, _ -> },
     onShowToast: (String) -> Unit = {}
 ) {
     var showSplash: Boolean by remember { mutableStateOf(true) }

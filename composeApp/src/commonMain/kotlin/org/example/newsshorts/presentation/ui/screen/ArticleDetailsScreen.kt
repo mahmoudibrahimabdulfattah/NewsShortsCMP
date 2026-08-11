@@ -108,6 +108,8 @@ fun ArticleDetailsScreen(
                 ),
             )
             Spacer(modifier = Modifier.height(20.dp))
+            // The disclaimer belongs to the summary, so it goes when the summary
+            // does — otherwise the screen explains a summary that isn't there.
             if (article.description.value.isNotBlank()) {
                 Text(
                     text = article.description.value,
@@ -115,12 +117,12 @@ fun ArticleDetailsScreen(
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
                 )
                 Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = strings.summaryDisclaimer,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                )
             }
-            Text(
-                text = strings.summaryDisclaimer,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-            )
             Spacer(modifier = Modifier.height(28.dp))
             Button(
                 onClick = { onEvent(NewsUiEvent.OpenArticleSource) },

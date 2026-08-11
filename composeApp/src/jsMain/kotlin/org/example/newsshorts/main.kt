@@ -14,7 +14,7 @@ fun main() {
     ComposeViewport(rootElement) {
         App(
             onOpenUrl = { url -> openUrlWeb(url) },
-            onShareContent = { title, url -> shareContentWeb(title, url) },
+            onShareContent = { title, url, _ -> shareContentWeb(title, url) },
             onShowToast = { message -> showToastWeb(message) }
         )
     }

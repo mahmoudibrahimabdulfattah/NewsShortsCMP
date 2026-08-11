@@ -3,4 +3,5 @@
     <string name="app_name">News Shorts</string>
     <string name="notification_channel_breaking_news">Breaking news</string>
     <string name="notification_channel_breaking_news_description">Major stories as they happen</string>
+    <string name="unable_to_open_link">Unable to open link</string>
 </resources>

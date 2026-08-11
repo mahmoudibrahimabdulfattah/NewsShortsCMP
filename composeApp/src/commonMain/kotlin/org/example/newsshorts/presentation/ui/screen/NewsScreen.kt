@@ -55,7 +55,7 @@ import org.example.newsshorts.presentation.viewmodel.NewsViewModel
 fun NewsScreen(
     viewModel: NewsViewModel,
     onOpenUrl: (String) -> Unit = {},
-    onShareContent: (String, String) -> Unit = { _, _ -> },
+    onShareContent: (String, String, String) -> Unit = { _, _, _ -> },
     onShowToast: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -64,7 +64,8 @@ fun NewsScreen(
         viewModel.uiEffect.collect { effect ->
             when (effect) {
                 is NewsUiEffect.OpenUrl -> onOpenUrl(effect.url)
-                is NewsUiEffect.ShareContent -> onShareContent(effect.title, effect.url)
+                is NewsUiEffect.ShareContent ->
+                    onShareContent(effect.title, effect.url, effect.chooserTitle)
                 is NewsUiEffect.ShowToast -> onShowToast(effect.message)
             }
         }

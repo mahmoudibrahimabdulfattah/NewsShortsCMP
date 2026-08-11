@@ -30,6 +30,11 @@ val localProperties = Properties().apply {
 }
 val backendBaseUrl: String = localProperties.getProperty("BACKEND_BASE_URL") ?: "http://localhost:8091"
 
+// Shared links point at the published site, never at a local server: a link
+// sent to someone else has to resolve on their device.
+val shareBaseUrl: String = localProperties.getProperty("SHARE_BASE_URL")
+    ?: "https://mahmoudibrahimabdulfattah.github.io/NewsShortsCMP"
+
 // Generate BuildConfig.kt file
 val buildConfigDir = file("src/commonMain/kotlin/org/example/newsshorts/config")
 val buildConfigFile = file("src/commonMain/kotlin/org/example/newsshorts/config/BuildConfig.kt")
@@ -41,6 +46,7 @@ buildConfigFile.writeText(
     |
     |object BuildConfig {
     |    const val BACKEND_BASE_URL: String = "$backendBaseUrl"
+    |    const val SHARE_BASE_URL: String = "$shareBaseUrl"
     |}
     """.trimMargin()
 )
@@ -161,7 +167,12 @@ android {
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "org.example.newsshorts"
+        // The identity Play and Firebase use, and the one baked into every
+        // share link. It can never be changed once the app is published, so it
+        // is deliberately not the org.example placeholder.
+        // `namespace` stays on the Kotlin package so R and the manifest's
+        // relative class names keep resolving; the two are allowed to differ.
+        applicationId = "com.mk.newsshorts"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1

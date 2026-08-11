@@ -3,4 +3,5 @@
     <string name="app_name">أخبار مختصرة</string>
     <string name="notification_channel_breaking_news">أخبار عاجلة</string>
     <string name="notification_channel_breaking_news_description">أهم الأخبار فور حدوثها</string>
+    <string name="unable_to_open_link">تعذّر فتح الرابط</string>
 </resources>

@@ -21,7 +21,7 @@ fun main() {
         ) {
             App(
                 onOpenUrl = { url -> openUrlDesktop(url) },
-                onShareContent = { title, url -> copyToClipboardDesktop("$title\n\n$url") },
+                onShareContent = { title, url, _ -> copyToClipboardDesktop("$title\n\n$url") },
                 onShowToast = { /* Desktop notification could be added */ }
             )
         }
