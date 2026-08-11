@@ -6,6 +6,8 @@ import org.example.newsshorts.server.config.FeedCatalog
 import org.example.newsshorts.server.ingest.IngestionPipeline
 import org.example.newsshorts.server.ingest.RssFetcher
 import org.example.newsshorts.server.model.FeedResponse
+import org.example.newsshorts.server.push.BreakingNewsPusher
+import org.example.newsshorts.server.push.PushNotifier
 import org.example.newsshorts.server.store.ArticleStore
 import org.example.newsshorts.server.summarize.buildSummarizer
 import org.slf4j.LoggerFactory
@@ -77,6 +79,13 @@ object StaticFeedGenerator {
         File(outputDir, ".nojekyll").writeText("")
 
         log.info("Wrote $filesWritten JSON files to ${outputDir.absolutePath}")
+
+        // After publishing, not before: a notification should never point at a
+        // story the feed has not caught up with yet.
+        // fromEnvironment reports why it declined, so this only notes the effect.
+        val notifier = PushNotifier.fromEnvironment()
+        if (notifier == null) log.info("Push is not configured — skipping")
+        else BreakingNewsPusher(store, notifier).run()
     }
 
     private fun write(target: File, store: ArticleStore, language: String, category: String?) {

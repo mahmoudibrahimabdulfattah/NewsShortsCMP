@@ -11,12 +11,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.example.newsshorts.data.local.SettingsManager
 import org.example.newsshorts.data.local.currentTimeMillis
+import org.example.newsshorts.domain.model.FeedLanguage
 import org.example.newsshorts.domain.model.NewsCategory
 import org.example.newsshorts.domain.model.NewsResult
 import org.example.newsshorts.domain.use_case.GetTopHeadlinesRequest
 import org.example.newsshorts.domain.use_case.GetTopHeadlinesUseCase
 import org.example.newsshorts.analytics.AnalyticsEvent
 import org.example.newsshorts.analytics.AnalyticsReporter
+import org.example.newsshorts.notifications.PushSubscriber
 import org.example.newsshorts.presentation.localization.AppLocale
 import org.example.newsshorts.presentation.localization.AppStrings
 import org.example.newsshorts.presentation.localization.getStrings
@@ -31,6 +33,7 @@ class NewsViewModel(
     private val getTopHeadlinesUseCase: GetTopHeadlinesUseCase,
     private val settingsManager: SettingsManager,
     private val analytics: AnalyticsReporter,
+    private val pushSubscriber: PushSubscriber,
 ) : BaseViewModel() {
 
     private val mutableState: MutableStateFlow<NewsUiState> = MutableStateFlow(NewsUiState())
@@ -64,6 +67,7 @@ class NewsViewModel(
                     isFirstLaunch = false
                 )
             }
+            pushSubscriber.subscribeToLanguage(FeedLanguage.resolve(newsLanguage.code))
             loadNewsWithCache()
         }
     }
@@ -160,6 +164,7 @@ class NewsViewModel(
         viewModelScope.launch {
             analytics.logEvent(AnalyticsEvent.NewsLanguageChanged(language.code))
             analytics.setProperty("news_language", language.code)
+            pushSubscriber.subscribeToLanguage(FeedLanguage.resolve(language.code))
             settingsManager.saveNewsLanguage(language.code)
             mutableEffect.emit(NewsUiEffect.ShowToast(strings().languageNames[language.code] ?: language.displayName))
         }

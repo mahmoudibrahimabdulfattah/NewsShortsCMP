@@ -3,6 +3,7 @@ package org.example.newsshorts.data.remote
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import org.example.newsshorts.domain.model.FeedLanguage
 import org.example.newsshorts.domain.model.NewsCategory
 import org.example.newsshorts.domain.model.NewsError
 import org.example.newsshorts.domain.model.NewsResult
@@ -21,13 +22,13 @@ class NewsApiClient(
         category: NewsCategory?,
         country: String
     ): NewsResult<NewsApiResponse> = fetchFeed(
-        language = DEFAULT_LANGUAGE,
+        language = FeedLanguage.DEFAULT,
         category = category?.apiValue,
     )
 
     suspend fun fetchTopHeadlinesByCountry(
         country: String
-    ): NewsResult<NewsApiResponse> = fetchCountry(country, DEFAULT_LANGUAGE)
+    ): NewsResult<NewsApiResponse> = fetchCountry(country, FeedLanguage.DEFAULT)
 
     suspend fun fetchNewsByLanguage(
         category: NewsCategory,
@@ -52,8 +53,7 @@ class NewsApiClient(
         return fetchUrl(ApiConfig.countryFeedUrl(code, supportedLanguage(language)))
     }
 
-    private fun supportedLanguage(language: String): String =
-        if (language in SUPPORTED_LANGUAGES) language else DEFAULT_LANGUAGE
+    private fun supportedLanguage(language: String): String = FeedLanguage.resolve(language)
 
     suspend fun fetchNewsByQuery(query: String): NewsResult<NewsApiResponse> =
         fetchFeed(language = null, category = null)
@@ -151,10 +151,4 @@ class NewsApiClient(
         (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
 
     private fun pad(value: Long): String = if (value < 10) "0$value" else "$value"
-
-    companion object {
-        /** Languages the backend publishes; the UI offers more than these. */
-        private val SUPPORTED_LANGUAGES: Set<String> = setOf("en", "ar")
-        private const val DEFAULT_LANGUAGE: String = "en"
-    }
 }

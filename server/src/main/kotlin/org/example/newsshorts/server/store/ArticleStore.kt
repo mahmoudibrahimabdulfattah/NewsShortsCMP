@@ -11,6 +11,7 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
 import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.deleteWhere
+import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertIgnore
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -48,13 +49,42 @@ object ArticleTexts : Table("article_texts") {
     override val primaryKey = PrimaryKey(articleId, language)
 }
 
+/**
+ * When each push topic was last sent to. Persisted rather than held in memory
+ * because every publish run is a fresh process — without it the rate limit
+ * would reset on every cycle and readers would be notified every half hour.
+ */
+object PushLog : Table("push_log") {
+    val topic = varchar("topic", 64)
+    val articleUrl = text("article_url")
+    val sentAt = long("sent_at")
+
+    override val primaryKey = PrimaryKey(topic)
+}
+
 class ArticleStore(dbPath: String) {
 
     init {
         Database.connect("jdbc:sqlite:$dbPath", driver = "org.sqlite.JDBC")
         // createMissingTablesAndColumns so a cached database from before a
         // column was added (CI restores it between runs) migrates in place.
-        transaction { SchemaUtils.createMissingTablesAndColumns(Articles, ArticleTexts) }
+        transaction { SchemaUtils.createMissingTablesAndColumns(Articles, ArticleTexts, PushLog) }
+    }
+
+    fun lastPushAt(topic: String): Long? = transaction {
+        PushLog.selectAll().andWhere { PushLog.topic eq topic }
+            .firstOrNull()?.get(PushLog.sentAt)
+    }
+
+    fun recordPush(topic: String, articleUrl: String, sentAt: Long) {
+        transaction {
+            PushLog.deleteWhere { PushLog.topic eq topic }
+            PushLog.insert {
+                it[PushLog.topic] = topic
+                it[PushLog.articleUrl] = articleUrl
+                it[PushLog.sentAt] = sentAt
+            }
+        }
     }
 
     /** Inserts if the URL is new. Returns the new row id, or null if it already existed. */

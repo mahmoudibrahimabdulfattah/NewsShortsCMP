@@ -175,6 +175,26 @@ it at `composeApp/google-services.json`. The Gradle plugins are applied only
 when that file exists, so a clone without it still builds and runs — reporting
 is simply off (`NoOpAnalyticsReporter`).
 
+### Breaking-news notifications (optional)
+
+Delivery is by topic — `news_en` and `news_ar` — so reaching the right readers
+needs no accounts and no user records on the backend. The app subscribes to the
+topic for whichever news language is selected.
+
+The publish workflow sends at most one notification per language every six
+hours, and only for a story less than three hours old. A news app that
+interrupts more often than that gets its notifications switched off, and then
+it cannot reach the reader at all.
+
+To enable sending, add a Firebase service account key (Project settings →
+Service accounts → Generate new private key) as a repository secret:
+
+```bash
+gh secret set FIREBASE_SERVICE_ACCOUNT < path/to/service-account.json
+```
+
+Without it the workflow still publishes the feed and simply sends nothing.
+
 Events are declared in
 [`AnalyticsReporter.kt`](composeApp/src/commonMain/kotlin/org/example/newsshorts/analytics/AnalyticsReporter.kt).
 The ones worth watching are `article_viewed` vs `article_skipped`, split by how

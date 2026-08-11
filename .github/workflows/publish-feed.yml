@@ -50,6 +50,8 @@ jobs:
       - name: Generate feed
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # Optional: without it the run publishes the feed but sends no push.
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           DB_PATH: news.db
           # 20 Gemini requests per run (batches of 10) x 48 runs/day stays
           # inside the free tier's ~1,500 requests/day.

@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">News Shorts</string>
+    <string name="notification_channel_breaking_news">Breaking news</string>
+    <string name="notification_channel_breaking_news_description">Major stories as they happen</string>
 </resources>

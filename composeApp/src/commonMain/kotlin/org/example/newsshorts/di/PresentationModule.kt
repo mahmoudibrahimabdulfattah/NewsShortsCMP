@@ -8,7 +8,8 @@ val presentationModule = module {
         NewsViewModel(
             getTopHeadlinesUseCase = get(),
             settingsManager = get(),
-            analytics = get()
+            analytics = get(),
+            pushSubscriber = get()
         )
     }
 }
