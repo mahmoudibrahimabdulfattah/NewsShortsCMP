@@ -12,6 +12,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import org.example.newsshorts.MainActivity
+import org.example.newsshorts.navigation.ArticleDeepLinks
 import org.example.newsshorts.R
 
 /**
@@ -28,18 +29,23 @@ class NewsMessagingService : FirebaseMessagingService() {
         val title = payload["title"]?.takeUnless { it.isBlank() } ?: return
         val body = payload["body"].orEmpty()
         val articleUrl = payload["url"].orEmpty()
+        // Servers that predate the deepLink key still deliver a usable tap.
+        val deepLink = payload["deepLink"]?.takeUnless { it.isBlank() }
+            ?: fallbackDeepLink(title, articleUrl)
 
         if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) return
         ensureChannel(this)
 
-        val intent = Intent(this, MainActivity::class.java).apply {
+        // ACTION_VIEW carrying the deep link, but with an explicit component so
+        // no other app can intercept the tap and no chooser appears. The app
+        // then handles a notification and a shared link through one parser.
+        val intent = Intent(
+            Intent.ACTION_VIEW,
+            deepLink?.let { Uri.parse(it) },
+            this,
+            MainActivity::class.java,
+        ).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            if (articleUrl.isNotBlank()) {
-                putExtra(EXTRA_ARTICLE_URL, articleUrl)
-                // Distinct data per article, so a second push does not reuse
-                // the first one's extras.
-                setData(Uri.parse(articleUrl))
-            }
         }
         val pendingIntent = PendingIntent.getActivity(
             this,
@@ -71,8 +77,14 @@ class NewsMessagingService : FirebaseMessagingService() {
         NewsTopics.resubscribe(applicationContext)
     }
 
+    /** Enough for the details screen to render a headline and a source link. */
+    private fun fallbackDeepLink(title: String, articleUrl: String): String? {
+        if (articleUrl.isBlank()) return null
+        return "${ArticleDeepLinks.SCHEME}://${ArticleDeepLinks.HOST}" +
+            "?url=${Uri.encode(articleUrl)}&title=${Uri.encode(title)}"
+    }
+
     companion object {
-        const val EXTRA_ARTICLE_URL: String = "article_url"
         const val CHANNEL_ID: String = "breaking_news"
 
         /** Channels are only a concept from API 26; below that this is a no-op. */

@@ -21,6 +21,7 @@ coil = "3.2.0"
 kotlinx-datetime = "0.6.2"
 sqldelight = "2.0.2"
 datastore = "1.1.7"
+androidx-browser = "1.8.0"
 googleServices = "4.4.2"
 firebaseBom = "33.7.0"
 firebaseCrashlyticsPlugin = "3.0.2"
@@ -91,6 +92,12 @@ sqldelight-js = { module = "app.cash.sqldelight:web-worker-driver", version.ref 
 
 # DataStore
 datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "datastore" }
+
+# Chrome Custom Tabs (Android only)
+androidx-browser = { module = "androidx.browser:browser", version.ref = "androidx-browser" }
+
+# Compose back handling, used from commonMain
+compose-ui-backhandler = { module = "org.jetbrains.compose.ui:ui-backhandler", version.ref = "composeMultiplatform" }
 
 # Firebase (Android only — the BoM pins the individual artifact versions)
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }

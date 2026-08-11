@@ -9,7 +9,8 @@ val presentationModule = module {
             getTopHeadlinesUseCase = get(),
             settingsManager = get(),
             analytics = get(),
-            pushSubscriber = get()
+            pushSubscriber = get(),
+            deepLinkBus = get()
         )
     }
 }

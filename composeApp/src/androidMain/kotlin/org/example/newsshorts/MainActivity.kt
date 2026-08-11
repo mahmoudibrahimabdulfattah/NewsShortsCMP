@@ -17,8 +17,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
 import org.example.newsshorts.di.initializeKoin
 import org.example.newsshorts.di.platformModule
+import androidx.browser.customtabs.CustomTabColorSchemeParams
+import androidx.browser.customtabs.CustomTabsIntent
+import org.example.newsshorts.navigation.ArticleDeepLinks
+import org.example.newsshorts.navigation.DeepLinkBus
 import org.example.newsshorts.notifications.NewsMessagingService
 import org.koin.android.ext.koin.androidContext
+import org.koin.android.ext.android.inject
 
 class NewsShortsApplication : Application() {
     override fun onCreate() {
@@ -30,6 +35,9 @@ class NewsShortsApplication : Application() {
 }
 
 class MainActivity : ComponentActivity() {
+
+    // The Activity hands links to the bus and never touches the ViewModel.
+    private val deepLinkBus: DeepLinkBus by inject()
 
     private val notificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -47,20 +55,27 @@ class MainActivity : ComponentActivity() {
                 onShowToast = { message -> showToast(message) }
             )
         }
-        openArticleFrom(intent)
+        // Only on a fresh start: after process death the system replays the
+        // original intent, which would reopen an article the reader dismissed.
+        if (savedInstanceState == null) consumeDeepLink(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        openArticleFrom(intent)
+        consumeDeepLink(intent)
     }
 
-    /** A tapped push carries the article it was about. */
-    private fun openArticleFrom(intent: Intent?) {
-        val url = intent?.getStringExtra(NewsMessagingService.EXTRA_ARTICLE_URL) ?: return
-        intent.removeExtra(NewsMessagingService.EXTRA_ARTICLE_URL)
-        openUrl(url)
+    /**
+     * A tapped notification and a `newsshorts://` link arrive the same way, so
+     * one parser covers both — and `adb am start` exercises the real path.
+     */
+    private fun consumeDeepLink(intent: Intent?) {
+        val data = intent?.data?.toString() ?: return
+        // Clearing it stops the same link firing again when the app resumes.
+        intent.data = null
+        val link = ArticleDeepLinks.parse(data) ?: return
+        deepLinkBus.post(link)
     }
 
     private fun requestNotificationPermissionIfNeeded() {
@@ -72,12 +87,31 @@ class MainActivity : ComponentActivity() {
         if (!granted) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
+    /**
+     * Opens the publisher's page in a Custom Tab, so the reader stays inside
+     * the app and one back press returns to the article.
+     */
     private fun openUrl(url: String) {
+        if (!url.startsWith("http://", true) && !url.startsWith("https://", true)) return
+        val uri = Uri.parse(url)
         try {
-            val intent: Intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-            startActivity(intent)
+            CustomTabsIntent.Builder()
+                .setShowTitle(true)
+                .setColorScheme(CustomTabsIntent.COLOR_SCHEME_DARK)
+                .setDefaultColorSchemeParams(
+                    CustomTabColorSchemeParams.Builder()
+                        .setToolbarColor(TOOLBAR_COLOR)
+                        .build()
+                )
+                .build()
+                .launchUrl(this, uri)
         } catch (exception: Exception) {
-            showToast("Unable to open link")
+            // No Custom Tabs-capable browser installed.
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, uri))
+            } catch (fallbackFailure: Exception) {
+                showToast("Unable to open link")
+            }
         }
     }
 
@@ -92,6 +126,11 @@ class MainActivity : ComponentActivity() {
 
     private fun showToast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private companion object {
+        /** Matches the app's dark surface so the tab does not look borrowed. */
+        const val TOOLBAR_COLOR: Int = 0xFF1A1A2E.toInt()
     }
 }
 

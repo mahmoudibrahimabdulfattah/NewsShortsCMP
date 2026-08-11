@@ -12,16 +12,22 @@ import kotlinx.coroutines.launch
 import org.example.newsshorts.data.local.SettingsManager
 import org.example.newsshorts.data.local.currentTimeMillis
 import org.example.newsshorts.domain.model.FeedLanguage
+import org.example.newsshorts.domain.model.NewsArticle
 import org.example.newsshorts.domain.model.NewsCategory
 import org.example.newsshorts.domain.model.NewsResult
 import org.example.newsshorts.domain.use_case.GetTopHeadlinesRequest
 import org.example.newsshorts.domain.use_case.GetTopHeadlinesUseCase
 import org.example.newsshorts.analytics.AnalyticsEvent
 import org.example.newsshorts.analytics.AnalyticsReporter
+import org.example.newsshorts.navigation.ArticleDeepLink
+import org.example.newsshorts.navigation.DeepLinkBus
+import org.example.newsshorts.navigation.toNewsArticle
 import org.example.newsshorts.notifications.PushSubscriber
 import org.example.newsshorts.presentation.localization.AppLocale
 import org.example.newsshorts.presentation.localization.AppStrings
 import org.example.newsshorts.presentation.localization.getStrings
+import org.example.newsshorts.presentation.mvi.ArticleDetails
+import org.example.newsshorts.presentation.mvi.ArticleOpenOrigin
 import org.example.newsshorts.presentation.mvi.CountryOption
 import org.example.newsshorts.presentation.mvi.LanguageOption
 import org.example.newsshorts.presentation.mvi.NavigationTab
@@ -34,6 +40,7 @@ class NewsViewModel(
     private val settingsManager: SettingsManager,
     private val analytics: AnalyticsReporter,
     private val pushSubscriber: PushSubscriber,
+    private val deepLinkBus: DeepLinkBus,
 ) : BaseViewModel() {
 
     private val mutableState: MutableStateFlow<NewsUiState> = MutableStateFlow(NewsUiState())
@@ -47,6 +54,19 @@ class NewsViewModel(
 
     init {
         loadSavedSettings()
+        observeDeepLinks()
+    }
+
+    private fun observeDeepLinks() {
+        viewModelScope.launch {
+            deepLinkBus.pending.collect { link ->
+                if (link == null) return@collect
+                processEvent(NewsUiEvent.OpenDeepLink(link))
+                // Both this and the ViewModel outlive the Activity, so an
+                // unconsumed link would reopen the screen on every resume.
+                deepLinkBus.consume()
+            }
+        }
     }
 
     private fun loadSavedSettings() {
@@ -80,10 +100,13 @@ class NewsViewModel(
             is NewsUiEvent.SelectAppLocale -> handleSelectAppLocale(event.locale)
             is NewsUiEvent.SelectTab -> handleSelectTab(event.tab)
             is NewsUiEvent.ScrollToArticle -> handleScrollToArticle(event.index)
-            is NewsUiEvent.OpenArticle -> handleOpenArticle(event.articleIndex)
-            is NewsUiEvent.ShareArticle -> handleShareArticle(event.articleIndex)
-            is NewsUiEvent.SaveArticle -> handleSaveArticle(event.articleIndex)
-            is NewsUiEvent.RemoveSavedArticle -> handleRemoveSavedArticle(event.articleIndex)
+            is NewsUiEvent.OpenArticleDetails -> handleOpenArticleDetails(event.article, event.origin)
+            NewsUiEvent.CloseArticleDetails -> handleCloseArticleDetails()
+            NewsUiEvent.OpenArticleSource -> handleOpenArticleSource()
+            is NewsUiEvent.OpenDeepLink -> handleOpenDeepLink(event.link)
+            is NewsUiEvent.ShareArticle -> handleShareArticle(event.article)
+            is NewsUiEvent.SaveArticle -> handleSaveArticle(event.article)
+            is NewsUiEvent.RemoveSavedArticle -> handleRemoveSavedArticle(event.article)
             NewsUiEvent.RefreshNews -> handleRefreshNews()
             NewsUiEvent.RetryLoading -> handleRetryLoading()
             NewsUiEvent.DismissError -> handleDismissError()
@@ -266,18 +289,51 @@ class NewsViewModel(
         )
     }
 
-    private fun handleOpenArticle(articleIndex: Int) {
-        val article = mutableState.value.articles.getOrNull(articleIndex) ?: return
+    private fun handleOpenArticleDetails(article: NewsArticle, origin: ArticleOpenOrigin) {
+        mutableState.update { state ->
+            state.copy(articleDetails = ArticleDetails(article, origin))
+        }
         analytics.logEvent(
-            AnalyticsEvent.ArticleOpened(article.category.apiValue, article.source.name.value)
+            AnalyticsEvent.ArticleDetailsOpened(
+                category = article.category.apiValue,
+                source = article.source.name.value,
+                origin = origin.analyticsValue,
+            )
+        )
+    }
+
+    private fun handleCloseArticleDetails() {
+        mutableState.update { state -> state.copy(articleDetails = null) }
+    }
+
+    private fun handleOpenArticleSource() {
+        val article = mutableState.value.articleDetails?.article ?: return
+        analytics.logEvent(
+            AnalyticsEvent.ArticleSourceOpened(article.category.apiValue, article.source.name.value)
         )
         viewModelScope.launch {
             mutableEffect.emit(NewsUiEffect.OpenUrl(article.articleUrl.value))
         }
     }
 
-    private fun handleShareArticle(articleIndex: Int) {
-        val article = mutableState.value.articles.getOrNull(articleIndex) ?: return
+    /**
+     * Prefers a copy already in the feed or the saved list — those carry the
+     * real image and timestamp — and falls back to rebuilding the article from
+     * the link, which is all a cold start has.
+     */
+    private fun handleOpenDeepLink(link: ArticleDeepLink) {
+        val state = mutableState.value
+        val article = state.articles.firstOrNull { it.articleUrl.value == link.url }
+            ?: state.savedArticles.firstOrNull { it.articleUrl.value == link.url }
+            ?: link.toNewsArticle()
+            ?: return
+        analytics.logEvent(
+            AnalyticsEvent.NotificationOpened(article.category.apiValue, article.source.name.value)
+        )
+        handleOpenArticleDetails(article, ArticleOpenOrigin.PUSH)
+    }
+
+    private fun handleShareArticle(article: NewsArticle) {
         analytics.logEvent(AnalyticsEvent.ArticleShared(article.category.apiValue))
         viewModelScope.launch {
             mutableEffect.emit(
@@ -289,8 +345,7 @@ class NewsViewModel(
         }
     }
 
-    private fun handleSaveArticle(articleIndex: Int) {
-        val article = mutableState.value.articles.getOrNull(articleIndex) ?: return
+    private fun handleSaveArticle(article: NewsArticle) {
         val currentSaved = mutableState.value.savedArticles.toMutableList()
         val savedIndex: Int = currentSaved.indexOfFirst { it.articleUrl == article.articleUrl }
         val isAlreadySaved: Boolean = savedIndex != -1
@@ -314,16 +369,17 @@ class NewsViewModel(
         }
     }
 
-    private fun handleRemoveSavedArticle(articleIndex: Int) {
+    private fun handleRemoveSavedArticle(article: NewsArticle) {
         val currentSaved = mutableState.value.savedArticles.toMutableList()
-        if (articleIndex in currentSaved.indices) {
-            currentSaved.removeAt(articleIndex)
-            mutableState.update { state ->
-                state.copy(savedArticles = currentSaved)
-            }
-            viewModelScope.launch {
-                mutableEffect.emit(NewsUiEffect.ShowToast(strings().articleRemoved))
-            }
+        // Matched by URL, the only stable identity an article has.
+        val savedIndex = currentSaved.indexOfFirst { it.articleUrl == article.articleUrl }
+        if (savedIndex == -1) return
+        currentSaved.removeAt(savedIndex)
+        mutableState.update { state ->
+            state.copy(savedArticles = currentSaved)
+        }
+        viewModelScope.launch {
+            mutableEffect.emit(NewsUiEffect.ShowToast(strings().articleRemoved))
         }
     }
 

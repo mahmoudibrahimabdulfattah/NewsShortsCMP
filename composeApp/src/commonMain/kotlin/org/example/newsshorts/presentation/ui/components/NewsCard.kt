@@ -268,7 +268,7 @@ private fun NewsCardMetadata(
         Text(
             // Isolated so a Latin source name keeps its own punctuation order
             // inside an RTL layout ("NYT U.S." rendering as ".NYT U.S").
-            text = "⁨$sourceName⁩",
+            text = isolateBidi(sourceName),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
             color = Color.White.copy(alpha = 0.9f)
@@ -359,42 +359,4 @@ private fun NewsCardActions(
             )
         }
     }
-}
-
-private fun formatPublishedTime(
-    timestamp: PublishedTimestamp,
-    monthNames: List<String>,
-    recentlyLabel: String,
-): String {
-    return try {
-        val epochMillis: Long = timestamp.epochMillis
-        val totalDays: Long = epochMillis / (1000 * 60 * 60 * 24)
-        // Calculate date from epoch days
-        var remainingDays: Int = totalDays.toInt()
-        var year: Int = 1970
-        while (true) {
-            val daysInYear: Int = if (isLeapYear(year)) 366 else 365
-            if (remainingDays < daysInYear) break
-            remainingDays -= daysInYear
-            year++
-        }
-        val daysInMonths: IntArray = if (isLeapYear(year)) {
-            intArrayOf(31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-        } else {
-            intArrayOf(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-        }
-        var month: Int = 0
-        while (month < 12 && remainingDays >= daysInMonths[month]) {
-            remainingDays -= daysInMonths[month]
-            month++
-        }
-        val day: Int = remainingDays + 1
-        "$day ${monthNames[month]} $year"
-    } catch (exception: Exception) {
-        recentlyLabel
-    }
-}
-
-private fun isLeapYear(year: Int): Boolean {
-    return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
 }

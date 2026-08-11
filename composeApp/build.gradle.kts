@@ -95,6 +95,9 @@ kotlin {
             implementation(compose.ui)
             implementation(compose.components.resources)
             implementation(compose.components.uiToolingPreview)
+            // Arrives transitively through material3, but declared so a future
+            // Compose bump cannot silently remove it.
+            implementation(libs.compose.ui.backhandler)
             // Kotlinx
             implementation(libs.kotlinx.coroutinesCore)
             implementation(libs.kotlinx.serialization.json)
@@ -126,6 +129,7 @@ kotlin {
             implementation(libs.firebase.analytics)
             implementation(libs.firebase.crashlytics)
             implementation(libs.firebase.messaging)
+            implementation(libs.androidx.browser)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

@@ -41,8 +41,29 @@ sealed class AnalyticsEvent(val name: String, val params: Map<String, String> = 
         params = mapOf("depth" to depth.toString(), "category" to category),
     )
 
-    class ArticleOpened(category: String, source: String) : AnalyticsEvent(
-        name = "article_opened",
+    /**
+     * The reader opened the in-app details screen. [origin] separates a feed tap
+     * from a saved-list tap from a notification.
+     *
+     * This replaces the old `article_opened`, which meant "the reader left for
+     * the publisher". The click that fired it now does something much cheaper
+     * and far more often, so reusing the name would have blended two behaviours
+     * into one series.
+     */
+    class ArticleDetailsOpened(category: String, source: String, origin: String) : AnalyticsEvent(
+        name = "article_details_opened",
+        params = mapOf("category" to category, "source" to source, "origin" to origin),
+    )
+
+    /** The reader went on to the publisher's page — the expensive, rarer step. */
+    class ArticleSourceOpened(category: String, source: String) : AnalyticsEvent(
+        name = "article_source_opened",
+        params = mapOf("category" to category, "source" to source),
+    )
+
+    /** Makes push-driven engagement measurable; previously it logged nothing. */
+    class NotificationOpened(category: String, source: String) : AnalyticsEvent(
+        name = "notification_opened",
         params = mapOf("category" to category, "source" to source),
     )
 

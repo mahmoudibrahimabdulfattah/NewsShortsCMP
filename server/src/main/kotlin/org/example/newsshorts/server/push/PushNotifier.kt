@@ -52,7 +52,9 @@ class PushNotifier(serviceAccountJson: String) : Notifier {
                 putJsonObject("data") {
                     put("title", article.title)
                     put("body", article.summary.take(160))
+                    // Kept for clients installed before deepLink existed.
                     put("url", article.url)
+                    put("deepLink", ArticleDeepLinks.build(article))
                 }
                 putJsonObject("android") { put("priority", "high") }
             }

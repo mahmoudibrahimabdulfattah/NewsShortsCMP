@@ -64,8 +64,8 @@ fun ProfileScreen(
     uiState: NewsUiState,
     onLanguageSelected: (LanguageOption) -> Unit,
     onAppLocaleSelected: (AppLocale) -> Unit,
-    onSavedArticleClick: (Int) -> Unit,
-    onRemoveSavedArticle: (Int) -> Unit,
+    onSavedArticleClick: (NewsArticle) -> Unit,
+    onRemoveSavedArticle: (NewsArticle) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -364,8 +364,8 @@ private fun LanguageChip(
 @Composable
 private fun SavedArticlesSection(
     savedArticles: List<NewsArticle>,
-    onArticleClick: (Int) -> Unit,
-    onRemoveArticle: (Int) -> Unit,
+    onArticleClick: (NewsArticle) -> Unit,
+    onRemoveArticle: (NewsArticle) -> Unit,
     strings: org.example.newsshorts.presentation.localization.AppStrings,
     modifier: Modifier = Modifier
 ) {
@@ -387,11 +387,11 @@ private fun SavedArticlesSection(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                savedArticles.forEachIndexed { index, article ->
+                savedArticles.forEach { article ->
                     SavedArticleCard(
                         article = article,
-                        onClick = { onArticleClick(index) },
-                        onRemove = { onRemoveArticle(index) }
+                        onClick = { onArticleClick(article) },
+                        onRemove = { onRemoveArticle(article) }
                     )
                 }
             }
@@ -541,7 +541,9 @@ private fun AppInfoSection(
                 Spacer(modifier = Modifier.height(12.dp))
                 InfoRow(label = strings.platform, value = "Compose Multiplatform")
                 Spacer(modifier = Modifier.height(12.dp))
-                InfoRow(label = strings.poweredBy, value = "NewsAPI.org")
+                // NewsAPI was replaced by the RSS + Gemini backend; the credit
+                // had been telling readers the wrong thing since then.
+                InfoRow(label = strings.poweredBy, value = "RSS + Gemini")
             }
         }
     }

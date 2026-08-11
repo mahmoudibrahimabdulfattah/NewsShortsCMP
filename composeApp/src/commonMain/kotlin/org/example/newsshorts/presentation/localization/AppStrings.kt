@@ -44,6 +44,11 @@ interface AppStrings {
     val fetchingLatestStories: String
     val appTagline: String
     val unknownError: String
+    val articleDetails: String
+    val readAtSource: String
+    val back: String
+    val summaryDisclaimer: String
+    val unableToOpenLink: String
 
     /** Keyed by [org.example.newsshorts.domain.model.NewsCategory.apiValue]. */
     val categoryNames: Map<String, String>
@@ -102,6 +107,12 @@ object EnglishStrings : AppStrings {
     override val fetchingLatestStories: String = "Fetching the latest stories"
     override val appTagline: String = "Stay informed, stay brief"
     override val unknownError: String = "Unknown error"
+    override val articleDetails: String = "Article"
+    override val readAtSource: String = "Read at source"
+    override val back: String = "Back"
+    override val summaryDisclaimer: String =
+        "AI-generated summary. Open the source for the full story."
+    override val unableToOpenLink: String = "Unable to open link"
 
     override val categoryNames: Map<String, String> = mapOf(
         "general" to "General",
@@ -194,6 +205,12 @@ object ArabicStrings : AppStrings {
     override val fetchingLatestStories: String = "جلب آخر الأخبار"
     override val appTagline: String = "ابق على اطلاع، باختصار"
     override val unknownError: String = "خطأ غير معروف"
+    override val articleDetails: String = "المقال"
+    override val readAtSource: String = "اقرأ من المصدر"
+    override val back: String = "رجوع"
+    override val summaryDisclaimer: String =
+        "ملخص مُولَّد بالذكاء الاصطناعي. افتح المصدر لقراءة الخبر كاملاً."
+    override val unableToOpenLink: String = "تعذّر فتح الرابط"
 
     override val categoryNames: Map<String, String> = mapOf(
         "general" to "عام",

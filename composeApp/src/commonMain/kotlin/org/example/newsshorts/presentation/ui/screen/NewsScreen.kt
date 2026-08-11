@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.example.newsshorts.presentation.localization.appStrings
 import org.example.newsshorts.presentation.localization.countryName
+import org.example.newsshorts.presentation.mvi.ArticleOpenOrigin
 import org.example.newsshorts.presentation.mvi.NavigationTab
 import org.example.newsshorts.presentation.mvi.NewsUiEffect
 import org.example.newsshorts.presentation.mvi.NewsUiEvent
@@ -96,11 +97,11 @@ private fun NewsScreenContent(
                     onAppLocaleSelected = { locale ->
                         onEvent(NewsUiEvent.SelectAppLocale(locale))
                     },
-                    onSavedArticleClick = { index ->
-                        onEvent(NewsUiEvent.OpenArticle(index))
+                    onSavedArticleClick = { article ->
+                        onEvent(NewsUiEvent.OpenArticleDetails(article, ArticleOpenOrigin.SAVED))
                     },
-                    onRemoveSavedArticle = { index ->
-                        onEvent(NewsUiEvent.RemoveSavedArticle(index))
+                    onRemoveSavedArticle = { article ->
+                        onEvent(NewsUiEvent.RemoveSavedArticle(article))
                     }
                 )
             }
@@ -143,11 +144,21 @@ private fun NewsScreenContent(
                 }
             }
         }
-        BottomNavigationBar(
-            selectedTab = uiState.currentTab,
-            onTabSelected = { tab -> onEvent(NewsUiEvent.SelectTab(tab)) },
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
+        if (uiState.articleDetails == null) {
+            BottomNavigationBar(
+                selectedTab = uiState.currentTab,
+                onTabSelected = { tab -> onEvent(NewsUiEvent.SelectTab(tab)) },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+        uiState.articleDetails?.let { details ->
+            ArticleDetailsScreen(
+                article = details.article,
+                isSaved = uiState.savedArticles.any { it.articleUrl == details.article.articleUrl },
+                onEvent = onEvent,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
     }
 }
 
@@ -273,9 +284,11 @@ private fun NewsArticlesPager(
             NewsCard(
                 article = article,
                 isSaved = isArticleSaved,
-                onOpenArticle = { onEvent(NewsUiEvent.OpenArticle(pageIndex)) },
-                onShareArticle = { onEvent(NewsUiEvent.ShareArticle(pageIndex)) },
-                onSaveArticle = { onEvent(NewsUiEvent.SaveArticle(pageIndex)) }
+                onOpenArticle = {
+                    onEvent(NewsUiEvent.OpenArticleDetails(article, ArticleOpenOrigin.FEED))
+                },
+                onShareArticle = { onEvent(NewsUiEvent.ShareArticle(article)) },
+                onSaveArticle = { onEvent(NewsUiEvent.SaveArticle(article)) }
             )
         }
     }

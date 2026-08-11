@@ -18,7 +18,9 @@ data class NewsUiState(
     val currentTab: NavigationTab = NavigationTab.FOR_YOU,
     val savedArticles: List<NewsArticle> = emptyList(),
     val isOfflineMode: Boolean = false,
-    val isFirstLaunch: Boolean = true
+    val isFirstLaunch: Boolean = true,
+    /** Non-null while the details screen is showing. One level deep, so no stack. */
+    val articleDetails: ArticleDetails? = null
 ) {
     val hasArticles: Boolean
         get() = articles.isNotEmpty()
@@ -31,6 +33,25 @@ data class NewsUiState(
 
     val hasSavedArticles: Boolean
         get() = savedArticles.isNotEmpty()
+}
+
+/**
+ * The article being shown full-screen.
+ *
+ * Holds the article itself rather than an index: [ArticleId] is derived from
+ * list position, and an article arriving from a notification is not in any list
+ * at all on a cold start.
+ */
+data class ArticleDetails(
+    val article: NewsArticle,
+    val origin: ArticleOpenOrigin
+)
+
+/** Where a details screen was opened from — reported with the analytics event. */
+enum class ArticleOpenOrigin(val analyticsValue: String) {
+    FEED("feed"),
+    SAVED("saved"),
+    PUSH("push")
 }
 
 enum class NavigationTab(
