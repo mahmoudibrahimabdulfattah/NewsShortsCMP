@@ -32,6 +32,9 @@ class NewsMessagingService : FirebaseMessagingService() {
         // Servers that predate the deepLink key still deliver a usable tap.
         val deepLink = payload["deepLink"]?.takeUnless { it.isBlank() }
             ?: fallbackDeepLink(title, articleUrl)
+        // A reminder carries no article, so the title is the only thing that
+        // identifies it — without this every one of them would reuse id 0.
+        val notificationId = (deepLink ?: title).hashCode()
 
         if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) return
         ensureChannel(this)
@@ -49,7 +52,7 @@ class NewsMessagingService : FirebaseMessagingService() {
         }
         val pendingIntent = PendingIntent.getActivity(
             this,
-            articleUrl.hashCode(),
+            notificationId,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -65,7 +68,7 @@ class NewsMessagingService : FirebaseMessagingService() {
             .build()
 
         try {
-            NotificationManagerCompat.from(this).notify(articleUrl.hashCode(), notification)
+            NotificationManagerCompat.from(this).notify(notificationId, notification)
         } catch (securityException: SecurityException) {
             // POST_NOTIFICATIONS revoked between the check above and here.
         }

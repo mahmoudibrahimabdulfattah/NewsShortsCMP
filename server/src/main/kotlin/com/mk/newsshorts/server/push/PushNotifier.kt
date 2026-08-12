@@ -15,7 +15,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
-import com.mk.newsshorts.server.model.FeedArticleDto
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.security.KeyFactory
@@ -42,7 +41,7 @@ class PushNotifier(serviceAccountJson: String) : Notifier {
     private val clientEmail = account.getValue("client_email").jsonPrimitive.content
     private val privateKeyPem = account.getValue("private_key").jsonPrimitive.content
 
-    override suspend fun send(topic: String, article: FeedArticleDto): Boolean {
+    override suspend fun send(topic: String, message: PushMessage): Boolean {
         val token = accessToken() ?: return false
         val body = buildJsonObject {
             putJsonObject("message") {
@@ -50,11 +49,12 @@ class PushNotifier(serviceAccountJson: String) : Notifier {
                 // Data-only: the app builds the notification so it controls the
                 // channel and the tap target even when backgrounded.
                 putJsonObject("data") {
-                    put("title", article.title)
-                    put("body", article.summary.take(160))
-                    // Kept for clients installed before deepLink existed.
-                    put("url", article.url)
-                    put("deepLink", ArticleDeepLinks.build(article))
+                    put("title", message.title)
+                    put("body", message.body)
+                    put("tier", message.tier.label)
+                    // Absent on the reminder tier, which has no article behind
+                    // it — the app then opens on the feed.
+                    message.deepLink?.let { put("deepLink", it) }
                 }
                 putJsonObject("android") { put("priority", "high") }
             }
@@ -67,7 +67,7 @@ class PushNotifier(serviceAccountJson: String) : Notifier {
                 setBody(body.toString())
             }
             if (response.status.isSuccess()) {
-                log.info("Pushed to $topic: ${article.title.take(60)}")
+                log.info("Pushed ${message.tier.label} to $topic: ${message.title.take(60)}")
                 true
             } else {
                 log.warn("Push to $topic failed: ${response.status} ${response.bodyAsText().take(300)}")
