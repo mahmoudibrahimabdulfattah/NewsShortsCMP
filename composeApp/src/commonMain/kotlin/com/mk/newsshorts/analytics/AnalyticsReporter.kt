@@ -97,6 +97,18 @@ sealed class AnalyticsEvent(val name: String, val params: Map<String, String> = 
         params = mapOf("language" to language),
     )
 
+    /**
+     * A build was blocked by the minimum supported version.
+     *
+     * Reported with the version that was blocked, so how many readers are stuck
+     * on an old build — and whether they went on to update — is answerable
+     * rather than guessed at.
+     */
+    class UpdateRequired(versionCode: Int) : AnalyticsEvent(
+        name = "update_required",
+        params = mapOf("version_code" to versionCode.toString()),
+    )
+
     /** An empty or failed feed load, split by whether the cache covered it. */
     class FeedLoadFailed(reason: String, servedFromCache: Boolean) : AnalyticsEvent(
         name = "feed_load_failed",

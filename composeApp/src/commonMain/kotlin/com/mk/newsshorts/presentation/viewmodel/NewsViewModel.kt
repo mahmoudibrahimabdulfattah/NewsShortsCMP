@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import com.mk.newsshorts.data.local.SavedArticlesStore
 import com.mk.newsshorts.data.local.SettingsManager
 import com.mk.newsshorts.data.local.currentTimeMillis
+import com.mk.newsshorts.data.remote.AppUpdateClient
 import com.mk.newsshorts.domain.model.FeedLanguage
 import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.domain.model.NewsCategory
@@ -45,6 +46,7 @@ class NewsViewModel(
     private val pushSubscriber: PushSubscriber,
     private val deepLinkBus: DeepLinkBus,
     private val savedArticlesStore: SavedArticlesStore,
+    private val appUpdateClient: AppUpdateClient,
 ) : BaseViewModel() {
 
     private val mutableState: MutableStateFlow<NewsUiState> = MutableStateFlow(NewsUiState())
@@ -59,6 +61,21 @@ class NewsViewModel(
     init {
         loadSavedSettings()
         observeDeepLinks()
+        checkForRequiredUpdate()
+    }
+
+    /**
+     * Runs alongside the feed load rather than before it: the check is a
+     * safeguard for the rare release that has to be retired, and making every
+     * launch wait on a network call to find out it is fine would be a cost paid
+     * by everyone for a case that almost never happens.
+     */
+    private fun checkForRequiredUpdate() {
+        viewModelScope.launch {
+            val update = appUpdateClient.requiredUpdate() ?: return@launch
+            analytics.logEvent(AnalyticsEvent.UpdateRequired(BuildConfig.VERSION_CODE))
+            mutableState.update { state -> state.copy(requiredUpdate = update) }
+        }
     }
 
     private fun observeDeepLinks() {

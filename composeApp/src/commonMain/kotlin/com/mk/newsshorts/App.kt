@@ -22,6 +22,7 @@ import com.mk.newsshorts.presentation.localization.LocaleProvider
 import com.mk.newsshorts.presentation.mvi.NewsUiState
 import com.mk.newsshorts.presentation.ui.screen.NewsScreen
 import com.mk.newsshorts.presentation.ui.screen.SplashScreen
+import com.mk.newsshorts.presentation.ui.screen.UpdateRequiredScreen
 import com.mk.newsshorts.presentation.ui.theme.NewsShortsTheme
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
@@ -59,7 +60,17 @@ fun App(
                 animationSpec = tween(CROSSFADE_DURATION_MS),
                 label = "SplashTransition"
             ) { isSplashVisible: Boolean ->
-                if (isSplashVisible) {
+                val requiredUpdate = uiState.requiredUpdate
+                if (requiredUpdate != null) {
+                    // Replaces the content rather than covering it: nothing
+                    // underneath should keep running once the build is retired.
+                    NewsShortsTheme(isDarkTheme = true) {
+                        UpdateRequiredScreen(
+                            onUpdate = { onOpenUrl(requiredUpdate.storeUrl) },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                } else if (isSplashVisible) {
                     SplashScreen(
                         logoPainter = logoPainter,
                         onSplashComplete = { showSplash = false },

@@ -47,6 +47,12 @@ val shareLinkPathPrefix: String = shareBaseUrl
     .trimEnd('/')
     .let { path -> if (path.isEmpty()) "/a/" else "/$path/a/" }
 
+// The one place the version is declared. The Android block and the shared
+// BuildConfig both read it, so the number the update check compares against is
+// by construction the number Play installed.
+val appVersionCode: Int = 1
+val appVersionName: String = "1.0.0"
+
 // Generate BuildConfig.kt file
 val buildConfigDir = file("src/commonMain/kotlin/com/mk/newsshorts/config")
 val buildConfigFile = file("src/commonMain/kotlin/com/mk/newsshorts/config/BuildConfig.kt")
@@ -59,6 +65,8 @@ buildConfigFile.writeText(
     |object BuildConfig {
     |    const val BACKEND_BASE_URL: String = "$backendBaseUrl"
     |    const val SHARE_BASE_URL: String = "$shareBaseUrl"
+    |    const val VERSION_CODE: Int = $appVersionCode
+    |    const val VERSION_NAME: String = "$appVersionName"
     |}
     """.trimMargin()
 )
@@ -186,8 +194,8 @@ android {
         manifestPlaceholders["shareLinkPathPrefix"] = shareLinkPathPrefix
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
     }
     packaging {
         resources {

@@ -50,6 +50,9 @@ interface AppStrings {
     val summaryDisclaimer: String
     val unableToOpenLink: String
     val shareArticle: String
+    val updateRequiredTitle: String
+    val updateRequiredMessage: String
+    val updateNow: String
 
     /** Keyed by [com.mk.newsshorts.domain.model.NewsCategory.apiValue]. */
     val categoryNames: Map<String, String>
@@ -115,6 +118,10 @@ object EnglishStrings : AppStrings {
         "AI-generated summary. Open the source for the full story."
     override val unableToOpenLink: String = "Unable to open link"
     override val shareArticle: String = "Share article"
+    override val updateRequiredTitle: String = "Update required"
+    override val updateRequiredMessage: String =
+        "This version of News Shorts is out of date. Update to keep reading the latest news."
+    override val updateNow: String = "Update now"
 
     override val categoryNames: Map<String, String> = mapOf(
         "general" to "General",
@@ -214,6 +221,10 @@ object ArabicStrings : AppStrings {
         "ملخص مُولَّد بالذكاء الاصطناعي. افتح المصدر لقراءة الخبر كاملاً."
     override val unableToOpenLink: String = "تعذّر فتح الرابط"
     override val shareArticle: String = "مشاركة المقال"
+    override val updateRequiredTitle: String = "مطلوب تحديث"
+    override val updateRequiredMessage: String =
+        "هذه النسخة من أخبار مختصرة لم تعد مدعومة. حدّث التطبيق لمتابعة آخر الأخبار."
+    override val updateNow: String = "حدّث الآن"
 
     override val categoryNames: Map<String, String> = mapOf(
         "general" to "عام",

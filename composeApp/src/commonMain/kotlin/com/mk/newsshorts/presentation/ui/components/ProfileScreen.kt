@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.mk.newsshorts.config.BuildConfig
 import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.localization.appStrings
@@ -537,7 +538,7 @@ private fun AppInfoSection(
             ) {
                 InfoRow(label = strings.appName, value = "News Shorts")
                 Spacer(modifier = Modifier.height(12.dp))
-                InfoRow(label = strings.appVersion, value = "1.0.0")
+                InfoRow(label = strings.appVersion, value = BuildConfig.VERSION_NAME)
                 Spacer(modifier = Modifier.height(12.dp))
                 InfoRow(label = strings.platform, value = "Compose Multiplatform")
                 Spacer(modifier = Modifier.height(12.dp))

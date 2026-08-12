@@ -75,6 +75,9 @@ object StaticFeedGenerator {
         )
         filesWritten++
 
+        writeAppConfig(outputDir)
+        filesWritten++
+
         if (writeSharePage(outputDir)) filesWritten++
 
         // Without this, GitHub Pages runs the output through Jekyll.
@@ -88,6 +91,40 @@ object StaticFeedGenerator {
         val notifier = PushNotifier.fromEnvironment()
         if (notifier == null) log.info("Push is not configured — skipping")
         else BreakingNewsPusher(store, notifier).run()
+    }
+
+    /**
+     * The kill switch for old builds.
+     *
+     * A published app cannot be recalled: an installed build keeps running its
+     * own code against this feed forever. When a released version becomes
+     * unusable — a breaking change to the feed shape, a bug that corrupts saved
+     * data — raising MIN_SUPPORTED_VERSION_CODE is the only way to stop it, so
+     * the number lives here rather than in the app.
+     *
+     * Defaults keep every build supported, which is what it should say until
+     * there is a reason otherwise.
+     */
+    private fun writeAppConfig(outputDir: File) {
+        val storeUrl = System.getenv("PLAY_STORE_URL").orEmpty()
+        val config = AppConfigResponse(
+            minSupportedVersionCode = envInt("MIN_SUPPORTED_VERSION_CODE", default = 1),
+            latestVersionCode = envInt("LATEST_VERSION_CODE", default = 1),
+            storeUrl = storeUrl,
+        )
+        if (config.minSupportedVersionCode > 1) {
+            log.info("Builds below versionCode ${config.minSupportedVersionCode} are now blocked")
+        }
+        File(outputDir, "v1/app.json").writeText(json.encodeToString(config))
+    }
+
+    /** A malformed value would silently lock every reader out, so it is reported. */
+    private fun envInt(name: String, default: Int): Int {
+        val raw = System.getenv(name)?.takeUnless { it.isBlank() } ?: return default
+        return raw.trim().toIntOrNull() ?: run {
+            log.warn("$name is set to '$raw', which is not a number — using $default")
+            default
+        }
     }
 
     /**
@@ -120,6 +157,18 @@ object StaticFeedGenerator {
         target.writeText(json.encodeToString(FeedResponse(articles = articles, total = total)))
     }
 }
+
+/**
+ * [storeUrl] is empty until the app is on Play. The app treats an empty value as
+ * "no update available", so a forced update can never leave a reader with a
+ * blocking screen and nowhere to go.
+ */
+@kotlinx.serialization.Serializable
+private data class AppConfigResponse(
+    val minSupportedVersionCode: Int,
+    val latestVersionCode: Int,
+    val storeUrl: String,
+)
 
 @kotlinx.serialization.Serializable
 private data class MetaResponse(

@@ -31,5 +31,8 @@ object ApiConfig {
     fun countryFeedUrl(countryCode: String, language: String): String =
         "$baseUrl/v1/feed/country-$countryCode-$language.json"
 
+    /** Minimum supported build and store link — see [AppUpdateClient]. */
+    fun appConfigUrl(): String = "$baseUrl/v1/app.json"
+
     private const val DEFAULT_LANGUAGE: String = "en"
 }

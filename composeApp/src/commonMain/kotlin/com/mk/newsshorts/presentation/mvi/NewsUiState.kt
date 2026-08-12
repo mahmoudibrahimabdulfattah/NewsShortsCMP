@@ -1,5 +1,6 @@
 package com.mk.newsshorts.presentation.mvi
 
+import com.mk.newsshorts.data.remote.RequiredUpdate
 import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.domain.model.NewsCategory
 import com.mk.newsshorts.presentation.localization.AppLocale
@@ -20,7 +21,9 @@ data class NewsUiState(
     val isOfflineMode: Boolean = false,
     val isFirstLaunch: Boolean = true,
     /** Non-null while the details screen is showing. One level deep, so no stack. */
-    val articleDetails: ArticleDetails? = null
+    val articleDetails: ArticleDetails? = null,
+    /** Non-null when the backend no longer supports this build; blocks the UI. */
+    val requiredUpdate: RequiredUpdate? = null
 ) {
     val hasArticles: Boolean
         get() = articles.isNotEmpty()
