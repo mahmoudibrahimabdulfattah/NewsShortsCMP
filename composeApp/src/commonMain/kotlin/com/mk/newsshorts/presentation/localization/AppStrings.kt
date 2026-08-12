@@ -1,5 +1,7 @@
 package com.mk.newsshorts.presentation.localization
 
+import com.mk.newsshorts.auth.AuthFailure
+
 interface AppStrings {
     val appName: String
     val forYou: String
@@ -108,6 +110,14 @@ interface AppStrings {
 
     /** Twelve abbreviated month names, January first. */
     val monthNames: List<String>
+
+    /**
+     * Reader-facing text for a sign-in failure. A function over the enum, so
+     * adding an [com.mk.newsshorts.auth.AuthFailure] case without translating
+     * it is a compile error rather than an English sentence leaking into the
+     * Arabic UI.
+     */
+    fun authFailure(failure: AuthFailure): String
 
     /**
      * "3 articles" — a method rather than a template because Arabic does not
@@ -239,6 +249,20 @@ object EnglishStrings : AppStrings {
 
     override fun savedArticlesCount(count: Int): String =
         if (count == 1) "1 article" else "$count articles"
+
+    override fun authFailure(failure: AuthFailure): String = when (failure) {
+        AuthFailure.NO_GOOGLE_ACCOUNT ->
+            "No Google account on this device. Add one in Settings, or sign in with an email instead."
+        AuthFailure.NETWORK -> "No connection. Check your network and try again."
+        AuthFailure.INVALID_CREDENTIALS -> "Wrong email or password."
+        AuthFailure.INVALID_EMAIL -> "That email address doesn't look right."
+        AuthFailure.EMAIL_ALREADY_IN_USE -> "An account with this email already exists. Sign in instead."
+        AuthFailure.WEAK_PASSWORD -> "Password is too short — use at least 6 characters."
+        AuthFailure.REAUTHENTICATION_REQUIRED -> "Sign in again to confirm, then delete your account."
+        AuthFailure.NOT_CONFIGURED -> "Google Sign-In isn't available right now."
+        AuthFailure.UNSUPPORTED_PLATFORM -> "Sign-in isn't available on this platform."
+        AuthFailure.UNKNOWN -> "Something went wrong. Try again."
+    }
 
     override val settings: String = "Settings"
     override val settingsSubtitle: String = "Language, theme, notifications"
@@ -403,6 +427,20 @@ object ArabicStrings : AppStrings {
         count == 2 -> "مقالان"
         count <= 10 -> "$count مقالات"
         else -> "$count مقالاً"
+    }
+
+    override fun authFailure(failure: AuthFailure): String = when (failure) {
+        AuthFailure.NO_GOOGLE_ACCOUNT ->
+            "لا يوجد حساب Google على هذا الجهاز. أضف حساباً من الإعدادات، أو سجّل الدخول بالبريد الإلكتروني."
+        AuthFailure.NETWORK -> "لا يوجد اتصال. تحقّق من الشبكة وحاول مرة أخرى."
+        AuthFailure.INVALID_CREDENTIALS -> "البريد الإلكتروني أو كلمة المرور غير صحيحة."
+        AuthFailure.INVALID_EMAIL -> "صيغة البريد الإلكتروني غير صحيحة."
+        AuthFailure.EMAIL_ALREADY_IN_USE -> "يوجد حساب بهذا البريد بالفعل. سجّل الدخول بدلاً من إنشاء حساب."
+        AuthFailure.WEAK_PASSWORD -> "كلمة المرور قصيرة — استخدم 6 أحرف على الأقل."
+        AuthFailure.REAUTHENTICATION_REQUIRED -> "سجّل الدخول مرة أخرى للتأكيد، ثم احذف حسابك."
+        AuthFailure.NOT_CONFIGURED -> "تسجيل الدخول عبر Google غير متاح حالياً."
+        AuthFailure.UNSUPPORTED_PLATFORM -> "تسجيل الدخول غير متاح على هذه المنصة."
+        AuthFailure.UNKNOWN -> "حدث خطأ ما. حاول مرة أخرى."
     }
 
     override val settings: String = "الإعدادات"

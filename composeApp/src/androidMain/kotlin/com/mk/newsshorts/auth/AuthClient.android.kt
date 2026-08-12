@@ -5,10 +5,17 @@ import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.mk.newsshorts.config.BuildConfig
@@ -47,8 +54,8 @@ private class FirebaseAuthClient(
         if (webClientId.isBlank()) {
             // Not configured yet — see the setup notes on GOOGLE_WEB_CLIENT_ID.
             // A blank audience would fail on Google's side anyway; this fails
-            // sooner, with a message that says why.
-            return AuthResult.Error("Google Sign-In is not configured")
+            // sooner, and says why.
+            return AuthResult.Error(AuthFailure.NOT_CONFIGURED)
         }
         return runCatching {
             val option = GetGoogleIdOption.Builder()
@@ -65,7 +72,7 @@ private class FirebaseAuthClient(
             if (failure is GetCredentialCancellationException) {
                 AuthResult.Cancelled
             } else {
-                AuthResult.Error(failure.message ?: "Google Sign-In failed")
+                AuthResult.Error(failure.toAuthFailure())
             }
         }
     }
@@ -74,13 +81,13 @@ private class FirebaseAuthClient(
         runCatching {
             auth.signInWithEmailAndPassword(email, password).await()
             AuthResult.Success
-        }.getOrElse { AuthResult.Error(it.message ?: "Sign-in failed") }
+        }.getOrElse { AuthResult.Error(it.toAuthFailure()) }
 
     override suspend fun signUpWithEmail(email: String, password: String): AuthResult =
         runCatching {
             auth.createUserWithEmailAndPassword(email, password).await()
             AuthResult.Success
-        }.getOrElse { AuthResult.Error(it.message ?: "Account creation failed") }
+        }.getOrElse { AuthResult.Error(it.toAuthFailure()) }
 
     override suspend fun signOut() {
         auth.signOut()
@@ -92,17 +99,39 @@ private class FirebaseAuthClient(
     }
 
     override suspend fun deleteAccount(): AuthResult {
-        val user = auth.currentUser ?: return AuthResult.Error("Not signed in")
+        val user = auth.currentUser ?: return AuthResult.Error(AuthFailure.INVALID_CREDENTIALS)
         return runCatching {
             user.delete().await()
             AuthResult.Success
         }.getOrElse {
             // Firebase requires a *recent* sign-in for this specific operation
             // and throws FirebaseAuthRecentLoginRequiredException otherwise —
-            // surfaced as-is so the caller can prompt a re-auth rather than
-            // silently failing.
-            AuthResult.Error(it.message ?: "Account deletion failed")
+            // mapped to its own case so the screen can say "sign in again"
+            // rather than showing a generic failure.
+            AuthResult.Error(it.toAuthFailure())
         }
+    }
+
+    /**
+     * Maps the SDKs' exceptions onto [AuthFailure]. Every branch here exists
+     * because the untranslated message underneath would otherwise reach the
+     * screen: Firebase and Credential Manager only ever speak English.
+     */
+    private fun Throwable.toAuthFailure(): AuthFailure = when (this) {
+        is NoCredentialException -> AuthFailure.NO_GOOGLE_ACCOUNT
+        is FirebaseNetworkException -> AuthFailure.NETWORK
+        is FirebaseAuthWeakPasswordException -> AuthFailure.WEAK_PASSWORD
+        is FirebaseAuthUserCollisionException -> AuthFailure.EMAIL_ALREADY_IN_USE
+        is FirebaseAuthRecentLoginRequiredException -> AuthFailure.REAUTHENTICATION_REQUIRED
+        // A malformed address and a wrong password arrive as the same type, so
+        // the error code is the only thing that separates them.
+        is FirebaseAuthInvalidCredentialsException ->
+            if (errorCode == "ERROR_INVALID_EMAIL") AuthFailure.INVALID_EMAIL else AuthFailure.INVALID_CREDENTIALS
+        // Unknown or disabled account. Deliberately the same case as a wrong
+        // password: telling an attacker which addresses exist is not worth the
+        // marginally better error message.
+        is FirebaseAuthInvalidUserException -> AuthFailure.INVALID_CREDENTIALS
+        else -> AuthFailure.UNKNOWN
     }
 
     private fun FirebaseUser.toAuthUser() = AuthUser(

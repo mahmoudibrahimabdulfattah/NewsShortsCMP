@@ -205,7 +205,7 @@ class NewsViewModel(
                 AuthResult.Success -> handleCloseOverlay()
                 AuthResult.Cancelled -> mutableState.update { it.copy(authInProgress = false) }
                 is AuthResult.Error -> mutableState.update {
-                    it.copy(authInProgress = false, authError = result.message)
+                    it.copy(authInProgress = false, authError = result.failure)
                 }
             }
         }
@@ -218,7 +218,7 @@ class NewsViewModel(
                 AuthResult.Success -> handleCloseOverlay()
                 AuthResult.Cancelled -> mutableState.update { it.copy(authInProgress = false) }
                 is AuthResult.Error -> mutableState.update {
-                    it.copy(authInProgress = false, authError = result.message)
+                    it.copy(authInProgress = false, authError = result.failure)
                 }
             }
         }
@@ -231,7 +231,7 @@ class NewsViewModel(
                 AuthResult.Success -> handleCloseOverlay()
                 AuthResult.Cancelled -> mutableState.update { it.copy(authInProgress = false) }
                 is AuthResult.Error -> mutableState.update {
-                    it.copy(authInProgress = false, authError = result.message)
+                    it.copy(authInProgress = false, authError = result.failure)
                 }
             }
         }
@@ -261,7 +261,7 @@ class NewsViewModel(
                 AuthResult.Success -> handleCloseOverlay()
                 AuthResult.Cancelled -> mutableState.update { it.copy(authInProgress = false) }
                 is AuthResult.Error -> mutableState.update {
-                    it.copy(authInProgress = false, authError = result.message)
+                    it.copy(authInProgress = false, authError = result.failure)
                 }
             }
         }

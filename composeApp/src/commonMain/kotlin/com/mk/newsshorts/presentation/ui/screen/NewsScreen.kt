@@ -212,7 +212,7 @@ private fun NewsScreenContent(
             Overlay.SignIn -> {
                 SignInScreen(
                     isLoading = uiState.authInProgress,
-                    errorMessage = uiState.authError,
+                    errorFailure = uiState.authError,
                     onGoogleClick = { onEvent(NewsUiEvent.SignInWithGoogle) },
                     onEmailSignIn = { email, password ->
                         onEvent(NewsUiEvent.SignInWithEmail(email, password))

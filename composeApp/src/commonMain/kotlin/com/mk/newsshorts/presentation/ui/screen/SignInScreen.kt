@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.mk.newsshorts.auth.AuthFailure
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.mvi.NewsUiEvent
 import com.mk.newsshorts.presentation.ui.components.OverlayTopBar
@@ -51,7 +52,7 @@ import com.mk.newsshorts.presentation.ui.components.OverlayTopBar
 @Composable
 fun SignInScreen(
     isLoading: Boolean,
-    errorMessage: String?,
+    errorFailure: AuthFailure?,
     onGoogleClick: () -> Unit,
     onEmailSignIn: (String, String) -> Unit,
     onEmailSignUp: (String, String) -> Unit,
@@ -145,9 +146,9 @@ fun SignInScreen(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                errorMessage?.let {
+                errorFailure?.let {
                     Text(
-                        text = it,
+                        text = strings.authFailure(it),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),

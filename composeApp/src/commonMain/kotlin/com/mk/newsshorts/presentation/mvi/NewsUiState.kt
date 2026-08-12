@@ -1,5 +1,6 @@
 package com.mk.newsshorts.presentation.mvi
 
+import com.mk.newsshorts.auth.AuthFailure
 import com.mk.newsshorts.auth.AuthUser
 import com.mk.newsshorts.data.remote.RequiredUpdate
 import com.mk.newsshorts.security.SecurityNotice
@@ -46,8 +47,12 @@ data class NewsUiState(
     val authUser: AuthUser? = null,
     /** True while a sign-in/up/delete call is in flight — drives a spinner. */
     val authInProgress: Boolean = false,
-    /** The last auth failure, shown once then dismissed — not a stored fact. */
-    val authError: String? = null,
+    /**
+     * The last auth failure, shown once then dismissed. A value rather than
+     * a message so the screen can render it in the reader's language — the
+     * SDKs' own text is English-only.
+     */
+    val authError: AuthFailure? = null,
 ) {
     val hasArticles: Boolean
         get() = articles.isNotEmpty()
