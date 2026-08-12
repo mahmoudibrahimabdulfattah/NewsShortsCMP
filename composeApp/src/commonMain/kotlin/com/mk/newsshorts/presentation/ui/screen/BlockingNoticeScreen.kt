@@ -20,22 +20,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mk.newsshorts.presentation.localization.appStrings
 
 /**
- * Shown when the backend no longer supports this build.
+ * A dead end the reader cannot dismiss: the app has decided it should not keep
+ * running as it is.
  *
- * A full screen rather than a dialog, and with no dismiss: the point is that
- * the app underneath cannot be trusted to keep working, so leaving a way past
- * it would defeat the check. The store button is the only way out, which is why
- * the check never fires without a store link behind it.
+ * A screen rather than a dialog, and it replaces the content instead of
+ * covering it — leaving the app alive underneath would defeat the point of both
+ * callers (a retired build, and an install that cannot be trusted).
+ *
+ * [actionLabel] and [onAction] are optional because not every dead end has a
+ * way out. When there is one, it is the only control on the screen.
  */
 @Composable
-fun UpdateRequiredScreen(
-    onUpdate: () -> Unit,
-    modifier: Modifier = Modifier
+fun BlockingNoticeScreen(
+    icon: String,
+    title: String,
+    message: String,
+    modifier: Modifier = Modifier,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
 ) {
-    val strings = appStrings()
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -51,9 +56,9 @@ fun UpdateRequiredScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(text = "⬆️", fontSize = 48.sp)
+            Text(text = icon, fontSize = 48.sp)
             Text(
-                text = strings.updateRequiredTitle,
+                text = title,
                 color = Color.White,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
@@ -61,27 +66,29 @@ fun UpdateRequiredScreen(
                 modifier = Modifier.padding(top = 24.dp)
             )
             Text(
-                text = strings.updateRequiredMessage,
+                text = message,
                 color = Color.White.copy(alpha = 0.75f),
                 fontSize = 15.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 12.dp)
             )
-            Button(
-                onClick = onUpdate,
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE63946)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 32.dp)
-            ) {
-                Text(
-                    text = strings.updateNow,
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(vertical = 6.dp)
-                )
+            if (actionLabel != null && onAction != null) {
+                Button(
+                    onClick = onAction,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE63946)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 32.dp)
+                ) {
+                    Text(
+                        text = actionLabel,
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(vertical = 6.dp)
+                    )
+                }
             }
         }
     }

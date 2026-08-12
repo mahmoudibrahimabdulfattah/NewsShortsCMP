@@ -12,7 +12,14 @@ import kotlinx.coroutines.launch
 import com.mk.newsshorts.data.local.SavedArticlesStore
 import com.mk.newsshorts.data.local.SettingsManager
 import com.mk.newsshorts.data.local.currentTimeMillis
-import com.mk.newsshorts.data.remote.AppUpdateClient
+import com.mk.newsshorts.data.remote.RemoteConfigClient
+import com.mk.newsshorts.security.DeviceIntegrityInspector
+import com.mk.newsshorts.security.IntegrityPolicy
+import com.mk.newsshorts.security.SecurityNotice
+import com.mk.newsshorts.security.securityNoticeFor
+import com.mk.newsshorts.security.securityReasonFor
+import com.mk.newsshorts.data.remote.isDebugBuild
+import com.mk.newsshorts.data.remote.requiredUpdateFor
 import com.mk.newsshorts.domain.model.FeedLanguage
 import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.domain.model.NewsCategory
@@ -46,7 +53,8 @@ class NewsViewModel(
     private val pushSubscriber: PushSubscriber,
     private val deepLinkBus: DeepLinkBus,
     private val savedArticlesStore: SavedArticlesStore,
-    private val appUpdateClient: AppUpdateClient,
+    private val remoteConfigClient: RemoteConfigClient,
+    private val deviceIntegrityInspector: DeviceIntegrityInspector,
 ) : BaseViewModel() {
 
     private val mutableState: MutableStateFlow<NewsUiState> = MutableStateFlow(NewsUiState())
@@ -65,16 +73,70 @@ class NewsViewModel(
     }
 
     /**
-     * Runs alongside the feed load rather than before it: the check is a
-     * safeguard for the rare release that has to be retired, and making every
-     * launch wait on a network call to find out it is fine would be a cost paid
-     * by everyone for a case that almost never happens.
+     * Runs alongside the feed load rather than before it: these checks are
+     * safeguards for rare cases, and making every launch wait on a network call
+     * to find out everything is fine would be a cost paid by everyone.
+     *
+     * The device is inspected regardless of whether the config arrives — a
+     * blocked network is exactly the state an attacker would arrange if the
+     * response decided whether the check ran. What the config decides is only
+     * the response to it, and the default is the mildest one.
      */
     private fun checkForRequiredUpdate() {
         viewModelScope.launch {
-            val update = appUpdateClient.requiredUpdate() ?: return@launch
-            analytics.logEvent(AnalyticsEvent.UpdateRequired(BuildConfig.VERSION_CODE))
-            mutableState.update { state -> state.copy(requiredUpdate = update) }
+            val config = remoteConfigClient.fetch()
+
+            val update = config?.let { requiredUpdateFor(it, BuildConfig.VERSION_CODE) }
+            if (update != null) {
+                analytics.logEvent(AnalyticsEvent.UpdateRequired(BuildConfig.VERSION_CODE))
+                mutableState.update { state -> state.copy(requiredUpdate = update) }
+                // An unsupported build is the more urgent of the two screens,
+                // and it is the one the reader can act on.
+                return@launch
+            }
+
+            // A debug build never enforces any of this, so it does not run the
+            // checks either — the whole feature is invisible while developing.
+            if (isDebugBuild()) return@launch
+
+            val integrity = deviceIntegrityInspector.inspect()
+            if (!integrity.isCompromised && !integrity.isDeveloperEnvironment) return@launch
+
+            analytics.logEvent(
+                AnalyticsEvent.DeviceIntegrityFailed(
+                    rooted = integrity.isRooted,
+                    debugger = integrity.isDebuggerAttached,
+                    tampered = integrity.isTampered,
+                    emulator = integrity.isEmulator,
+                    developerOptions = integrity.isDeveloperOptionsEnabled,
+                )
+            )
+            val notice = securityNoticeFor(
+                integrity = integrity,
+                policy = IntegrityPolicy.fromWire(config?.rootPolicy),
+                environmentPolicy = IntegrityPolicy.fromWire(
+                    config?.emulatorPolicy,
+                    default = IntegrityPolicy.BLOCK,
+                ),
+                warningAlreadySeen = settingsManager.securityWarningSeen(),
+                enforce = true,
+            )
+            if (notice != SecurityNotice.NONE) {
+                mutableState.update { state ->
+                    state.copy(
+                        securityNotice = notice,
+                        securityReason = securityReasonFor(integrity),
+                    )
+                }
+            }
+        }
+    }
+
+    /** The warning is shown once; dismissing it records that it was seen. */
+    private fun handleDismissSecurityWarning() {
+        viewModelScope.launch {
+            settingsManager.markSecurityWarningSeen()
+            mutableState.update { state -> state.copy(securityNotice = SecurityNotice.NONE) }
         }
     }
 
@@ -124,6 +186,7 @@ class NewsViewModel(
             is NewsUiEvent.ScrollToArticle -> handleScrollToArticle(event.index)
             is NewsUiEvent.OpenArticleDetails -> handleOpenArticleDetails(event.article, event.origin)
             NewsUiEvent.CloseArticleDetails -> handleCloseArticleDetails()
+            NewsUiEvent.DismissSecurityWarning -> handleDismissSecurityWarning()
             NewsUiEvent.OpenArticleSource -> handleOpenArticleSource()
             is NewsUiEvent.OpenDeepLink -> handleOpenDeepLink(event.link)
             is NewsUiEvent.ShareArticle -> handleShareArticle(event.article)

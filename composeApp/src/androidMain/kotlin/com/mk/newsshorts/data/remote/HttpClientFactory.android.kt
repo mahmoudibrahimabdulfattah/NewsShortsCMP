@@ -7,3 +7,6 @@ actual fun createPlatformHttpClient(): HttpClient {
     return HttpClient(OkHttp)
 }
 
+
+/** The build type, from the generated BuildConfig — not from the device. */
+actual fun isDebugBuild(): Boolean = com.mk.newsshorts.BuildConfig.DEBUG

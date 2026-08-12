@@ -38,6 +38,9 @@ sealed interface NewsUiEvent {
     data object RefreshNews : NewsUiEvent
     data object RetryLoading : NewsUiEvent
     data object DismissError : NewsUiEvent
+    /** Acknowledges the device-integrity warning, which then stays dismissed. */
+    data object DismissSecurityWarning : NewsUiEvent
+
     data object NavigateToSavedArticles : NewsUiEvent
     data object NavigateToLanguageSettings : NewsUiEvent
 }

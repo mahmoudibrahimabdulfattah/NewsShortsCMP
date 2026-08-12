@@ -7,3 +7,6 @@ actual fun createPlatformHttpClient(): HttpClient {
     return HttpClient(Js)
 }
 
+
+// No shipped build of this target exists yet; treated as development.
+actual fun isDebugBuild(): Boolean = true

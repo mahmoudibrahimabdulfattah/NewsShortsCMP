@@ -47,6 +47,11 @@ val shareLinkPathPrefix: String = shareBaseUrl
     .trimEnd('/')
     .let { path -> if (path.isEmpty()) "/a/" else "/$path/a/" }
 
+// SHA-256 of the certificate the released app is signed with — the Play App
+// Signing one, since Play re-signs every build it serves. Empty until there is
+// a release keystore, which disables the tamper check rather than failing it.
+val expectedSigningSha256: String = localProperties.getProperty("SIGNING_CERT_SHA256").orEmpty()
+
 // The one place the version is declared. The Android block and the shared
 // BuildConfig both read it, so the number the update check compares against is
 // by construction the number Play installed.
@@ -196,15 +201,52 @@ android {
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = appVersionCode
         versionName = appVersionName
+        buildConfigField("String", "EXPECTED_SIGNING_SHA256", "\"$expectedSigningSha256\"")
     }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    buildFeatures {
+        // Only for DEBUG: the release build must be able to tell that it is a
+        // release without asking the OS, which an attacker controls.
+        buildConfig = true
+    }
+    // A release build has to be signed before it can be installed, and running
+    // the release variant is how the hardening below gets tested at all. The
+    // keystore comes from local.properties, which is not in version control.
+    val releaseStorePath: String? = localProperties.getProperty("RELEASE_STORE_FILE")
+    val releaseKeystore: File? = releaseStorePath?.let(::file)?.takeIf { it.exists() }
+    if (releaseKeystore != null) {
+        signingConfigs.create("release") {
+            storeFile = releaseKeystore
+            storePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD")
+            keyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS")
+            keyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD")
+        }
+    } else if (releaseStorePath != null) {
+        logger.warn("RELEASE_STORE_FILE points at $releaseStorePath, which does not exist")
+    }
+
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = false
+            // Falls back to the debug key so the release variant can be run and
+            // tested locally. A build signed this way must never be uploaded —
+            // Play would bind the app's identity to a keystore that ships with
+            // the SDK and is therefore public.
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
+            // R8 both shrinks and renames. The renaming is not the security
+            // control — anyone determined will still read the app — but it
+            // raises the cost of a casual repackage, and the shrinking is what
+            // keeps a Compose + Ktor + Firebase app down to a sane size.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
     compileOptions {

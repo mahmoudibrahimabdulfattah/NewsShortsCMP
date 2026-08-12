@@ -9,7 +9,7 @@ import kotlin.test.assertNull
  * mistake in it is only visible after the file is published. The cases below are
  * the ones where being wrong is expensive.
  */
-class AppUpdateClientTest {
+class RemoteConfigClientTest {
 
     private val store = "https://play.google.com/store/apps/details?id=com.mk.newsshorts"
 

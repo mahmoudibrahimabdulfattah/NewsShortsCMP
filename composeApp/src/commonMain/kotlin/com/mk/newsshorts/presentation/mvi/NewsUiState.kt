@@ -1,6 +1,8 @@
 package com.mk.newsshorts.presentation.mvi
 
 import com.mk.newsshorts.data.remote.RequiredUpdate
+import com.mk.newsshorts.security.SecurityNotice
+import com.mk.newsshorts.security.SecurityReason
 import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.domain.model.NewsCategory
 import com.mk.newsshorts.presentation.localization.AppLocale
@@ -23,7 +25,11 @@ data class NewsUiState(
     /** Non-null while the details screen is showing. One level deep, so no stack. */
     val articleDetails: ArticleDetails? = null,
     /** Non-null when the backend no longer supports this build; blocks the UI. */
-    val requiredUpdate: RequiredUpdate? = null
+    val requiredUpdate: RequiredUpdate? = null,
+    /** Result of the device-integrity check under the backend's policy. */
+    val securityNotice: SecurityNotice = SecurityNotice.NONE,
+    /** Which signals produced [securityNotice]; decides the wording shown. */
+    val securityReason: SecurityReason = SecurityReason.INTEGRITY
 ) {
     val hasArticles: Boolean
         get() = articles.isNotEmpty()

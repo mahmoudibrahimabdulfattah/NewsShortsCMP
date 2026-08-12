@@ -70,6 +70,12 @@ jobs:
           # release needed, which is the whole point. Unset means "support all".
           MIN_SUPPORTED_VERSION_CODE: ${{ vars.MIN_SUPPORTED_VERSION_CODE }}
           LATEST_VERSION_CODE: ${{ vars.LATEST_VERSION_CODE }}
+          # allow | warn | block — what a rooted or repackaged install does.
+          # Unset means warn.
+          ROOT_POLICY: ${{ vars.ROOT_POLICY }}
+          # Same values for emulators and developer-mode devices. Unset means
+          # block, which only ever applies to release builds.
+          EMULATOR_POLICY: ${{ vars.EMULATOR_POLICY }}
         run: ./gradlew :server:generateStaticFeed -PoutputDir=build/site --no-daemon
 
       - uses: actions/configure-pages@v5

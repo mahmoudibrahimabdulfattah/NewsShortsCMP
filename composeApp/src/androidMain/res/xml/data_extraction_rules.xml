@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 12+ replacement for allowBackup. Both paths are refused: cloud
+    backup, and device-to-device transfer.
+
+    Everything the app stores can be rebuilt from the feed in seconds, so there
+    is nothing to gain from copying it off the device, and a backup archive is
+    one more copy of a reader's data sitting somewhere they did not choose.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

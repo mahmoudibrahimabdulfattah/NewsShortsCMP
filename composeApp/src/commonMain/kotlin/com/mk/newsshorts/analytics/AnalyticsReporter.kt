@@ -109,6 +109,30 @@ sealed class AnalyticsEvent(val name: String, val params: Map<String, String> = 
         params = mapOf("version_code" to versionCode.toString()),
     )
 
+    /**
+     * A device-integrity check found something, whatever the policy then did
+     * about it. Reported even when the policy is "allow", because the first
+     * question worth answering is how many installs this would affect — that
+     * number is what makes turning the policy up a decision rather than a
+     * guess.
+     */
+    class DeviceIntegrityFailed(
+        rooted: Boolean,
+        debugger: Boolean,
+        tampered: Boolean,
+        emulator: Boolean,
+        developerOptions: Boolean,
+    ) : AnalyticsEvent(
+        name = "device_integrity_failed",
+        params = mapOf(
+            "rooted" to rooted.toString(),
+            "debugger" to debugger.toString(),
+            "tampered" to tampered.toString(),
+            "emulator" to emulator.toString(),
+            "developer_options" to developerOptions.toString(),
+        ),
+    )
+
     /** An empty or failed feed load, split by whether the cache covered it. */
     class FeedLoadFailed(reason: String, servedFromCache: Boolean) : AnalyticsEvent(
         name = "feed_load_failed",

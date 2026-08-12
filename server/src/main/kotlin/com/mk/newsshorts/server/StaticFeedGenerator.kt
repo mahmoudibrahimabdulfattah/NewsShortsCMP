@@ -111,6 +111,8 @@ object StaticFeedGenerator {
             minSupportedVersionCode = envInt("MIN_SUPPORTED_VERSION_CODE", default = 1),
             latestVersionCode = envInt("LATEST_VERSION_CODE", default = 1),
             storeUrl = storeUrl,
+            rootPolicy = System.getenv("ROOT_POLICY")?.takeUnless { it.isBlank() }?.trim() ?: "warn",
+            emulatorPolicy = System.getenv("EMULATOR_POLICY")?.takeUnless { it.isBlank() }?.trim() ?: "block",
         )
         if (config.minSupportedVersionCode > 1) {
             log.info("Builds below versionCode ${config.minSupportedVersionCode} are now blocked")
@@ -168,6 +170,14 @@ private data class AppConfigResponse(
     val minSupportedVersionCode: Int,
     val latestVersionCode: Int,
     val storeUrl: String,
+    /**
+     * What a rooted or repackaged install should do: allow, warn, or block.
+     * Served rather than compiled in because the right answer depends on who
+     * turns out to be installing the app, which is not knowable before launch.
+     */
+    val rootPolicy: String,
+    /** Same values, for emulators and developer-mode devices. */
+    val emulatorPolicy: String,
 )
 
 @kotlinx.serialization.Serializable

@@ -53,6 +53,15 @@ interface AppStrings {
     val updateRequiredTitle: String
     val updateRequiredMessage: String
     val updateNow: String
+    val securityWarningTitle: String
+    val securityWarningMessage: String
+    val continueAnyway: String
+    val securityBlockedTitle: String
+    val securityBlockedMessage: String
+    val environmentBlockedTitle: String
+    val environmentBlockedMessage: String
+    val environmentWarningTitle: String
+    val environmentWarningMessage: String
 
     /** Keyed by [com.mk.newsshorts.domain.model.NewsCategory.apiValue]. */
     val categoryNames: Map<String, String>
@@ -65,6 +74,13 @@ interface AppStrings {
 
     /** Twelve abbreviated month names, January first. */
     val monthNames: List<String>
+
+    /**
+     * "3 articles" — a method rather than a template because Arabic does not
+     * pluralize by appending an s. It has singular, dual, and two plural forms,
+     * chosen by the number itself.
+     */
+    fun savedArticlesCount(count: Int): String
 }
 
 object EnglishStrings : AppStrings {
@@ -122,6 +138,24 @@ object EnglishStrings : AppStrings {
     override val updateRequiredMessage: String =
         "This version of News Shorts is out of date. Update to keep reading the latest news."
     override val updateNow: String = "Update now"
+    override val securityWarningTitle: String = "Unrecognized device setup"
+    override val securityWarningMessage: String =
+        "This device appears to be rooted or the app has been modified. " +
+            "News Shorts still works, but your data is less protected here."
+    override val continueAnyway: String = "Continue anyway"
+    override val securityBlockedTitle: String = "Cannot run on this device"
+    override val securityBlockedMessage: String =
+        "News Shorts does not run on rooted or modified installations. " +
+            "Install the official app from Google Play on an unmodified device."
+    override val environmentBlockedTitle: String = "Not available in this environment"
+    override val environmentBlockedMessage: String =
+        "This build does not run on emulators or on devices with developer " +
+            "options enabled. Turn developer options off in Settings, or use a " +
+            "regular device."
+    override val environmentWarningTitle: String = "Developer environment detected"
+    override val environmentWarningMessage: String =
+        "Developer options are enabled on this device. News Shorts works " +
+            "normally, but this is not the environment the app is tested in."
 
     override val categoryNames: Map<String, String> = mapOf(
         "general" to "General",
@@ -168,6 +202,9 @@ object EnglishStrings : AppStrings {
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",
         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     )
+
+    override fun savedArticlesCount(count: Int): String =
+        if (count == 1) "1 article" else "$count articles"
 }
 
 object ArabicStrings : AppStrings {
@@ -225,6 +262,23 @@ object ArabicStrings : AppStrings {
     override val updateRequiredMessage: String =
         "هذه النسخة من أخبار مختصرة لم تعد مدعومة. حدّث التطبيق لمتابعة آخر الأخبار."
     override val updateNow: String = "حدّث الآن"
+    override val securityWarningTitle: String = "إعداد غير معتاد للجهاز"
+    override val securityWarningMessage: String =
+        "يبدو أن الجهاز مُروّت (root) أو أن التطبيق مُعدَّل. " +
+            "أخبار مختصرة يعمل كالمعتاد، لكن حماية بياناتك أقل في هذه الحالة."
+    override val continueAnyway: String = "المتابعة على أي حال"
+    override val securityBlockedTitle: String = "لا يمكن التشغيل على هذا الجهاز"
+    override val securityBlockedMessage: String =
+        "أخبار مختصرة لا يعمل على الأجهزة المُروّتة أو النسخ المُعدَّلة. " +
+            "ثبّت النسخة الرسمية من Google Play على جهاز غير مُعدَّل."
+    override val environmentBlockedTitle: String = "غير متاح في هذه البيئة"
+    override val environmentBlockedMessage: String =
+        "هذه النسخة لا تعمل على المحاكيات ولا على الأجهزة المُفعَّل بها خيارات " +
+            "المطوّر. أوقف خيارات المطوّر من الإعدادات، أو استخدم جهازاً عادياً."
+    override val environmentWarningTitle: String = "بيئة تطوير"
+    override val environmentWarningMessage: String =
+        "خيارات المطوّر مُفعَّلة على هذا الجهاز. أخبار مختصرة يعمل كالمعتاد، " +
+            "لكن هذه ليست البيئة التي يُختبر عليها التطبيق."
 
     override val categoryNames: Map<String, String> = mapOf(
         "general" to "عام",
@@ -271,6 +325,14 @@ object ArabicStrings : AppStrings {
         "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
         "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
     )
+
+    /** Singular, dual, then the two plural forms Arabic uses either side of 10. */
+    override fun savedArticlesCount(count: Int): String = when {
+        count == 1 -> "مقال واحد"
+        count == 2 -> "مقالان"
+        count <= 10 -> "$count مقالات"
+        else -> "$count مقالاً"
+    }
 }
 
 fun getStrings(locale: AppLocale): AppStrings {

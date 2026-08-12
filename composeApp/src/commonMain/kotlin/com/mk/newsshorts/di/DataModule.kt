@@ -3,7 +3,7 @@ package com.mk.newsshorts.di
 import com.mk.newsshorts.data.local.NewsLocalDataSource
 import com.mk.newsshorts.data.local.SavedArticlesStore
 import com.mk.newsshorts.data.local.SettingsManager
-import com.mk.newsshorts.data.remote.AppUpdateClient
+import com.mk.newsshorts.data.remote.RemoteConfigClient
 import com.mk.newsshorts.data.remote.NewsApiClient
 import com.mk.newsshorts.data.remote.createHttpClient
 import com.mk.newsshorts.data.repository.NewsRepositoryImpl
@@ -16,7 +16,7 @@ val dataModule = module {
     single { DeepLinkBus() }
     single(createdAtStart = false) { createHttpClient() }
     single(createdAtStart = false) { NewsApiClient(httpClient = get()) }
-    single(createdAtStart = false) { AppUpdateClient(httpClient = get()) }
+    single(createdAtStart = false) { RemoteConfigClient(httpClient = get()) }
     single(createdAtStart = false) { NewsLocalDataSource(settingsStorage = get()) }
     single(createdAtStart = false) { SettingsManager(settingsStorage = get()) }
     single(createdAtStart = false) { SavedArticlesStore(settingsStorage = get()) }

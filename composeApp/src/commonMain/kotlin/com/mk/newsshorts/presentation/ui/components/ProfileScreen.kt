@@ -377,7 +377,7 @@ private fun SavedArticlesSection(
             subtitle = if (savedArticles.isEmpty()) {
                 strings.noSavedArticles
             } else {
-                "${savedArticles.size} article${if (savedArticles.size > 1) "s" else ""}"
+                strings.savedArticlesCount(savedArticles.size)
             }
         )
         Spacer(modifier = Modifier.height(12.dp))

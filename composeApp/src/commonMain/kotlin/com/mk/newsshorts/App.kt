@@ -19,10 +19,15 @@ import newsshorts.composeapp.generated.resources.Res
 import newsshorts.composeapp.generated.resources.logo
 import com.mk.newsshorts.di.provideNewsViewModel
 import com.mk.newsshorts.presentation.localization.LocaleProvider
+import com.mk.newsshorts.presentation.localization.appStrings
+import com.mk.newsshorts.presentation.mvi.NewsUiEvent
 import com.mk.newsshorts.presentation.mvi.NewsUiState
+import com.mk.newsshorts.presentation.ui.screen.BlockingNoticeScreen
+import com.mk.newsshorts.presentation.ui.screen.SecurityWarningDialog
+import com.mk.newsshorts.security.SecurityNotice
+import com.mk.newsshorts.security.SecurityReason
 import com.mk.newsshorts.presentation.ui.screen.NewsScreen
 import com.mk.newsshorts.presentation.ui.screen.SplashScreen
-import com.mk.newsshorts.presentation.ui.screen.UpdateRequiredScreen
 import com.mk.newsshorts.presentation.ui.theme.NewsShortsTheme
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
@@ -61,12 +66,38 @@ fun App(
                 label = "SplashTransition"
             ) { isSplashVisible: Boolean ->
                 val requiredUpdate = uiState.requiredUpdate
+                val strings = appStrings()
                 if (requiredUpdate != null) {
                     // Replaces the content rather than covering it: nothing
                     // underneath should keep running once the build is retired.
                     NewsShortsTheme(isDarkTheme = true) {
-                        UpdateRequiredScreen(
-                            onUpdate = { onOpenUrl(requiredUpdate.storeUrl) },
+                        BlockingNoticeScreen(
+                            icon = "⬆️",
+                            title = strings.updateRequiredTitle,
+                            message = strings.updateRequiredMessage,
+                            actionLabel = strings.updateNow,
+                            onAction = { onOpenUrl(requiredUpdate.storeUrl) },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                } else if (uiState.securityNotice == SecurityNotice.BLOCKED) {
+                    // No action: there is nothing the reader can tap that would
+                    // make the device trustworthy, and a button that pretends
+                    // otherwise would only teach them to distrust the message.
+                    val isEnvironment = uiState.securityReason == SecurityReason.ENVIRONMENT
+                    NewsShortsTheme(isDarkTheme = true) {
+                        BlockingNoticeScreen(
+                            icon = if (isEnvironment) "🛠️" else "🔒",
+                            title = if (isEnvironment) {
+                                strings.environmentBlockedTitle
+                            } else {
+                                strings.securityBlockedTitle
+                            },
+                            message = if (isEnvironment) {
+                                strings.environmentBlockedMessage
+                            } else {
+                                strings.securityBlockedMessage
+                            },
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -85,6 +116,16 @@ fun App(
                             onShowToast = onShowToast,
                             modifier = Modifier.fillMaxSize()
                         )
+                        // Over the feed, not instead of it: this tier is a
+                        // caution, and the reader is allowed to carry on.
+                        if (uiState.securityNotice == SecurityNotice.WARNING) {
+                            SecurityWarningDialog(
+                                reason = uiState.securityReason,
+                                onDismiss = {
+                                    viewModel.processEvent(NewsUiEvent.DismissSecurityWarning)
+                                }
+                            )
+                        }
                     }
                 }
             }

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    TLS is required for every host the app talks to.
+
+    The two exceptions are the device's own loopback and 10.0.2.2, which is how
+    an emulator reaches the development machine. Neither is reachable from the
+    network, so an attacker cannot steer traffic to them — the exception buys
+    local development against the Ktor server and gives up nothing.
+
+    No certificate pinning: the feed is served by GitHub Pages, whose
+    certificates rotate on their schedule and without notice. A pin there would
+    eventually take the app off the air for every installed reader at once, and
+    the content it protects is a public RSS feed. The trade is not worth it.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

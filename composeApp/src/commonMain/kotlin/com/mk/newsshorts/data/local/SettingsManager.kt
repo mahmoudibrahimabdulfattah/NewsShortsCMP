@@ -41,7 +41,20 @@ class SettingsManager(
         selectedCountryState.value = countryCode
     }
 
+    /**
+     * Whether the device-integrity warning has already been shown. Stored so a
+     * reader on a rooted device is told once and then left alone — a warning on
+     * every launch is a warning nobody reads.
+     */
+    fun securityWarningSeen(): Boolean =
+        settingsStorage.getString(KEY_SECURITY_WARNING_SEEN, "") == "true"
+
+    suspend fun markSecurityWarningSeen() {
+        settingsStorage.putString(KEY_SECURITY_WARNING_SEEN, "true")
+    }
+
     companion object {
+        private const val KEY_SECURITY_WARNING_SEEN: String = "security_warning_seen"
         private const val KEY_NEWS_LANGUAGE: String = "news_language"
         private const val KEY_APP_LOCALE: String = "app_locale"
         private const val KEY_SELECTED_COUNTRY: String = "selected_country"
