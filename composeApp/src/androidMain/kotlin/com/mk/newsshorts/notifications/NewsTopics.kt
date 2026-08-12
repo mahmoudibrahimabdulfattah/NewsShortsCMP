@@ -40,4 +40,17 @@ object NewsTopics {
             .getString(KEY_LANGUAGE, null) ?: return
         FirebaseMessaging.getInstance().subscribeToTopic(topicFor(language))
     }
+
+    /**
+     * Leaves whichever topic is currently subscribed and forgets it, so a later
+     * [subscribe] starts clean rather than treating the old language as already
+     * subscribed.
+     */
+    fun unsubscribeAll(context: Context) {
+        if (FirebaseApp.getApps(context).isEmpty()) return
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val current = prefs.getString(KEY_LANGUAGE, null) ?: return
+        FirebaseMessaging.getInstance().unsubscribeFromTopic(topicFor(current))
+        prefs.edit().remove(KEY_LANGUAGE).apply()
+    }
 }

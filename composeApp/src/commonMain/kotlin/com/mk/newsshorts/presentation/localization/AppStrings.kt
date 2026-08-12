@@ -62,6 +62,20 @@ interface AppStrings {
     val environmentBlockedMessage: String
     val environmentWarningTitle: String
     val environmentWarningMessage: String
+    val settings: String
+    val settingsSubtitle: String
+    val seeAll: String
+    val themeSectionTitle: String
+    val themeSectionDescription: String
+    val themeSystem: String
+    val themeLight: String
+    val themeDark: String
+    val notificationsSectionTitle: String
+    val notificationsSectionDescription: String
+    val notificationsMasterLabel: String
+    val notifyBreakingLabel: String
+    val notifyTopStoryLabel: String
+    val notifyReminderLabel: String
 
     /** Keyed by [com.mk.newsshorts.domain.model.NewsCategory.apiValue]. */
     val categoryNames: Map<String, String>
@@ -205,6 +219,21 @@ object EnglishStrings : AppStrings {
 
     override fun savedArticlesCount(count: Int): String =
         if (count == 1) "1 article" else "$count articles"
+
+    override val settings: String = "Settings"
+    override val settingsSubtitle: String = "Language, theme, notifications"
+    override val seeAll: String = "See all"
+    override val themeSectionTitle: String = "Appearance"
+    override val themeSectionDescription: String = "Choose how News Shorts looks"
+    override val themeSystem: String = "System"
+    override val themeLight: String = "Light"
+    override val themeDark: String = "Dark"
+    override val notificationsSectionTitle: String = "Notifications"
+    override val notificationsSectionDescription: String = "Choose what News Shorts can notify you about"
+    override val notificationsMasterLabel: String = "Push notifications"
+    override val notifyBreakingLabel: String = "Breaking news"
+    override val notifyTopStoryLabel: String = "Top stories"
+    override val notifyReminderLabel: String = "Daily reminders"
 }
 
 object ArabicStrings : AppStrings {
@@ -333,6 +362,21 @@ object ArabicStrings : AppStrings {
         count <= 10 -> "$count مقالات"
         else -> "$count مقالاً"
     }
+
+    override val settings: String = "الإعدادات"
+    override val settingsSubtitle: String = "اللغة، المظهر، الإشعارات"
+    override val seeAll: String = "عرض الكل"
+    override val themeSectionTitle: String = "المظهر"
+    override val themeSectionDescription: String = "اختر شكل أخبار مختصرة"
+    override val themeSystem: String = "تلقائي"
+    override val themeLight: String = "فاتح"
+    override val themeDark: String = "داكن"
+    override val notificationsSectionTitle: String = "الإشعارات"
+    override val notificationsSectionDescription: String = "اختر ما يمكن لأخبار مختصرة إشعارك به"
+    override val notificationsMasterLabel: String = "إشعارات الدفع"
+    override val notifyBreakingLabel: String = "الأخبار العاجلة"
+    override val notifyTopStoryLabel: String = "أهم الأخبار"
+    override val notifyReminderLabel: String = "تذكيرات يومية"
 }
 
 fun getStrings(locale: AppLocale): AppStrings {

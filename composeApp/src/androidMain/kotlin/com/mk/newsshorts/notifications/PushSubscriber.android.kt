@@ -6,4 +6,8 @@ class FirebasePushSubscriber(private val context: Context) : PushSubscriber {
     override fun subscribeToLanguage(language: String) {
         NewsTopics.subscribe(context, language)
     }
+
+    override fun unsubscribeAll() {
+        NewsTopics.unsubscribeAll(context)
+    }
 }

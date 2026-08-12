@@ -10,8 +10,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.mk.newsshorts.data.local.SavedArticlesStore
+import com.mk.newsshorts.data.local.SeenArticlesStore
 import com.mk.newsshorts.data.local.SettingsManager
 import com.mk.newsshorts.data.local.currentTimeMillis
+import com.mk.newsshorts.domain.ranking.deprioritiseSeen
 import com.mk.newsshorts.data.remote.RemoteConfigClient
 import com.mk.newsshorts.security.DeviceIntegrityInspector
 import com.mk.newsshorts.security.IntegrityPolicy
@@ -37,7 +39,6 @@ import com.mk.newsshorts.notifications.PushSubscriber
 import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.getStrings
-import com.mk.newsshorts.presentation.mvi.ArticleDetails
 import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
 import com.mk.newsshorts.presentation.mvi.CountryOption
 import com.mk.newsshorts.presentation.mvi.LanguageOption
@@ -45,6 +46,9 @@ import com.mk.newsshorts.presentation.mvi.NavigationTab
 import com.mk.newsshorts.presentation.mvi.NewsUiEffect
 import com.mk.newsshorts.presentation.mvi.NewsUiEvent
 import com.mk.newsshorts.presentation.mvi.NewsUiState
+import com.mk.newsshorts.presentation.mvi.NotificationTier
+import com.mk.newsshorts.presentation.mvi.Overlay
+import com.mk.newsshorts.presentation.mvi.ThemeMode
 
 class NewsViewModel(
     private val getTopHeadlinesUseCase: GetTopHeadlinesUseCase,
@@ -53,6 +57,7 @@ class NewsViewModel(
     private val pushSubscriber: PushSubscriber,
     private val deepLinkBus: DeepLinkBus,
     private val savedArticlesStore: SavedArticlesStore,
+    private val seenArticlesStore: SeenArticlesStore,
     private val remoteConfigClient: RemoteConfigClient,
     private val deviceIntegrityInspector: DeviceIntegrityInspector,
 ) : BaseViewModel() {
@@ -157,24 +162,47 @@ class NewsViewModel(
             val savedNewsLanguage: String = settingsManager.newsLanguageFlow.first()
             val savedAppLocale: String = settingsManager.appLocaleFlow.first()
             val savedCountry: String = settingsManager.selectedCountryFlow.first()
+            val savedThemeMode: String = settingsManager.themeModeFlow.first()
+            val notificationsEnabled: Boolean = settingsManager.notificationsEnabledFlow.first()
+            val notifyBreaking: Boolean = settingsManager.notifyBreakingFlow.first()
+            val notifyTopStory: Boolean = settingsManager.notifyTopStoryFlow.first()
+            val notifyReminder: Boolean = settingsManager.notifyReminderFlow.first()
             val newsLanguage: LanguageOption = LanguageOption.entries.find { it.code == savedNewsLanguage }
                 ?: LanguageOption.ENGLISH
             val appLocale: AppLocale = AppLocale.fromCode(savedAppLocale)
             val country: CountryOption = CountryOption.entries.find { it.code == savedCountry }
                 ?: CountryOption.UNITED_STATES
+            val themeMode: ThemeMode = ThemeMode.entries.find { it.name.equals(savedThemeMode, ignoreCase = true) }
+                ?: ThemeMode.SYSTEM
             mutableState.update { state ->
                 state.copy(
                     selectedLanguage = newsLanguage,
                     appLocale = appLocale,
                     selectedCountry = country,
+                    themeMode = themeMode,
+                    notificationsEnabled = notificationsEnabled,
+                    notifyBreaking = notifyBreaking,
+                    notifyTopStory = notifyTopStory,
+                    notifyReminder = notifyReminder,
                     isFirstLaunch = false
                 )
             }
             mutableState.update { state -> state.copy(savedArticles = savedArticlesStore.load()) }
-            pushSubscriber.subscribeToLanguage(FeedLanguage.resolve(newsLanguage.code))
+            if (notificationsEnabled) {
+                pushSubscriber.subscribeToLanguage(FeedLanguage.resolve(newsLanguage.code))
+            }
             loadNewsWithCache()
         }
     }
+
+    /**
+     * Read-then-newest-first is not enough on its own — a returning reader
+     * would just see yesterday's top story again. Applied at every site that
+     * assigns [NewsUiState.articles], never to the list already on screen: a
+     * reorder under a reader's thumb would move the card they are mid-swipe on.
+     */
+    private fun applyRanking(articles: List<NewsArticle>): List<NewsArticle> =
+        articles.deprioritiseSeen(seenArticlesStore.load())
 
     fun processEvent(event: NewsUiEvent) {
         when (event) {
@@ -185,7 +213,9 @@ class NewsViewModel(
             is NewsUiEvent.SelectTab -> handleSelectTab(event.tab)
             is NewsUiEvent.ScrollToArticle -> handleScrollToArticle(event.index)
             is NewsUiEvent.OpenArticleDetails -> handleOpenArticleDetails(event.article, event.origin)
-            NewsUiEvent.CloseArticleDetails -> handleCloseArticleDetails()
+            NewsUiEvent.CloseArticleDetails -> handleCloseOverlay()
+            is NewsUiEvent.OpenOverlay -> handleOpenOverlay(event.overlay)
+            NewsUiEvent.CloseOverlay -> handleCloseOverlay()
             NewsUiEvent.DismissSecurityWarning -> handleDismissSecurityWarning()
             NewsUiEvent.OpenArticleSource -> handleOpenArticleSource()
             is NewsUiEvent.OpenDeepLink -> handleOpenDeepLink(event.link)
@@ -195,8 +225,10 @@ class NewsViewModel(
             NewsUiEvent.RefreshNews -> handleRefreshNews()
             NewsUiEvent.RetryLoading -> handleRetryLoading()
             NewsUiEvent.DismissError -> handleDismissError()
-            NewsUiEvent.NavigateToSavedArticles -> handleNavigateToSavedArticles()
-            NewsUiEvent.NavigateToLanguageSettings -> handleNavigateToLanguageSettings()
+            is NewsUiEvent.SelectThemeMode -> handleSelectThemeMode(event.mode)
+            NewsUiEvent.ToggleNotificationsEnabled -> handleToggleNotificationsEnabled()
+            is NewsUiEvent.ToggleNotificationTier -> handleToggleNotificationTier(event.tier)
+            NewsUiEvent.RequestNotificationPermissionIfDue -> handleRequestNotificationPermissionIfDue()
         }
     }
 
@@ -245,7 +277,7 @@ class NewsViewModel(
             mutableState.update { state ->
                 state.copy(
                     isLoading = false,
-                    articles = cachedResult.data,
+                    articles = applyRanking(cachedResult.data),
                     errorMessage = null,
                     isBackgroundRefreshing = true
                 )
@@ -345,8 +377,9 @@ class NewsViewModel(
         val article = mutableState.value.articles.getOrNull(index) ?: return
         val category: String = article.category.apiValue
         val source: String = article.source.name.value
+        val wasRead: Boolean = visibleMillis >= READ_THRESHOLD_MILLIS
         analytics.logEvent(
-            if (visibleMillis >= READ_THRESHOLD_MILLIS) {
+            if (wasRead) {
                 AnalyticsEvent.ArticleViewed(
                     category = category,
                     source = source,
@@ -356,6 +389,9 @@ class NewsViewModel(
                 AnalyticsEvent.ArticleSkipped(category = category, source = source)
             }
         )
+        // A skim doesn't count — only a card the reader actually spent time on
+        // is deprioritised on the next load.
+        if (wasRead) seenArticlesStore.markSeen(article.articleUrl.value)
     }
 
     /**
@@ -365,6 +401,14 @@ class NewsViewModel(
     private fun reportDepth(index: Int) {
         if (index <= deepestArticleIndex) return
         deepestArticleIndex = index
+        // A reader who has scrolled this far has already decided the app is
+        // worth their time — this is a far better moment to ask for the
+        // permission than the cold start, before a single headline was on
+        // screen. Independent of the analytics milestone below, and it fires
+        // at most once, guarded inside the handler itself.
+        if (index == PERMISSION_PROMPT_DEPTH) {
+            processEvent(NewsUiEvent.RequestNotificationPermissionIfDue)
+        }
         if (index % DEPTH_MILESTONE != 0) return
         analytics.logEvent(
             AnalyticsEvent.FeedDepthReached(
@@ -375,9 +419,7 @@ class NewsViewModel(
     }
 
     private fun handleOpenArticleDetails(article: NewsArticle, origin: ArticleOpenOrigin) {
-        mutableState.update { state ->
-            state.copy(articleDetails = ArticleDetails(article, origin))
-        }
+        handleOpenOverlay(Overlay.Details(article, origin))
         analytics.logEvent(
             AnalyticsEvent.ArticleDetailsOpened(
                 category = article.category.apiValue,
@@ -387,8 +429,13 @@ class NewsViewModel(
         )
     }
 
-    private fun handleCloseArticleDetails() {
-        mutableState.update { state -> state.copy(articleDetails = null) }
+    private fun handleOpenOverlay(overlay: Overlay) {
+        mutableState.update { state -> state.copy(overlays = state.overlays + overlay) }
+    }
+
+    /** Pops whatever is on top — the details screen, Settings, or Saved. */
+    private fun handleCloseOverlay() {
+        mutableState.update { state -> state.copy(overlays = state.overlays.dropLast(1)) }
     }
 
     private fun handleOpenArticleSource() {
@@ -495,15 +542,61 @@ class NewsViewModel(
         }
     }
 
-    private fun handleNavigateToSavedArticles() {
-        mutableState.update { state ->
-            state.copy(currentTab = NavigationTab.PROFILE)
+    private fun handleSelectThemeMode(mode: ThemeMode) {
+        if (mode == mutableState.value.themeMode) return
+        mutableState.update { state -> state.copy(themeMode = mode) }
+        viewModelScope.launch { settingsManager.saveThemeMode(mode.name.lowercase()) }
+    }
+
+    private fun handleToggleNotificationsEnabled() {
+        val enabling = !mutableState.value.notificationsEnabled
+        mutableState.update { state -> state.copy(notificationsEnabled = enabling) }
+        viewModelScope.launch {
+            settingsManager.setNotificationsEnabled(enabling)
+            if (enabling) {
+                pushSubscriber.subscribeToLanguage(
+                    FeedLanguage.resolve(mutableState.value.selectedLanguage.code)
+                )
+                // Turning the switch on is the moment consent is meaningful —
+                // the OS dialog belongs right here, not at cold start.
+                mutableEffect.emit(NewsUiEffect.RequestNotificationPermission)
+            } else {
+                pushSubscriber.unsubscribeAll()
+            }
         }
     }
 
-    private fun handleNavigateToLanguageSettings() {
-        mutableState.update { state ->
-            state.copy(currentTab = NavigationTab.PROFILE)
+    private fun handleToggleNotificationTier(tier: NotificationTier) {
+        val state = mutableState.value
+        when (tier) {
+            NotificationTier.BREAKING -> {
+                val enabling = !state.notifyBreaking
+                mutableState.update { it.copy(notifyBreaking = enabling) }
+                viewModelScope.launch { settingsManager.setNotifyBreaking(enabling) }
+            }
+            NotificationTier.TOP_STORY -> {
+                val enabling = !state.notifyTopStory
+                mutableState.update { it.copy(notifyTopStory = enabling) }
+                viewModelScope.launch { settingsManager.setNotifyTopStory(enabling) }
+            }
+            NotificationTier.REMINDER -> {
+                val enabling = !state.notifyReminder
+                mutableState.update { it.copy(notifyReminder = enabling) }
+                viewModelScope.launch { settingsManager.setNotifyReminder(enabling) }
+            }
+        }
+    }
+
+    /**
+     * Fired from [reportDepth] once a reader has read enough to make an
+     * informed choice — asking before a single headline is on screen is where
+     * opt-in rates go to die. Fires at most once, ever.
+     */
+    private fun handleRequestNotificationPermissionIfDue() {
+        viewModelScope.launch {
+            if (settingsManager.notificationPromptSeen()) return@launch
+            settingsManager.markNotificationPromptSeen()
+            mutableEffect.emit(NewsUiEffect.RequestNotificationPermission)
         }
     }
 
@@ -553,7 +646,7 @@ class NewsViewModel(
             mutableState.update { state ->
                 state.copy(
                     isLoading = false,
-                    articles = cachedResult.data,
+                    articles = applyRanking(cachedResult.data),
                     errorMessage = null,
                     isBackgroundRefreshing = true
                 )
@@ -576,7 +669,7 @@ class NewsViewModel(
                         isLoading = false,
                         isRefreshing = false,
                         isBackgroundRefreshing = false,
-                        articles = result.data,
+                        articles = applyRanking(result.data),
                         errorMessage = null,
                         currentArticleIndex = 0,
                         isOfflineMode = false
@@ -618,7 +711,7 @@ class NewsViewModel(
                         state.copy(
                             isLoading = false,
                             isRefreshing = false,
-                            articles = result.data,
+                            articles = applyRanking(result.data),
                             errorMessage = null,
                             currentArticleIndex = 0,
                             isOfflineMode = false
@@ -644,5 +737,8 @@ class NewsViewModel(
 
         /** Depth is reported every this many cards, not on every swipe. */
         const val DEPTH_MILESTONE: Int = 10
+
+        /** Cards deep before the notification permission is worth asking for. */
+        const val PERMISSION_PROMPT_DEPTH: Int = 5
     }
 }

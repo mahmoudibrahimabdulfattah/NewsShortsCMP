@@ -12,6 +12,7 @@ val presentationModule = module {
             pushSubscriber = get(),
             deepLinkBus = get(),
             savedArticlesStore = get(),
+            seenArticlesStore = get(),
             remoteConfigClient = get(),
             deviceIntegrityInspector = get()
         )

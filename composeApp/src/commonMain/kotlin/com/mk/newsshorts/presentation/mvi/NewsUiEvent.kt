@@ -35,12 +35,31 @@ sealed interface NewsUiEvent {
 
     data class OpenDeepLink(val link: ArticleDeepLink) : NewsUiEvent
 
+    /** Pushes a screen above the tabs. See [com.mk.newsshorts.presentation.mvi.Overlay]. */
+    data class OpenOverlay(val overlay: Overlay) : NewsUiEvent
+
+    /** Pops the top of the overlay stack — one back-press rule for all of them. */
+    data object CloseOverlay : NewsUiEvent
+
     data object RefreshNews : NewsUiEvent
     data object RetryLoading : NewsUiEvent
     data object DismissError : NewsUiEvent
     /** Acknowledges the device-integrity warning, which then stays dismissed. */
     data object DismissSecurityWarning : NewsUiEvent
 
-    data object NavigateToSavedArticles : NewsUiEvent
-    data object NavigateToLanguageSettings : NewsUiEvent
+    data class SelectThemeMode(val mode: ThemeMode) : NewsUiEvent
+
+    data object ToggleNotificationsEnabled : NewsUiEvent
+    data class ToggleNotificationTier(val tier: NotificationTier) : NewsUiEvent
+    /** Fired once, after the reader has read enough to make an informed choice. */
+    data object RequestNotificationPermissionIfDue : NewsUiEvent
+}
+
+/**
+ * Which per-tier notification switch was toggled. Matches the "tier" field the
+ * server puts in the FCM data payload (server's `PushTier.label`), so the
+ * stored preference and the incoming message can be compared as plain strings.
+ */
+enum class NotificationTier(val wireValue: String) {
+    BREAKING("breaking"), TOP_STORY("top_story"), REMINDER("reminder");
 }

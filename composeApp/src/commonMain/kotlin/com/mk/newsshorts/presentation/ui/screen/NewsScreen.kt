@@ -29,7 +29,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -41,6 +43,7 @@ import com.mk.newsshorts.presentation.mvi.NavigationTab
 import com.mk.newsshorts.presentation.mvi.NewsUiEffect
 import com.mk.newsshorts.presentation.mvi.NewsUiEvent
 import com.mk.newsshorts.presentation.mvi.NewsUiState
+import com.mk.newsshorts.presentation.mvi.Overlay
 import com.mk.newsshorts.presentation.ui.components.ArticleIndicator
 import com.mk.newsshorts.presentation.ui.components.BottomNavigationBar
 import com.mk.newsshorts.presentation.ui.components.CategoryRow
@@ -49,6 +52,7 @@ import com.mk.newsshorts.presentation.ui.components.ErrorScreen
 import com.mk.newsshorts.presentation.ui.components.LoadingScreen
 import com.mk.newsshorts.presentation.ui.components.NewsCard
 import com.mk.newsshorts.presentation.ui.components.ProfileScreen
+import com.mk.newsshorts.presentation.ui.theme.NewsShortsTheme
 import com.mk.newsshorts.presentation.viewmodel.NewsViewModel
 
 @Composable
@@ -57,6 +61,7 @@ fun NewsScreen(
     onOpenUrl: (String) -> Unit = {},
     onShareContent: (String, String, String) -> Unit = { _, _, _ -> },
     onShowToast: (String) -> Unit = {},
+    onRequestNotificationPermission: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val uiState: NewsUiState by viewModel.uiState.collectAsState()
@@ -67,6 +72,7 @@ fun NewsScreen(
                 is NewsUiEffect.ShareContent ->
                     onShareContent(effect.title, effect.url, effect.chooserTitle)
                 is NewsUiEffect.ShowToast -> onShowToast(effect.message)
+                NewsUiEffect.RequestNotificationPermission -> onRequestNotificationPermission()
             }
         }
     }
@@ -77,12 +83,21 @@ fun NewsScreen(
     )
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun NewsScreenContent(
     uiState: NewsUiState,
     onEvent: (NewsUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // One rule for every screen pushed above the tabs — the details screen,
+    // Settings, Saved — rather than each owning its own BackHandler. Only
+    // Android has a back gesture, which is why every overlay also keeps a
+    // visible back arrow instead of relying on this alone.
+    BackHandler(enabled = uiState.overlays.isNotEmpty()) {
+        onEvent(NewsUiEvent.CloseOverlay)
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -92,73 +107,87 @@ private fun NewsScreenContent(
             NavigationTab.PROFILE -> {
                 ProfileScreen(
                     uiState = uiState,
-                    onLanguageSelected = { language ->
-                        onEvent(NewsUiEvent.SelectLanguage(language))
-                    },
-                    onAppLocaleSelected = { locale ->
-                        onEvent(NewsUiEvent.SelectAppLocale(locale))
-                    },
-                    onSavedArticleClick = { article ->
-                        onEvent(NewsUiEvent.OpenArticleDetails(article, ArticleOpenOrigin.SAVED))
-                    },
-                    onRemoveSavedArticle = { article ->
-                        onEvent(NewsUiEvent.RemoveSavedArticle(article))
-                    }
+                    onEvent = onEvent,
                 )
             }
             else -> {
-                when {
-                    uiState.isLoading -> {
-                        LoadingScreen()
-                    }
-                    uiState.isError && !uiState.hasArticles -> {
-                        ErrorScreen(
-                            errorMessage = uiState.errorMessage ?: appStrings().unknownError,
-                            onRetry = { onEvent(NewsUiEvent.RetryLoading) }
-                        )
-                    }
-                    uiState.hasArticles -> {
-                        NewsArticlesPager(
+                // The feed stays dark regardless of the app theme: its text
+                // sits directly on full-bleed photos, not on a themed surface,
+                // and a light background there would make headlines unreadable
+                // over a bright image.
+                NewsShortsTheme(isDarkTheme = true) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        when {
+                            uiState.isLoading -> {
+                                LoadingScreen()
+                            }
+                            uiState.isError && !uiState.hasArticles -> {
+                                ErrorScreen(
+                                    errorMessage = uiState.errorMessage ?: appStrings().unknownError,
+                                    onRetry = { onEvent(NewsUiEvent.RetryLoading) }
+                                )
+                            }
+                            uiState.hasArticles -> {
+                                NewsArticlesPager(
+                                    uiState = uiState,
+                                    onEvent = onEvent
+                                )
+                            }
+                        }
+                        TopGradientOverlay()
+                        NewsScreenHeader(
                             uiState = uiState,
-                            onEvent = onEvent
+                            onEvent = onEvent,
+                            modifier = Modifier.align(Alignment.TopCenter)
                         )
+                        AnimatedVisibility(
+                            visible = uiState.hasArticles,
+                            enter = fadeIn() + slideInVertically { it },
+                            exit = fadeOut() + slideOutVertically { it },
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 8.dp)
+                        ) {
+                            ArticleIndicator(
+                                totalCount = uiState.articles.size,
+                                currentIndex = uiState.currentArticleIndex
+                            )
+                        }
                     }
-                }
-                TopGradientOverlay()
-                NewsScreenHeader(
-                    uiState = uiState,
-                    onEvent = onEvent,
-                    modifier = Modifier.align(Alignment.TopCenter)
-                )
-                AnimatedVisibility(
-                    visible = uiState.hasArticles,
-                    enter = fadeIn() + slideInVertically { it },
-                    exit = fadeOut() + slideOutVertically { it },
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 8.dp)
-                ) {
-                    ArticleIndicator(
-                        totalCount = uiState.articles.size,
-                        currentIndex = uiState.currentArticleIndex
-                    )
                 }
             }
         }
-        if (uiState.articleDetails == null) {
+        if (uiState.overlays.isEmpty()) {
             BottomNavigationBar(
                 selectedTab = uiState.currentTab,
                 onTabSelected = { tab -> onEvent(NewsUiEvent.SelectTab(tab)) },
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
-        uiState.articleDetails?.let { details ->
-            ArticleDetailsScreen(
-                article = details.article,
-                isSaved = uiState.savedArticles.any { it.articleUrl == details.article.articleUrl },
-                onEvent = onEvent,
-                modifier = Modifier.fillMaxSize()
-            )
+        when (val topOverlay = uiState.overlays.lastOrNull()) {
+            is Overlay.Details -> {
+                ArticleDetailsScreen(
+                    article = topOverlay.article,
+                    isSaved = uiState.savedArticles.any { it.articleUrl == topOverlay.article.articleUrl },
+                    onEvent = onEvent,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            Overlay.Settings -> {
+                SettingsScreen(
+                    uiState = uiState,
+                    onEvent = onEvent,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            Overlay.SavedArticles -> {
+                SavedArticlesScreen(
+                    savedArticles = uiState.savedArticles,
+                    onEvent = onEvent,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            null -> Unit
         }
     }
 }

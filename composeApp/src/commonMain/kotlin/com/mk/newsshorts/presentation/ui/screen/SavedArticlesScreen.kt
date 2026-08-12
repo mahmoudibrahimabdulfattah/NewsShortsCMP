@@ -1,0 +1,70 @@
+package com.mk.newsshorts.presentation.ui.screen
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.mk.newsshorts.domain.model.NewsArticle
+import com.mk.newsshorts.presentation.localization.appStrings
+import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
+import com.mk.newsshorts.presentation.mvi.NewsUiEvent
+import com.mk.newsshorts.presentation.ui.components.EmptySavedArticlesCard
+import com.mk.newsshorts.presentation.ui.components.OverlayTopBar
+import com.mk.newsshorts.presentation.ui.components.SavedArticleCard
+
+/**
+ * Every bookmark, not just the two-item preview Profile shows.
+ *
+ * A real `LazyColumn` rather than Profile's plain `Column` — up to
+ * `MAX_SAVED` (200) articles composing at once inside one `item {}` was the
+ * cost of that preview approach, and this screen is exactly where it stops
+ * being acceptable.
+ */
+@Composable
+fun SavedArticlesScreen(
+    savedArticles: List<NewsArticle>,
+    onEvent: (NewsUiEvent) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val strings = appStrings()
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            OverlayTopBar(title = strings.savedArticles, onBack = { onEvent(NewsUiEvent.CloseOverlay) })
+            if (savedArticles.isEmpty()) {
+                EmptySavedArticlesCard(
+                    strings = strings,
+                    modifier = Modifier.padding(16.dp)
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(savedArticles, key = { it.articleUrl.value }) { article ->
+                        SavedArticleCard(
+                            article = article,
+                            onClick = {
+                                onEvent(NewsUiEvent.OpenArticleDetails(article, ArticleOpenOrigin.SAVED))
+                            },
+                            onRemove = { onEvent(NewsUiEvent.RemoveSavedArticle(article)) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

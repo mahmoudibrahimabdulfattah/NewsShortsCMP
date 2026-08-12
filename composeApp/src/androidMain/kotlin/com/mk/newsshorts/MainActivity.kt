@@ -47,12 +47,16 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         NewsMessagingService.ensureChannel(this)
-        requestNotificationPermissionIfNeeded()
+        // No longer requested here unconditionally: asking before a single
+        // headline is on screen is where opt-in rates go to die. It now fires
+        // from the app itself — when the reader turns notifications on in
+        // Settings, or once after they've read a few stories.
         setContent {
             App(
                 onOpenUrl = { url -> openUrl(url) },
                 onShareContent = { title, url, chooserTitle -> shareContent(title, url, chooserTitle) },
-                onShowToast = { message -> showToast(message) }
+                onShowToast = { message -> showToast(message) },
+                onRequestNotificationPermission = { requestNotificationPermissionIfNeeded() }
             )
         }
         // Only on a fresh start: after process death the system replays the

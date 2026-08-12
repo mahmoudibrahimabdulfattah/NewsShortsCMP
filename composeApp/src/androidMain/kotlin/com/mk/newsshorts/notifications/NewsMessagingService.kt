@@ -12,6 +12,8 @@ import androidx.core.app.NotificationManagerCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.mk.newsshorts.MainActivity
+import com.mk.newsshorts.data.local.NotificationPreferenceKeys
+import com.mk.newsshorts.data.local.SettingsStorage
 import com.mk.newsshorts.navigation.ArticleDeepLinks
 import com.mk.newsshorts.R
 
@@ -37,6 +39,7 @@ class NewsMessagingService : FirebaseMessagingService() {
         val notificationId = (deepLink ?: title).hashCode()
 
         if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) return
+        if (!isAllowedByInAppSettings(payload["tier"])) return
         ensureChannel(this)
 
         // ACTION_VIEW carrying the deep link, but with an explicit component so
@@ -78,6 +81,29 @@ class NewsMessagingService : FirebaseMessagingService() {
         // Delivery is by topic, so there is no per-device token to register;
         // re-subscribing keeps a rotated token attached to the same topics.
         NewsTopics.resubscribe(applicationContext)
+    }
+
+    /**
+     * The in-app on/off switches, checked alongside the OS-level one at [39].
+     *
+     * This service is instantiated by the system, not by Koin, so it reads
+     * `SettingsStorage` directly rather than taking it as a constructor
+     * argument — there is nothing to inject it. The key names come from
+     * [NotificationPreferenceKeys] so this and the Settings screen can never
+     * name the same switch two different things.
+     *
+     * An unrecognised tier is allowed through: a server that starts sending a
+     * new tier this build does not know about should not go silent for it.
+     */
+    private fun isAllowedByInAppSettings(tier: String?): Boolean {
+        val settingsStorage = SettingsStorage(applicationContext)
+        fun flag(key: String) =
+            settingsStorage.getString(key, NotificationPreferenceKeys.DEFAULT_ENABLED) == "true"
+
+        val masterEnabled = flag(NotificationPreferenceKeys.ENABLED)
+        val tierKey = NotificationPreferenceKeys.keyForWireTier(tier.orEmpty())
+        val tierEnabled = tierKey?.let { flag(it) }
+        return NotificationPreferenceKeys.isAllowed(masterEnabled, tierEnabled)
     }
 
     /** Enough for the details screen to render a headline and a source link. */

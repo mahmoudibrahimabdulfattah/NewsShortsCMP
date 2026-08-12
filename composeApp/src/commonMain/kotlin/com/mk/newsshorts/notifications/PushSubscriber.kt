@@ -9,9 +9,18 @@ package com.mk.newsshorts.notifications
 interface PushSubscriber {
     /** Receive breaking news in [language], leaving any previous language. */
     fun subscribeToLanguage(language: String)
+
+    /**
+     * Leaves every topic. Called when the reader turns notifications off in
+     * Settings, alongside the local gate in the messaging service — belt and
+     * braces, so anything already queued server-side still gets filtered even
+     * if the unsubscribe has not landed yet.
+     */
+    fun unsubscribeAll()
 }
 
 /** Used on targets without push support. */
 object NoOpPushSubscriber : PushSubscriber {
     override fun subscribeToLanguage(language: String) = Unit
+    override fun unsubscribeAll() = Unit
 }

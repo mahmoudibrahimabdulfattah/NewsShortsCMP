@@ -15,4 +15,11 @@ sealed interface NewsUiEffect {
     ) : NewsUiEffect
 
     data class ShowToast(val message: String) : NewsUiEffect
+
+    /**
+     * Asks the platform layer to show the OS permission dialog. Kept as an
+     * effect rather than a direct call so the ViewModel decides *when* to ask
+     * without knowing *how* — only Android has this permission at all.
+     */
+    data object RequestNotificationPermission : NewsUiEffect
 }

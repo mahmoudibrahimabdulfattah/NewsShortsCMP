@@ -22,14 +22,25 @@ data class NewsUiState(
     val savedArticles: List<NewsArticle> = emptyList(),
     val isOfflineMode: Boolean = false,
     val isFirstLaunch: Boolean = true,
-    /** Non-null while the details screen is showing. One level deep, so no stack. */
-    val articleDetails: ArticleDetails? = null,
+    /**
+     * Screens pushed above the tabs — Profile → Settings, Profile → Saved,
+     * a details screen. Last element is what is on screen; empty means none.
+     * A list rather than one nullable field, because Settings needs Sign-in
+     * above it in a later phase and the tabs themselves are not part of this
+     * stack — they switch, they do not push.
+     */
+    val overlays: List<Overlay> = emptyList(),
     /** Non-null when the backend no longer supports this build; blocks the UI. */
     val requiredUpdate: RequiredUpdate? = null,
     /** Result of the device-integrity check under the backend's policy. */
     val securityNotice: SecurityNotice = SecurityNotice.NONE,
     /** Which signals produced [securityNotice]; decides the wording shown. */
-    val securityReason: SecurityReason = SecurityReason.INTEGRITY
+    val securityReason: SecurityReason = SecurityReason.INTEGRITY,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val notificationsEnabled: Boolean = true,
+    val notifyBreaking: Boolean = true,
+    val notifyTopStory: Boolean = true,
+    val notifyReminder: Boolean = true,
 ) {
     val hasArticles: Boolean
         get() = articles.isNotEmpty()
@@ -42,6 +53,39 @@ data class NewsUiState(
 
     val hasSavedArticles: Boolean
         get() = savedArticles.isNotEmpty()
+
+    /**
+     * The details overlay, if that is what is on top. Kept as a derived
+     * property under the old name so every existing read site — the pager,
+     * the save-state lookup, the details composable itself — keeps compiling
+     * against the shape it already expects.
+     */
+    val articleDetails: ArticleDetails?
+        get() = (overlays.lastOrNull() as? Overlay.Details)?.let {
+            ArticleDetails(article = it.article, origin = it.origin)
+        }
+}
+
+/** One screen pushed above the tabs. See [NewsUiState.overlays]. */
+sealed interface Overlay {
+    data class Details(val article: NewsArticle, val origin: ArticleOpenOrigin) : Overlay
+    data object Settings : Overlay
+    data object SavedArticles : Overlay
+}
+
+/**
+ * SYSTEM follows the device; LIGHT/DARK are an explicit override. Applies to
+ * every screen except the vertical feed itself, which stays dark regardless —
+ * its text sits on full-bleed photos, not on a themed surface.
+ */
+enum class ThemeMode {
+    SYSTEM, LIGHT, DARK;
+
+    fun resolveIsDark(systemIsDark: Boolean): Boolean = when (this) {
+        SYSTEM -> systemIsDark
+        LIGHT -> false
+        DARK -> true
+    }
 }
 
 /**

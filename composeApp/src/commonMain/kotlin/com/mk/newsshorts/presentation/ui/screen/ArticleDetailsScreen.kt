@@ -34,9 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -57,8 +55,11 @@ import com.mk.newsshorts.presentation.ui.components.isolateBidi
  * Deliberately not a reader view: the app only ever holds the AI summary, never
  * the publisher's text. So this shows the whole summary — the feed card cuts it
  * to three lines — and sends the reader to the source for the rest.
+ *
+ * Back is handled once, centrally, in `NewsScreenContent` — every overlay
+ * screen (this one, Settings, Saved) pops the same stack, so there is exactly
+ * one place that decides what a back-press does.
  */
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun ArticleDetailsScreen(
     article: NewsArticle,
@@ -67,10 +68,6 @@ fun ArticleDetailsScreen(
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
-
-    // Android only; iOS, desktop and web have no system back, which is why the
-    // arrow below is always present rather than being a redundant affordance.
-    BackHandler { onEvent(NewsUiEvent.CloseArticleDetails) }
 
     Column(
         modifier = modifier
