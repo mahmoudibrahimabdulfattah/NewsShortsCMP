@@ -14,7 +14,9 @@ val presentationModule = module {
             savedArticlesStore = get(),
             seenArticlesStore = get(),
             remoteConfigClient = get(),
-            deviceIntegrityInspector = get()
+            deviceIntegrityInspector = get(),
+            authClient = get(),
+            remoteSyncClient = get()
         )
     }
 }

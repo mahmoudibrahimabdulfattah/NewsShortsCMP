@@ -53,6 +53,13 @@ sealed interface NewsUiEvent {
     data class ToggleNotificationTier(val tier: NotificationTier) : NewsUiEvent
     /** Fired once, after the reader has read enough to make an informed choice. */
     data object RequestNotificationPermissionIfDue : NewsUiEvent
+
+    data object SignInWithGoogle : NewsUiEvent
+    data class SignInWithEmail(val email: String, val password: String) : NewsUiEvent
+    data class SignUpWithEmail(val email: String, val password: String) : NewsUiEvent
+    data object SignOut : NewsUiEvent
+    data object DeleteAccount : NewsUiEvent
+    data object DismissAuthError : NewsUiEvent
 }
 
 /**

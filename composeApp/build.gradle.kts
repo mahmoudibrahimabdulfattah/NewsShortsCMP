@@ -52,6 +52,13 @@ val shareLinkPathPrefix: String = shareBaseUrl
 // a release keystore, which disables the tamper check rather than failing it.
 val expectedSigningSha256: String = localProperties.getProperty("SIGNING_CERT_SHA256").orEmpty()
 
+// The Firebase project's "Web client (auto created by Google Service)" OAuth
+// client ID — Credential Manager needs it as the audience for the Google ID
+// token even though this is an Android app, because Firebase Auth verifies
+// that token against a web client. Empty until it exists, which disables the
+// Google Sign-In button rather than crashing (see AuthClient).
+val googleWebClientId: String = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID").orEmpty()
+
 // The one place the version is declared. The Android block and the shared
 // BuildConfig both read it, so the number the update check compares against is
 // by construction the number Play installed.
@@ -72,6 +79,7 @@ buildConfigFile.writeText(
     |    const val SHARE_BASE_URL: String = "$shareBaseUrl"
     |    const val VERSION_CODE: Int = $appVersionCode
     |    const val VERSION_NAME: String = "$appVersionName"
+    |    const val GOOGLE_WEB_CLIENT_ID: String = "$googleWebClientId"
     |}
     """.trimMargin()
 )
@@ -160,6 +168,12 @@ kotlin {
             implementation(libs.firebase.analytics)
             implementation(libs.firebase.crashlytics)
             implementation(libs.firebase.messaging)
+            implementation(libs.firebase.auth)
+            implementation(libs.firebase.firestore)
+            implementation(libs.androidx.credentials)
+            implementation(libs.androidx.credentials.playServicesAuth)
+            implementation(libs.google.id)
+            implementation(libs.kotlinx.coroutinesPlayServices)
             implementation(libs.androidx.browser)
         }
         iosMain.dependencies {

@@ -36,8 +36,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import com.mk.newsshorts.auth.AuthUser
 import com.mk.newsshorts.config.BuildConfig
 import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.presentation.localization.AppStrings
@@ -75,7 +78,11 @@ fun ProfileScreen(
             contentPadding = PaddingValues(vertical = 16.dp)
         ) {
             item {
-                ProfileHeader(strings = strings)
+                ProfileHeader(
+                    strings = strings,
+                    authUser = uiState.authUser,
+                    onSignInClick = { onEvent(NewsUiEvent.OpenOverlay(Overlay.SignIn)) },
+                )
             }
             item {
                 Spacer(modifier = Modifier.height(28.dp))
@@ -105,13 +112,16 @@ fun ProfileScreen(
 }
 
 /**
- * A guest identity for now — Phase 2 replaces this with the signed-in
- * account's name, photo and email once accounts exist. Everything below this
- * screen already works without one.
+ * A guest identity by default; the signed-in account's photo, name and email
+ * once one exists. Deliberately not a gate either way — everything below this
+ * screen already works without an account, so a guest sees the same layout
+ * with a "Sign in" call to action in place of a subtitle.
  */
 @Composable
 private fun ProfileHeader(
     strings: AppStrings,
+    authUser: AuthUser?,
+    onSignInClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -134,26 +144,49 @@ private fun ProfileHeader(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Filled.Person,
-                contentDescription = strings.profile,
-                tint = MaterialTheme.colorScheme.onSecondary,
-                modifier = Modifier.size(40.dp)
-            )
+            val photoUrl = authUser?.photoUrl
+            if (photoUrl != null) {
+                AsyncImage(
+                    model = photoUrl,
+                    contentDescription = strings.profile,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.Person,
+                    contentDescription = strings.profile,
+                    tint = MaterialTheme.colorScheme.onSecondary,
+                    modifier = Modifier.size(40.dp)
+                )
+            }
         }
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = strings.newsReader,
+            text = authUser?.displayName ?: authUser?.email ?: strings.guestLabel,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
         )
         Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = strings.personalizeExperience,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-        )
+        if (authUser != null) {
+            Text(
+                text = authUser.email ?: strings.personalizeExperience,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+            )
+        } else {
+            Text(
+                text = strings.signIn,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onSignInClick)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+        }
     }
 }
 

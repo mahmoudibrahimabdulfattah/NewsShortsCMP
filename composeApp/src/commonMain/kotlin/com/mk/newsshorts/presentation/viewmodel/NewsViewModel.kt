@@ -9,11 +9,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.mk.newsshorts.auth.AuthClient
+import com.mk.newsshorts.auth.AuthResult
 import com.mk.newsshorts.data.local.SavedArticlesStore
 import com.mk.newsshorts.data.local.SeenArticlesStore
 import com.mk.newsshorts.data.local.SettingsManager
 import com.mk.newsshorts.data.local.currentTimeMillis
 import com.mk.newsshorts.domain.ranking.deprioritiseSeen
+import com.mk.newsshorts.domain.sync.mergeSavedArticles
+import com.mk.newsshorts.sync.RemoteSyncClient
+import com.mk.newsshorts.sync.SyncFetch
+import com.mk.newsshorts.sync.SyncedSettings
 import com.mk.newsshorts.data.remote.RemoteConfigClient
 import com.mk.newsshorts.security.DeviceIntegrityInspector
 import com.mk.newsshorts.security.IntegrityPolicy
@@ -60,6 +66,8 @@ class NewsViewModel(
     private val seenArticlesStore: SeenArticlesStore,
     private val remoteConfigClient: RemoteConfigClient,
     private val deviceIntegrityInspector: DeviceIntegrityInspector,
+    private val authClient: AuthClient,
+    private val remoteSyncClient: RemoteSyncClient,
 ) : BaseViewModel() {
 
     private val mutableState: MutableStateFlow<NewsUiState> = MutableStateFlow(NewsUiState())
@@ -75,6 +83,192 @@ class NewsViewModel(
         loadSavedSettings()
         observeDeepLinks()
         checkForRequiredUpdate()
+        observeAuthState()
+    }
+
+    /**
+     * One listener covers sign-in, sign-out and deletion, since [AuthClient]
+     * reports all three through the same flow. A newly-non-null uid — whether
+     * from an interactive sign-in or a session Firebase restored at cold
+     * start — triggers a sync; the point is the transition into "signed in",
+     * not the particular action that caused it.
+     */
+    private fun observeAuthState() {
+        viewModelScope.launch {
+            var previousUid: String? = null
+            authClient.currentUser.collect { user ->
+                mutableState.update { it.copy(authUser = user, authInProgress = false) }
+                if (user != null && user.uid != previousUid) {
+                    syncOnSignIn(user.uid)
+                }
+                previousUid = user?.uid
+            }
+        }
+    }
+
+    /**
+     * Union the saved articles, let settings follow the account. Never the
+     * other way — see `mergeSavedArticles` for why a union is the only
+     * direction that cannot lose a bookmark.
+     */
+    private suspend fun syncOnSignIn(uid: String) {
+        when (val remoteSaved = remoteSyncClient.fetchSavedArticles(uid)) {
+            is SyncFetch.Found -> {
+                val merged = mergeSavedArticles(local = mutableState.value.savedArticles, remote = remoteSaved.value)
+                mutableState.update { it.copy(savedArticles = merged) }
+                persistSavedArticles(merged)
+                remoteSyncClient.pushSavedArticles(uid, merged)
+            }
+            SyncFetch.NotFound -> remoteSyncClient.pushSavedArticles(uid, mutableState.value.savedArticles)
+            // Offline or a transient failure: neither side is touched, and the
+            // next launch (or the next save) tries again.
+            SyncFetch.Unavailable -> Unit
+        }
+
+        when (val remoteSettings = remoteSyncClient.fetchSettings(uid)) {
+            is SyncFetch.Found -> applySyncedSettings(remoteSettings.value)
+            SyncFetch.NotFound -> remoteSyncClient.pushSettings(uid, currentSyncedSettings())
+            SyncFetch.Unavailable -> Unit
+        }
+    }
+
+    private fun currentSyncedSettings(): SyncedSettings {
+        val state = mutableState.value
+        return SyncedSettings(
+            newsLanguage = state.selectedLanguage.code,
+            appLocale = state.appLocale.code,
+            selectedCountry = state.selectedCountry.code,
+            themeMode = state.themeMode.name.lowercase(),
+            notificationsEnabled = state.notificationsEnabled,
+            notifyBreaking = state.notifyBreaking,
+            notifyTopStory = state.notifyTopStory,
+            notifyReminder = state.notifyReminder,
+        )
+    }
+
+    /** The remote copy becomes the local one — this is the "remote wins" side of sync. */
+    private suspend fun applySyncedSettings(settings: SyncedSettings) {
+        val newsLanguage = LanguageOption.entries.find { it.code == settings.newsLanguage }
+            ?: mutableState.value.selectedLanguage
+        val appLocale = AppLocale.fromCode(settings.appLocale)
+        val country = CountryOption.entries.find { it.code == settings.selectedCountry }
+            ?: mutableState.value.selectedCountry
+        val themeMode = ThemeMode.entries.find { it.name.equals(settings.themeMode, ignoreCase = true) }
+            ?: mutableState.value.themeMode
+
+        settingsManager.saveNewsLanguage(newsLanguage.code)
+        settingsManager.saveAppLocale(appLocale.code)
+        settingsManager.saveSelectedCountry(country.code)
+        settingsManager.saveThemeMode(themeMode.name.lowercase())
+        settingsManager.setNotificationsEnabled(settings.notificationsEnabled)
+        settingsManager.setNotifyBreaking(settings.notifyBreaking)
+        settingsManager.setNotifyTopStory(settings.notifyTopStory)
+        settingsManager.setNotifyReminder(settings.notifyReminder)
+
+        val languageChanged = newsLanguage != mutableState.value.selectedLanguage
+        mutableState.update { state ->
+            state.copy(
+                selectedLanguage = newsLanguage,
+                appLocale = appLocale,
+                selectedCountry = country,
+                themeMode = themeMode,
+                notificationsEnabled = settings.notificationsEnabled,
+                notifyBreaking = settings.notifyBreaking,
+                notifyTopStory = settings.notifyTopStory,
+                notifyReminder = settings.notifyReminder,
+            )
+        }
+        if (settings.notificationsEnabled) {
+            pushSubscriber.subscribeToLanguage(FeedLanguage.resolve(newsLanguage.code))
+        } else {
+            pushSubscriber.unsubscribeAll()
+        }
+        if (languageChanged) loadNewsWithCache()
+    }
+
+    /** Fire-and-forget: a signed-out reader is a no-op, a signed-in one pushes in the background. */
+    private fun pushSavedArticlesIfSignedIn(articles: List<NewsArticle>) {
+        val uid = mutableState.value.authUser?.uid ?: return
+        viewModelScope.launch { remoteSyncClient.pushSavedArticles(uid, articles) }
+    }
+
+    private fun pushSettingsIfSignedIn() {
+        val uid = mutableState.value.authUser?.uid ?: return
+        val settings = currentSyncedSettings()
+        viewModelScope.launch { remoteSyncClient.pushSettings(uid, settings) }
+    }
+
+    private fun handleSignInWithGoogle() {
+        mutableState.update { it.copy(authInProgress = true, authError = null) }
+        viewModelScope.launch {
+            when (val result = authClient.signInWithGoogle()) {
+                AuthResult.Success -> handleCloseOverlay()
+                AuthResult.Cancelled -> mutableState.update { it.copy(authInProgress = false) }
+                is AuthResult.Error -> mutableState.update {
+                    it.copy(authInProgress = false, authError = result.message)
+                }
+            }
+        }
+    }
+
+    private fun handleSignInWithEmail(email: String, password: String) {
+        mutableState.update { it.copy(authInProgress = true, authError = null) }
+        viewModelScope.launch {
+            when (val result = authClient.signInWithEmail(email, password)) {
+                AuthResult.Success -> handleCloseOverlay()
+                AuthResult.Cancelled -> mutableState.update { it.copy(authInProgress = false) }
+                is AuthResult.Error -> mutableState.update {
+                    it.copy(authInProgress = false, authError = result.message)
+                }
+            }
+        }
+    }
+
+    private fun handleSignUpWithEmail(email: String, password: String) {
+        mutableState.update { it.copy(authInProgress = true, authError = null) }
+        viewModelScope.launch {
+            when (val result = authClient.signUpWithEmail(email, password)) {
+                AuthResult.Success -> handleCloseOverlay()
+                AuthResult.Cancelled -> mutableState.update { it.copy(authInProgress = false) }
+                is AuthResult.Error -> mutableState.update {
+                    it.copy(authInProgress = false, authError = result.message)
+                }
+            }
+        }
+    }
+
+    /**
+     * Local bookmarks and settings are left exactly as they are: a guest is
+     * not a second-class reader here, and the data on this device belongs to
+     * this device regardless of whose account was just attached to it.
+     */
+    private fun handleSignOut() {
+        viewModelScope.launch { authClient.signOut() }
+    }
+
+    /**
+     * Deletes the server side first, while the reader is still authenticated —
+     * Firestore's security rules require `request.auth.uid == uid`, which is
+     * no longer true the moment `deleteAccount()` succeeds. Reversing this
+     * order would leave the synced copy behind with no way to reach it again.
+     */
+    private fun handleDeleteAccount() {
+        val uid = mutableState.value.authUser?.uid ?: return
+        mutableState.update { it.copy(authInProgress = true, authError = null) }
+        viewModelScope.launch {
+            remoteSyncClient.deleteUserData(uid)
+            when (val result = authClient.deleteAccount()) {
+                AuthResult.Success -> handleCloseOverlay()
+                AuthResult.Cancelled -> mutableState.update { it.copy(authInProgress = false) }
+                is AuthResult.Error -> mutableState.update {
+                    it.copy(authInProgress = false, authError = result.message)
+                }
+            }
+        }
+    }
+
+    private fun handleDismissAuthError() {
+        mutableState.update { it.copy(authError = null) }
     }
 
     /**
@@ -229,6 +423,12 @@ class NewsViewModel(
             NewsUiEvent.ToggleNotificationsEnabled -> handleToggleNotificationsEnabled()
             is NewsUiEvent.ToggleNotificationTier -> handleToggleNotificationTier(event.tier)
             NewsUiEvent.RequestNotificationPermissionIfDue -> handleRequestNotificationPermissionIfDue()
+            NewsUiEvent.SignInWithGoogle -> handleSignInWithGoogle()
+            is NewsUiEvent.SignInWithEmail -> handleSignInWithEmail(event.email, event.password)
+            is NewsUiEvent.SignUpWithEmail -> handleSignUpWithEmail(event.email, event.password)
+            NewsUiEvent.SignOut -> handleSignOut()
+            NewsUiEvent.DeleteAccount -> handleDeleteAccount()
+            NewsUiEvent.DismissAuthError -> handleDismissAuthError()
         }
     }
 
@@ -260,6 +460,7 @@ class NewsViewModel(
         viewModelScope.launch {
             settingsManager.saveSelectedCountry(country.code)
         }
+        pushSettingsIfSignedIn()
         loadNewsForCountryWithCache(country)
     }
 
@@ -308,6 +509,7 @@ class NewsViewModel(
             settingsManager.saveNewsLanguage(language.code)
             mutableEffect.emit(NewsUiEffect.ShowToast(strings().languageNames[language.code] ?: language.displayName))
         }
+        pushSettingsIfSignedIn()
         loadNewsWithCache()
     }
 
@@ -326,6 +528,7 @@ class NewsViewModel(
                 NewsUiEffect.ShowToast("${newStrings.languageChangedTo} $languageName")
             )
         }
+        pushSettingsIfSignedIn()
     }
 
     private fun handleSelectTab(tab: NavigationTab) {
@@ -511,6 +714,7 @@ class NewsViewModel(
                 state.copy(savedArticles = currentSaved)
             }
             persistSavedArticles(currentSaved)
+            pushSavedArticlesIfSignedIn(currentSaved)
             viewModelScope.launch {
                 mutableEffect.emit(NewsUiEffect.ShowToast(strings().articleRemoved))
             }
@@ -520,6 +724,7 @@ class NewsViewModel(
                 state.copy(savedArticles = currentSaved)
             }
             persistSavedArticles(currentSaved)
+            pushSavedArticlesIfSignedIn(currentSaved)
             analytics.logEvent(AnalyticsEvent.ArticleSaved(article.category.apiValue))
             viewModelScope.launch {
                 mutableEffect.emit(NewsUiEffect.ShowToast(strings().articleSaved))
@@ -537,6 +742,7 @@ class NewsViewModel(
             state.copy(savedArticles = currentSaved)
         }
         persistSavedArticles(currentSaved)
+        pushSavedArticlesIfSignedIn(currentSaved)
         viewModelScope.launch {
             mutableEffect.emit(NewsUiEffect.ShowToast(strings().articleRemoved))
         }
@@ -546,6 +752,7 @@ class NewsViewModel(
         if (mode == mutableState.value.themeMode) return
         mutableState.update { state -> state.copy(themeMode = mode) }
         viewModelScope.launch { settingsManager.saveThemeMode(mode.name.lowercase()) }
+        pushSettingsIfSignedIn()
     }
 
     private fun handleToggleNotificationsEnabled() {
@@ -564,6 +771,7 @@ class NewsViewModel(
                 pushSubscriber.unsubscribeAll()
             }
         }
+        pushSettingsIfSignedIn()
     }
 
     private fun handleToggleNotificationTier(tier: NotificationTier) {
@@ -585,6 +793,7 @@ class NewsViewModel(
                 viewModelScope.launch { settingsManager.setNotifyReminder(enabling) }
             }
         }
+        pushSettingsIfSignedIn()
     }
 
     /**

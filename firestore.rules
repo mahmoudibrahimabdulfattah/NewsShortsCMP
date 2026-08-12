@@ -1,0 +1,18 @@
+rules_version = '2';
+
+// One document per reader, at users/{uid}, holding their saved articles and
+// settings — see RemoteSyncClient.android.kt. A reader can only ever read or
+// write their own document; nothing here is queryable across readers, so
+// there is no broader rule needed than this one line.
+//
+// Deploy from the Firebase console: Firestore Database -> Rules -> paste this
+// file's contents -> Publish. Or via the CLI: `firebase deploy --only firestore:rules`
+// (needs a firebase.json pointing at this file, which this repo does not keep
+// since nothing else here uses the Firebase CLI).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

@@ -1,5 +1,6 @@
 package com.mk.newsshorts.presentation.mvi
 
+import com.mk.newsshorts.auth.AuthUser
 import com.mk.newsshorts.data.remote.RequiredUpdate
 import com.mk.newsshorts.security.SecurityNotice
 import com.mk.newsshorts.security.SecurityReason
@@ -41,6 +42,12 @@ data class NewsUiState(
     val notifyBreaking: Boolean = true,
     val notifyTopStory: Boolean = true,
     val notifyReminder: Boolean = true,
+    /** Null for a guest. Every screen already works without one. */
+    val authUser: AuthUser? = null,
+    /** True while a sign-in/up/delete call is in flight — drives a spinner. */
+    val authInProgress: Boolean = false,
+    /** The last auth failure, shown once then dismissed — not a stored fact. */
+    val authError: String? = null,
 ) {
     val hasArticles: Boolean
         get() = articles.isNotEmpty()
@@ -71,6 +78,7 @@ sealed interface Overlay {
     data class Details(val article: NewsArticle, val origin: ArticleOpenOrigin) : Overlay
     data object Settings : Overlay
     data object SavedArticles : Overlay
+    data object SignIn : Overlay
 }
 
 /**

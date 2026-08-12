@@ -76,6 +76,26 @@ interface AppStrings {
     val notifyBreakingLabel: String
     val notifyTopStoryLabel: String
     val notifyReminderLabel: String
+    val guestLabel: String
+    val signIn: String
+    val signInSubtitle: String
+    val continueWithGoogle: String
+    val orDivider: String
+    val emailLabel: String
+    val passwordLabel: String
+    val signInButton: String
+    val createAccountButton: String
+    val noAccountPrompt: String
+    val hasAccountPrompt: String
+    val continueAsGuest: String
+    val accountSectionTitle: String
+    val accountSectionDescription: String
+    val signOutLabel: String
+    val deleteAccountLabel: String
+    val deleteAccountConfirmTitle: String
+    val deleteAccountConfirmMessage: String
+    val deleteAccountConfirmButton: String
+    val cancelLabel: String
 
     /** Keyed by [com.mk.newsshorts.domain.model.NewsCategory.apiValue]. */
     val categoryNames: Map<String, String>
@@ -234,6 +254,28 @@ object EnglishStrings : AppStrings {
     override val notifyBreakingLabel: String = "Breaking news"
     override val notifyTopStoryLabel: String = "Top stories"
     override val notifyReminderLabel: String = "Daily reminders"
+    override val guestLabel: String = "Guest"
+    override val signIn: String = "Sign in"
+    override val signInSubtitle: String = "Sync your saved articles and settings"
+    override val continueWithGoogle: String = "Continue with Google"
+    override val orDivider: String = "or"
+    override val emailLabel: String = "Email"
+    override val passwordLabel: String = "Password"
+    override val signInButton: String = "Sign in"
+    override val createAccountButton: String = "Create account"
+    override val noAccountPrompt: String = "Don't have an account? Sign up"
+    override val hasAccountPrompt: String = "Already have an account? Sign in"
+    override val continueAsGuest: String = "Continue as guest"
+    override val accountSectionTitle: String = "Account"
+    override val accountSectionDescription: String = "Sign in to sync across devices"
+    override val signOutLabel: String = "Sign out"
+    override val deleteAccountLabel: String = "Delete account"
+    override val deleteAccountConfirmTitle: String = "Delete your account?"
+    override val deleteAccountConfirmMessage: String =
+        "This removes your account and everything synced to it. Saved articles on " +
+            "this device stay right where they are."
+    override val deleteAccountConfirmButton: String = "Delete"
+    override val cancelLabel: String = "Cancel"
 }
 
 object ArabicStrings : AppStrings {
@@ -377,6 +419,28 @@ object ArabicStrings : AppStrings {
     override val notifyBreakingLabel: String = "الأخبار العاجلة"
     override val notifyTopStoryLabel: String = "أهم الأخبار"
     override val notifyReminderLabel: String = "تذكيرات يومية"
+    override val guestLabel: String = "زائر"
+    override val signIn: String = "تسجيل الدخول"
+    override val signInSubtitle: String = "زامن مقالاتك المحفوظة وإعداداتك"
+    override val continueWithGoogle: String = "المتابعة باستخدام Google"
+    override val orDivider: String = "أو"
+    override val emailLabel: String = "البريد الإلكتروني"
+    override val passwordLabel: String = "كلمة المرور"
+    override val signInButton: String = "تسجيل الدخول"
+    override val createAccountButton: String = "إنشاء حساب"
+    override val noAccountPrompt: String = "ليس لديك حساب؟ أنشئ واحداً"
+    override val hasAccountPrompt: String = "لديك حساب بالفعل؟ سجّل الدخول"
+    override val continueAsGuest: String = "المتابعة كزائر"
+    override val accountSectionTitle: String = "الحساب"
+    override val accountSectionDescription: String = "سجّل الدخول للمزامنة بين الأجهزة"
+    override val signOutLabel: String = "تسجيل الخروج"
+    override val deleteAccountLabel: String = "حذف الحساب"
+    override val deleteAccountConfirmTitle: String = "حذف حسابك؟"
+    override val deleteAccountConfirmMessage: String =
+        "سيؤدي هذا إلى حذف حسابك وكل ما تمت مزامنته إليه. المقالات المحفوظة على " +
+            "هذا الجهاز تبقى كما هي."
+    override val deleteAccountConfirmButton: String = "حذف"
+    override val cancelLabel: String = "إلغاء"
 }
 
 fun getStrings(locale: AppLocale): AppStrings {

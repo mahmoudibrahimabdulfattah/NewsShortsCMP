@@ -7,6 +7,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -27,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -164,7 +167,26 @@ private fun NewsScreenContent(
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
-        when (val topOverlay = uiState.overlays.lastOrNull()) {
+        val topOverlay = uiState.overlays.lastOrNull()
+        // A plain Box with only a background does not consume touch input in
+        // Compose — a tap on empty space (a gap between controls, the space
+        // below a button) falls straight through to whatever is laid out
+        // underneath in the same Box, which is the tab content this overlay
+        // is meant to be covering. One blocking modifier here, rather than on
+        // every overlay screen individually, is what actually makes each of
+        // them modal.
+        if (topOverlay != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {},
+                    )
+            )
+        }
+        when (topOverlay) {
             is Overlay.Details -> {
                 ArticleDetailsScreen(
                     article = topOverlay.article,
@@ -183,6 +205,22 @@ private fun NewsScreenContent(
             Overlay.SavedArticles -> {
                 SavedArticlesScreen(
                     savedArticles = uiState.savedArticles,
+                    onEvent = onEvent,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            Overlay.SignIn -> {
+                SignInScreen(
+                    isLoading = uiState.authInProgress,
+                    errorMessage = uiState.authError,
+                    onGoogleClick = { onEvent(NewsUiEvent.SignInWithGoogle) },
+                    onEmailSignIn = { email, password ->
+                        onEvent(NewsUiEvent.SignInWithEmail(email, password))
+                    },
+                    onEmailSignUp = { email, password ->
+                        onEvent(NewsUiEvent.SignUpWithEmail(email, password))
+                    },
+                    onDismissError = { onEvent(NewsUiEvent.DismissAuthError) },
                     onEvent = onEvent,
                     modifier = Modifier.fillMaxSize()
                 )

@@ -84,6 +84,18 @@
 -keep class com.mk.newsshorts.notifications.NewsMessagingService { *; }
 
 # ---------------------------------------------------------------------------
+# Credential Manager / Google Sign-In
+# ---------------------------------------------------------------------------
+# GoogleIdTokenCredential is reconstructed from a Bundle via a static factory
+# rather than a normal constructor call R8 can trace.
+-keep class com.google.android.libraries.identity.googleid.** { *; }
+
+# Firestore sync in this app deliberately reads/writes plain field maps
+# (DocumentSnapshot.getString(...), hashMapOf(...)) rather than
+# toObject()/POJO mapping, specifically so no reflective model classes are
+# needed here at all.
+
+# ---------------------------------------------------------------------------
 # Entry points named in the manifest
 # ---------------------------------------------------------------------------
 -keep class com.mk.newsshorts.MainActivity { *; }
