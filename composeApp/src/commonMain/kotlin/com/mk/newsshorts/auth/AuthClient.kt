@@ -32,11 +32,19 @@ enum class AuthFailure {
     /** No Google account on the device at all, or the picker had nothing to offer. */
     NO_GOOGLE_ACCOUNT,
     NETWORK,
-    /** Wrong password, unknown email, or a disabled account — deliberately one case. */
-    INVALID_CREDENTIALS,
     INVALID_EMAIL,
-    EMAIL_ALREADY_IN_USE,
-    WEAK_PASSWORD,
+    /** The link is malformed, or was already used — they are single-use. */
+    INVALID_LINK,
+    EXPIRED_LINK,
+    /**
+     * Firebase caps how many sign-in emails a project may send per day, and
+     * the cap is per project rather than per reader — so one person can find
+     * themselves locked out by everyone else's attempts. Worth its own case:
+     * the only useful advice is to use Google instead, or wait.
+     */
+    EMAIL_QUOTA_EXCEEDED,
+    /** Asked to act on the account while nobody is signed in. */
+    NOT_SIGNED_IN,
     /** Firebase requires a fresh sign-in before deleting an account. */
     REAUTHENTICATION_REQUIRED,
     /** GOOGLE_WEB_CLIENT_ID is missing from the build. */
@@ -61,8 +69,32 @@ interface AuthClient {
     val currentUser: StateFlow<AuthUser?>
 
     suspend fun signInWithGoogle(): AuthResult
-    suspend fun signInWithEmail(email: String, password: String): AuthResult
-    suspend fun signUpWithEmail(email: String, password: String): AuthResult
+
+    /**
+     * Emails a one-time sign-in link, which is the whole of the email flow —
+     * this app has no passwords.
+     *
+     * Not having them is the point: a password account proves nothing about
+     * who owns the address, so anyone could have registered under someone
+     * else's email and squatted it. A link cannot be followed by someone who
+     * cannot read the inbox, so ownership is proven by construction rather
+     * than by a verification step that has to be remembered and enforced.
+     *
+     * [AuthResult.Success] here means *the link was sent* — the reader is not
+     * signed in until they follow it and [completeSignInWithLink] runs.
+     */
+    suspend fun sendSignInLink(email: String): AuthResult
+
+    /** Whether an incoming link is one of ours, before trying to act on it. */
+    fun isSignInLink(link: String): Boolean
+
+    /**
+     * Finishes what [sendSignInLink] started. Firebase requires the address the
+     * link was sent to, which the caller has to supply: the link may well be
+     * opened on a different device than asked for it, where nothing was stored.
+     */
+    suspend fun completeSignInWithLink(email: String, link: String): AuthResult
+
     suspend fun signOut()
 
     /**
@@ -80,8 +112,9 @@ object NoOpAuthClient : AuthClient {
     private val unsupported = AuthResult.Error(AuthFailure.UNSUPPORTED_PLATFORM)
 
     override suspend fun signInWithGoogle(): AuthResult = unsupported
-    override suspend fun signInWithEmail(email: String, password: String): AuthResult = unsupported
-    override suspend fun signUpWithEmail(email: String, password: String): AuthResult = unsupported
+    override suspend fun sendSignInLink(email: String): AuthResult = unsupported
+    override fun isSignInLink(link: String): Boolean = false
+    override suspend fun completeSignInWithLink(email: String, link: String): AuthResult = unsupported
     override suspend fun signOut() = Unit
     override suspend fun deleteAccount(): AuthResult = unsupported
 }

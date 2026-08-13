@@ -29,3 +29,7 @@ node_modules/
 # project and spend its free-tier quota. See README for local setup.
 google-services.json
 GoogleService-Info.plist
+
+# Firebase CLI deploy cache — local only, regenerated on every deploy.
+.firebase/
+firebase-debug.log

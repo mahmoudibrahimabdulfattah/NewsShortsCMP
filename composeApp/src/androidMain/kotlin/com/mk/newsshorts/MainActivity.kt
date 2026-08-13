@@ -21,6 +21,7 @@ import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
 import com.mk.newsshorts.navigation.ArticleDeepLinks
 import com.mk.newsshorts.navigation.DeepLinkBus
+import com.mk.newsshorts.navigation.SignInLinkBus
 import com.mk.newsshorts.notifications.NewsMessagingService
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.android.inject
@@ -38,6 +39,7 @@ class MainActivity : ComponentActivity() {
 
     // The Activity hands links to the bus and never touches the ViewModel.
     private val deepLinkBus: DeepLinkBus by inject()
+    private val signInLinkBus: SignInLinkBus by inject()
 
     private val notificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -73,13 +75,21 @@ class MainActivity : ComponentActivity() {
     /**
      * A tapped notification and a `newsshorts://` link arrive the same way, so
      * one parser covers both — and `adb am start` exercises the real path.
+     *
+     * A followed sign-in link arrives here too, and is deliberately checked
+     * second: only Firebase can say whether a link is one of its own, and
+     * asking it about every article link would be a pointless round trip.
      */
     private fun consumeDeepLink(intent: Intent?) {
         val data = intent?.data?.toString() ?: return
         // Clearing it stops the same link firing again when the app resumes.
         intent.data = null
-        val link = ArticleDeepLinks.parse(data) ?: return
-        deepLinkBus.post(link)
+        val articleLink = ArticleDeepLinks.parse(data)
+        if (articleLink != null) {
+            deepLinkBus.post(articleLink)
+            return
+        }
+        signInLinkBus.post(data)
     }
 
     private fun requestNotificationPermissionIfNeeded() {

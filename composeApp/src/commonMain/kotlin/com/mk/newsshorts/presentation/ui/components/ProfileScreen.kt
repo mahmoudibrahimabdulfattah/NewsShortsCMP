@@ -105,7 +105,7 @@ fun ProfileScreen(
             }
             item {
                 Spacer(modifier = Modifier.height(28.dp))
-                AppInfoSection(strings = strings)
+                AppInfoSection(strings = strings, onEvent = onEvent)
             }
         }
     }
@@ -330,6 +330,7 @@ private fun SettingsEntryRow(
 @Composable
 private fun AppInfoSection(
     strings: AppStrings,
+    onEvent: (NewsUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -362,6 +363,19 @@ private fun AppInfoSection(
                 // NewsAPI was replaced by the RSS + Gemini backend; the credit
                 // had been telling readers the wrong thing since then.
                 InfoRow(label = strings.poweredBy, value = "RSS + Gemini")
+                Spacer(modifier = Modifier.height(16.dp))
+                // Reachable without an account, on purpose: the policy's whole
+                // first point is that guests are tracked by nothing, and a
+                // reader deciding whether to sign in is exactly who needs it.
+                Text(
+                    text = strings.privacyPolicy,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onEvent(NewsUiEvent.OpenPrivacyPolicy) }
+                        .padding(vertical = 4.dp),
+                )
             }
         }
     }

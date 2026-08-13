@@ -10,11 +10,14 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.mk.newsshorts.auth.AuthClient
+import com.mk.newsshorts.auth.AuthFailure
 import com.mk.newsshorts.auth.AuthResult
+import com.mk.newsshorts.data.local.PendingSignInEmailStore
 import com.mk.newsshorts.data.local.SavedArticlesStore
 import com.mk.newsshorts.data.local.SeenArticlesStore
 import com.mk.newsshorts.data.local.SettingsManager
 import com.mk.newsshorts.data.local.currentTimeMillis
+import com.mk.newsshorts.data.local.isPlausibleEmail
 import com.mk.newsshorts.domain.ranking.deprioritiseSeen
 import com.mk.newsshorts.domain.sync.mergeSavedArticles
 import com.mk.newsshorts.sync.RemoteSyncClient
@@ -40,6 +43,7 @@ import com.mk.newsshorts.config.BuildConfig
 import com.mk.newsshorts.navigation.ArticleDeepLink
 import com.mk.newsshorts.navigation.ArticleDeepLinks
 import com.mk.newsshorts.navigation.DeepLinkBus
+import com.mk.newsshorts.navigation.SignInLinkBus
 import com.mk.newsshorts.navigation.toNewsArticle
 import com.mk.newsshorts.notifications.PushSubscriber
 import com.mk.newsshorts.presentation.localization.AppLocale
@@ -62,8 +66,10 @@ class NewsViewModel(
     private val analytics: AnalyticsReporter,
     private val pushSubscriber: PushSubscriber,
     private val deepLinkBus: DeepLinkBus,
+    private val signInLinkBus: SignInLinkBus,
     private val savedArticlesStore: SavedArticlesStore,
     private val seenArticlesStore: SeenArticlesStore,
+    private val pendingSignInEmailStore: PendingSignInEmailStore,
     private val remoteConfigClient: RemoteConfigClient,
     private val deviceIntegrityInspector: DeviceIntegrityInspector,
     private val authClient: AuthClient,
@@ -82,6 +88,7 @@ class NewsViewModel(
     init {
         loadSavedSettings()
         observeDeepLinks()
+        observeSignInLinks()
         checkForRequiredUpdate()
         observeAuthState()
     }
@@ -211,11 +218,28 @@ class NewsViewModel(
         }
     }
 
-    private fun handleSignInWithEmail(email: String, password: String) {
+    /**
+     * Success here means the mail is on its way, not that anyone is signed in —
+     * the reader now has to leave the app entirely, so the address is written
+     * to disk before the state changes. If they never come back, nothing was
+     * created; there is no half-made account waiting for a verification that
+     * may never happen, which is the whole reason this replaced passwords.
+     */
+    private fun handleSendSignInLink(email: String) {
+        val address = email.trim()
+        if (!isPlausibleEmail(address)) {
+            mutableState.update { it.copy(authError = AuthFailure.INVALID_EMAIL) }
+            return
+        }
         mutableState.update { it.copy(authInProgress = true, authError = null) }
         viewModelScope.launch {
-            when (val result = authClient.signInWithEmail(email, password)) {
-                AuthResult.Success -> handleCloseOverlay()
+            when (val result = authClient.sendSignInLink(address)) {
+                AuthResult.Success -> {
+                    pendingSignInEmailStore.save(address)
+                    mutableState.update {
+                        it.copy(authInProgress = false, pendingSignInEmail = address)
+                    }
+                }
                 AuthResult.Cancelled -> mutableState.update { it.copy(authInProgress = false) }
                 is AuthResult.Error -> mutableState.update {
                     it.copy(authInProgress = false, authError = result.failure)
@@ -224,16 +248,65 @@ class NewsViewModel(
         }
     }
 
-    private fun handleSignUpWithEmail(email: String, password: String) {
+    /**
+     * A followed link, handed over by the OS. The address it belongs to is not
+     * in the link — see [AuthClient.completeSignInWithLink] — so a link opened
+     * on a device that never asked for one is held for the screen to ask about
+     * rather than dropped.
+     */
+    private fun handleSignInLinkOpened(link: String) {
+        if (!authClient.isSignInLink(link)) return
+        val storedEmail = pendingSignInEmailStore.load()
+        if (storedEmail == null) {
+            mutableState.update { state ->
+                // The link may arrive with the app cold, so the sign-in screen
+                // is opened rather than assumed — but never stacked twice, or
+                // one back press would leave a duplicate behind.
+                val overlays = state.overlays.takeIf { Overlay.SignIn in it }
+                    ?: (state.overlays + Overlay.SignIn)
+                state.copy(unclaimedSignInLink = link, overlays = overlays)
+            }
+            return
+        }
+        completeLinkSignIn(email = storedEmail, link = link)
+    }
+
+    private fun handleSupplyLinkEmail(email: String) {
+        val link = mutableState.value.unclaimedSignInLink ?: return
+        val address = email.trim()
+        if (!isPlausibleEmail(address)) {
+            mutableState.update { it.copy(authError = AuthFailure.INVALID_EMAIL) }
+            return
+        }
+        completeLinkSignIn(email = address, link = link)
+    }
+
+    private fun completeLinkSignIn(email: String, link: String) {
         mutableState.update { it.copy(authInProgress = true, authError = null) }
         viewModelScope.launch {
-            when (val result = authClient.signUpWithEmail(email, password)) {
-                AuthResult.Success -> handleCloseOverlay()
+            when (val result = authClient.completeSignInWithLink(email, link)) {
+                AuthResult.Success -> {
+                    pendingSignInEmailStore.clear()
+                    mutableState.update {
+                        it.copy(pendingSignInEmail = null, unclaimedSignInLink = null)
+                    }
+                    handleCloseOverlay()
+                }
                 AuthResult.Cancelled -> mutableState.update { it.copy(authInProgress = false) }
+                // The link stays held on failure: an expired one is worth
+                // saying so about, and the reader may simply have mistyped the
+                // address on a second device.
                 is AuthResult.Error -> mutableState.update {
                     it.copy(authInProgress = false, authError = result.failure)
                 }
             }
+        }
+    }
+
+    private fun handleCancelPendingSignInLink() {
+        pendingSignInEmailStore.clear()
+        mutableState.update {
+            it.copy(pendingSignInEmail = null, unclaimedSignInLink = null, authError = null)
         }
     }
 
@@ -351,6 +424,18 @@ class NewsViewModel(
         }
     }
 
+    private fun observeSignInLinks() {
+        viewModelScope.launch {
+            signInLinkBus.pending.collect { link ->
+                if (link == null) return@collect
+                processEvent(NewsUiEvent.SignInLinkOpened(link))
+                // Consumed whether or not it worked: these are single-use, so
+                // retrying the same one only ever produces a worse error.
+                signInLinkBus.consume()
+            }
+        }
+    }
+
     private fun loadSavedSettings() {
         viewModelScope.launch {
             val savedNewsLanguage: String = settingsManager.newsLanguageFlow.first()
@@ -412,6 +497,9 @@ class NewsViewModel(
             NewsUiEvent.CloseOverlay -> handleCloseOverlay()
             NewsUiEvent.DismissSecurityWarning -> handleDismissSecurityWarning()
             NewsUiEvent.OpenArticleSource -> handleOpenArticleSource()
+            NewsUiEvent.OpenPrivacyPolicy -> viewModelScope.launch {
+                mutableEffect.emit(NewsUiEffect.OpenUrl(BuildConfig.PRIVACY_POLICY_URL))
+            }
             is NewsUiEvent.OpenDeepLink -> handleOpenDeepLink(event.link)
             is NewsUiEvent.ShareArticle -> handleShareArticle(event.article)
             is NewsUiEvent.SaveArticle -> handleSaveArticle(event.article)
@@ -424,8 +512,10 @@ class NewsViewModel(
             is NewsUiEvent.ToggleNotificationTier -> handleToggleNotificationTier(event.tier)
             NewsUiEvent.RequestNotificationPermissionIfDue -> handleRequestNotificationPermissionIfDue()
             NewsUiEvent.SignInWithGoogle -> handleSignInWithGoogle()
-            is NewsUiEvent.SignInWithEmail -> handleSignInWithEmail(event.email, event.password)
-            is NewsUiEvent.SignUpWithEmail -> handleSignUpWithEmail(event.email, event.password)
+            is NewsUiEvent.SendSignInLink -> handleSendSignInLink(event.email)
+            is NewsUiEvent.SignInLinkOpened -> handleSignInLinkOpened(event.link)
+            is NewsUiEvent.SupplyLinkEmail -> handleSupplyLinkEmail(event.email)
+            NewsUiEvent.CancelPendingSignInLink -> handleCancelPendingSignInLink()
             NewsUiEvent.SignOut -> handleSignOut()
             NewsUiEvent.DeleteAccount -> handleDeleteAccount()
             NewsUiEvent.DismissAuthError -> handleDismissAuthError()

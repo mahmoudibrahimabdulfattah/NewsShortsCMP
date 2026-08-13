@@ -47,7 +47,7 @@ class SavedArticlesMergeTest {
     }
 
     @Test
-    fun `a duplicate url is kept once, the local copy`() {
+    fun `a duplicate url is kept once and it is the local copy`() {
         val remoteCopyOfA = article("a-remote", "https://example.com/a")
         val result = mergeSavedArticles(local = listOf(a), remote = listOf(remoteCopyOfA))
         assertEquals(listOf(a), result)

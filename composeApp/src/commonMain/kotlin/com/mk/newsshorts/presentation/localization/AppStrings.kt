@@ -15,6 +15,7 @@ interface AppStrings {
     val noSavedArticles: String
     val savedArticlesDescription: String
     val about: String
+    val privacyPolicy: String
     val aboutDescription: String
     val appVersion: String
     val platform: String
@@ -84,11 +85,15 @@ interface AppStrings {
     val continueWithGoogle: String
     val orDivider: String
     val emailLabel: String
-    val passwordLabel: String
-    val signInButton: String
-    val createAccountButton: String
-    val noAccountPrompt: String
-    val hasAccountPrompt: String
+    val sendSignInLinkButton: String
+    val signInLinkExplainer: String
+    val checkInboxTitle: String
+    /** Names the address, so a typo is visible before the reader goes hunting. */
+    fun checkInboxBody(email: String): String
+    val useDifferentEmail: String
+    val confirmLinkEmailTitle: String
+    val confirmLinkEmailBody: String
+    val confirmLinkEmailButton: String
     val continueAsGuest: String
     val accountSectionTitle: String
     val accountSectionDescription: String
@@ -140,6 +145,7 @@ object EnglishStrings : AppStrings {
     override val noSavedArticles: String = "No saved articles"
     override val savedArticlesDescription: String = "Tap the bookmark icon on any article to save it for later"
     override val about: String = "About"
+    override val privacyPolicy: String = "Privacy policy"
     override val aboutDescription: String = "App information"
     override val appVersion: String = "Version"
     override val platform: String = "Platform"
@@ -254,10 +260,13 @@ object EnglishStrings : AppStrings {
         AuthFailure.NO_GOOGLE_ACCOUNT ->
             "No Google account on this device. Add one in Settings, or sign in with an email instead."
         AuthFailure.NETWORK -> "No connection. Check your network and try again."
-        AuthFailure.INVALID_CREDENTIALS -> "Wrong email or password."
         AuthFailure.INVALID_EMAIL -> "That email address doesn't look right."
-        AuthFailure.EMAIL_ALREADY_IN_USE -> "An account with this email already exists. Sign in instead."
-        AuthFailure.WEAK_PASSWORD -> "Password is too short — use at least 6 characters."
+        AuthFailure.INVALID_LINK ->
+            "This link no longer works — each one can only be used once. Ask for a new one."
+        AuthFailure.EXPIRED_LINK -> "This link has expired. Ask for a new one."
+        AuthFailure.EMAIL_QUOTA_EXCEEDED ->
+            "Too many sign-in emails have been sent today. Continue with Google, or try again tomorrow."
+        AuthFailure.NOT_SIGNED_IN -> "You're not signed in."
         AuthFailure.REAUTHENTICATION_REQUIRED -> "Sign in again to confirm, then delete your account."
         AuthFailure.NOT_CONFIGURED -> "Google Sign-In isn't available right now."
         AuthFailure.UNSUPPORTED_PLATFORM -> "Sign-in isn't available on this platform."
@@ -284,11 +293,17 @@ object EnglishStrings : AppStrings {
     override val continueWithGoogle: String = "Continue with Google"
     override val orDivider: String = "or"
     override val emailLabel: String = "Email"
-    override val passwordLabel: String = "Password"
-    override val signInButton: String = "Sign in"
-    override val createAccountButton: String = "Create account"
-    override val noAccountPrompt: String = "Don't have an account? Sign up"
-    override val hasAccountPrompt: String = "Already have an account? Sign in"
+    override val sendSignInLinkButton: String = "Email me a sign-in link"
+    override val signInLinkExplainer: String =
+        "No password to remember — we email you a link that signs you in."
+    override val checkInboxTitle: String = "Check your inbox"
+    override fun checkInboxBody(email: String): String =
+        "We sent a sign-in link to $email. Open it on this device to finish."
+    override val useDifferentEmail: String = "Use a different email"
+    override val confirmLinkEmailTitle: String = "One more thing"
+    override val confirmLinkEmailBody: String =
+        "This link was requested on another device. Enter the email address it was sent to."
+    override val confirmLinkEmailButton: String = "Continue"
     override val continueAsGuest: String = "Continue as guest"
     override val accountSectionTitle: String = "Account"
     override val accountSectionDescription: String = "Sign in to sync across devices"
@@ -315,6 +330,7 @@ object ArabicStrings : AppStrings {
     override val noSavedArticles: String = "لا توجد مقالات محفوظة"
     override val savedArticlesDescription: String = "اضغط على أيقونة الإشارة المرجعية على أي مقال لحفظه"
     override val about: String = "حول التطبيق"
+    override val privacyPolicy: String = "سياسة الخصوصية"
     override val aboutDescription: String = "معلومات التطبيق"
     override val appVersion: String = "الإصدار"
     override val platform: String = "المنصة"
@@ -433,10 +449,13 @@ object ArabicStrings : AppStrings {
         AuthFailure.NO_GOOGLE_ACCOUNT ->
             "لا يوجد حساب Google على هذا الجهاز. أضف حساباً من الإعدادات، أو سجّل الدخول بالبريد الإلكتروني."
         AuthFailure.NETWORK -> "لا يوجد اتصال. تحقّق من الشبكة وحاول مرة أخرى."
-        AuthFailure.INVALID_CREDENTIALS -> "البريد الإلكتروني أو كلمة المرور غير صحيحة."
         AuthFailure.INVALID_EMAIL -> "صيغة البريد الإلكتروني غير صحيحة."
-        AuthFailure.EMAIL_ALREADY_IN_USE -> "يوجد حساب بهذا البريد بالفعل. سجّل الدخول بدلاً من إنشاء حساب."
-        AuthFailure.WEAK_PASSWORD -> "كلمة المرور قصيرة — استخدم 6 أحرف على الأقل."
+        AuthFailure.INVALID_LINK ->
+            "هذا الرابط لم يعد صالحاً — كل رابط يُستخدم مرة واحدة فقط. اطلب رابطاً جديداً."
+        AuthFailure.EXPIRED_LINK -> "انتهت صلاحية الرابط. اطلب رابطاً جديداً."
+        AuthFailure.EMAIL_QUOTA_EXCEEDED ->
+            "تم إرسال عدد كبير من رسائل الدخول اليوم. تابع باستخدام Google، أو حاول غداً."
+        AuthFailure.NOT_SIGNED_IN -> "لست مسجّل الدخول."
         AuthFailure.REAUTHENTICATION_REQUIRED -> "سجّل الدخول مرة أخرى للتأكيد، ثم احذف حسابك."
         AuthFailure.NOT_CONFIGURED -> "تسجيل الدخول عبر Google غير متاح حالياً."
         AuthFailure.UNSUPPORTED_PLATFORM -> "تسجيل الدخول غير متاح على هذه المنصة."
@@ -463,11 +482,17 @@ object ArabicStrings : AppStrings {
     override val continueWithGoogle: String = "المتابعة باستخدام Google"
     override val orDivider: String = "أو"
     override val emailLabel: String = "البريد الإلكتروني"
-    override val passwordLabel: String = "كلمة المرور"
-    override val signInButton: String = "تسجيل الدخول"
-    override val createAccountButton: String = "إنشاء حساب"
-    override val noAccountPrompt: String = "ليس لديك حساب؟ أنشئ واحداً"
-    override val hasAccountPrompt: String = "لديك حساب بالفعل؟ سجّل الدخول"
+    override val sendSignInLinkButton: String = "أرسل لي رابط دخول"
+    override val signInLinkExplainer: String =
+        "لا توجد كلمة مرور تحفظها — نرسل لك رابطاً يسجّل دخولك."
+    override val checkInboxTitle: String = "افتح بريدك"
+    override fun checkInboxBody(email: String): String =
+        "أرسلنا رابط الدخول إلى $email. افتحه من هذا الجهاز لإتمام تسجيل الدخول."
+    override val useDifferentEmail: String = "استخدم بريداً آخر"
+    override val confirmLinkEmailTitle: String = "خطوة أخيرة"
+    override val confirmLinkEmailBody: String =
+        "طُلب هذا الرابط من جهاز آخر. أدخل البريد الإلكتروني الذي أُرسل إليه."
+    override val confirmLinkEmailButton: String = "متابعة"
     override val continueAsGuest: String = "المتابعة كزائر"
     override val accountSectionTitle: String = "الحساب"
     override val accountSectionDescription: String = "سجّل الدخول للمزامنة بين الأجهزة"

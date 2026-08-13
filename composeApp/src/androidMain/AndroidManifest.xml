@@ -64,6 +64,23 @@
                     android:host="${shareLinkHost}"
                     android:pathPrefix="${shareLinkPathPrefix}" />
             </intent-filter>
+
+            <!--
+                The passwordless sign-in link. Firebase serves the assetlinks
+                file for this host itself, so verification needs nothing from us
+                beyond the SHA-256 fingerprint being registered in the console —
+                which is also what makes the link open here rather than in a
+                browser tab where the app could never complete the sign-in.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="${firebaseAuthLinkHost}"
+                    android:pathPrefix="/__/auth/links" />
+            </intent-filter>
         </activity>
 
         <service

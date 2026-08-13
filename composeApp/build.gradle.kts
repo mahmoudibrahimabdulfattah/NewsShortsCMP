@@ -52,12 +52,32 @@ val shareLinkPathPrefix: String = shareBaseUrl
 // a release keystore, which disables the tamper check rather than failing it.
 val expectedSigningSha256: String = localProperties.getProperty("SIGNING_CERT_SHA256").orEmpty()
 
+// Required by Google Play once an app has accounts, and already advertised to
+// readers by Google's own sign-in consent sheet. Overridable so a fork does not
+// ship a link to someone else's policy.
+val privacyPolicyUrl: String = localProperties.getProperty("PRIVACY_POLICY_URL")
+    ?: "https://mahmoudibrahimabdulfattah.github.io/newsshorts-privacy/"
+
 // The Firebase project's "Web client (auto created by Google Service)" OAuth
 // client ID — Credential Manager needs it as the audience for the Google ID
 // token even though this is an Android app, because Firebase Auth verifies
 // that token against a web client. Empty until it exists, which disables the
 // Google Sign-In button rather than crashing (see AuthClient).
 val googleWebClientId: String = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID").orEmpty()
+
+// Passwordless sign-in links land on the Firebase project's own Auth domain,
+// which serves the App Links assetlinks file itself — so the app can claim the
+// link without us hosting anything. The manifest filter needs that host as a
+// literal and cannot read it at runtime, so it is parsed out of
+// google-services.json rather than written down twice. Without that file there
+// is no Firebase at all (see createAuthClient), so an unmatchable host leaves
+// the filter inert instead of breaking the merge.
+val firebaseAuthLinkHost: String = file("google-services.json")
+    .takeIf { it.exists() }
+    ?.readText()
+    ?.let { Regex("\"project_id\"\\s*:\\s*\"([^\"]+)\"").find(it)?.groupValues?.get(1) }
+    ?.let { projectId -> "$projectId.firebaseapp.com" }
+    ?: "invalid.invalid"
 
 // The one place the version is declared. The Android block and the shared
 // BuildConfig both read it, so the number the update check compares against is
@@ -80,6 +100,7 @@ buildConfigFile.writeText(
     |    const val VERSION_CODE: Int = $appVersionCode
     |    const val VERSION_NAME: String = "$appVersionName"
     |    const val GOOGLE_WEB_CLIENT_ID: String = "$googleWebClientId"
+    |    const val PRIVACY_POLICY_URL: String = "$privacyPolicyUrl"
     |}
     """.trimMargin()
 )
@@ -211,6 +232,7 @@ android {
         applicationId = "com.mk.newsshorts"
         manifestPlaceholders["shareLinkHost"] = shareLinkHost
         manifestPlaceholders["shareLinkPathPrefix"] = shareLinkPathPrefix
+        manifestPlaceholders["firebaseAuthLinkHost"] = firebaseAuthLinkHost
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = appVersionCode

@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
 class NotificationPreferenceKeysTest {
 
     @Test
-    fun `master off blocks every tier, regardless of its own switch`() {
+    fun `master off blocks every tier regardless of its own switch`() {
         assertFalse(NotificationPreferenceKeys.isAllowed(masterEnabled = false, tierEnabled = true))
         assertFalse(NotificationPreferenceKeys.isAllowed(masterEnabled = false, tierEnabled = false))
         assertFalse(NotificationPreferenceKeys.isAllowed(masterEnabled = false, tierEnabled = null))

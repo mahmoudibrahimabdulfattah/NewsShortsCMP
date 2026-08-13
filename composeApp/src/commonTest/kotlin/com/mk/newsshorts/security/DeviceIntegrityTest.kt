@@ -127,13 +127,13 @@ class DeviceIntegrityTest {
     }
 
     @Test
-    fun `the environment default is block, and it is the only one that is`() {
+    fun `the environment default is block and it is the only one that is`() {
         assertEquals(IntegrityPolicy.BLOCK, IntegrityPolicy.fromWire(null, default = IntegrityPolicy.BLOCK))
         assertEquals(IntegrityPolicy.WARN, IntegrityPolicy.fromWire(null))
     }
 
     @Test
-    fun `an unreadable policy falls back to warning, not blocking`() {
+    fun `an unreadable policy falls back to warning rather than blocking`() {
         // A typo in the repository variable would otherwise take the app away
         // from every affected install at once, with nothing in the app to say
         // why.
@@ -147,7 +147,7 @@ class DeviceIntegrityTest {
     }
 
     @Test
-    fun `the wire values are matched exactly, whatever their case`() {
+    fun `the wire values are matched exactly whatever their case`() {
         assertEquals(IntegrityPolicy.ALLOW, IntegrityPolicy.fromWire("allow"))
         assertEquals(IntegrityPolicy.BLOCK, IntegrityPolicy.fromWire("BLOCK"))
         assertEquals(IntegrityPolicy.WARN, IntegrityPolicy.fromWire(" warn "))

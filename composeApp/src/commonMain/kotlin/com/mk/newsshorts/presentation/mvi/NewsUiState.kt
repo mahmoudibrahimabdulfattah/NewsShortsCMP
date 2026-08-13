@@ -53,6 +53,18 @@ data class NewsUiState(
      * SDKs' own text is English-only.
      */
     val authError: AuthFailure? = null,
+    /**
+     * The address a sign-in link was just sent to. Non-null means the reader is
+     * waiting on their inbox, which is a state the screen has to show plainly:
+     * nothing else happens in the app until they leave it for their mail.
+     */
+    val pendingSignInEmail: String? = null,
+    /**
+     * A followed link that arrived with no stored address to redeem it — the
+     * link was opened on a different device than asked for it. Held so the
+     * screen can ask who it belongs to instead of discarding it.
+     */
+    val unclaimedSignInLink: String? = null,
 ) {
     val hasArticles: Boolean
         get() = articles.isNotEmpty()

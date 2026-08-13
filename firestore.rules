@@ -12,7 +12,15 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      // email_verified is redundant today and deliberately kept anyway: both
+      // sign-in methods prove the address by construction — Google vouches for
+      // its own accounts, and a sign-in link cannot be followed by someone who
+      // cannot read the inbox — so nothing legitimate is turned away. What it
+      // buys is that adding a provider which does not prove ownership, such as
+      // plain email and password, cannot silently reach anyone's data.
+      allow read, write: if request.auth != null
+                         && request.auth.uid == uid
+                         && request.auth.token.email_verified == true;
     }
   }
 }

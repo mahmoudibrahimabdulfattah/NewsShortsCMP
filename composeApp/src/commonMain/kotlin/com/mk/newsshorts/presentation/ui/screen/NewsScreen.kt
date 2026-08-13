@@ -101,6 +101,15 @@ private fun NewsScreenContent(
         onEvent(NewsUiEvent.CloseOverlay)
     }
 
+    // With no overlay open, back off a secondary tab returns to the feed
+    // rather than leaving the app. This is what Android readers expect — the
+    // first tab is the app's home, and closing from Countries or Profile feels
+    // like losing your place. Disabled on the feed itself, which hands back to
+    // the system so the app still closes from there on the next press.
+    BackHandler(enabled = uiState.overlays.isEmpty() && uiState.currentTab != NavigationTab.FOR_YOU) {
+        onEvent(NewsUiEvent.SelectTab(NavigationTab.FOR_YOU))
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -213,13 +222,9 @@ private fun NewsScreenContent(
                 SignInScreen(
                     isLoading = uiState.authInProgress,
                     errorFailure = uiState.authError,
+                    pendingEmail = uiState.pendingSignInEmail,
+                    hasUnclaimedLink = uiState.unclaimedSignInLink != null,
                     onGoogleClick = { onEvent(NewsUiEvent.SignInWithGoogle) },
-                    onEmailSignIn = { email, password ->
-                        onEvent(NewsUiEvent.SignInWithEmail(email, password))
-                    },
-                    onEmailSignUp = { email, password ->
-                        onEvent(NewsUiEvent.SignUpWithEmail(email, password))
-                    },
                     onDismissError = { onEvent(NewsUiEvent.DismissAuthError) },
                     onEvent = onEvent,
                     modifier = Modifier.fillMaxSize()

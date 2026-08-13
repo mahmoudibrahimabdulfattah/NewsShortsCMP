@@ -45,7 +45,7 @@ class SeenArticlesStoreTest {
     }
 
     @Test
-    fun `the cap keeps the newest, not an arbitrary subset`() {
+    fun `the cap keeps the newest rather than an arbitrary subset`() {
         // Newest-first order, as markSeen always writes it: the most recently
         // seen article must never be the one the cap drops.
         val existing = (1..450).toList()

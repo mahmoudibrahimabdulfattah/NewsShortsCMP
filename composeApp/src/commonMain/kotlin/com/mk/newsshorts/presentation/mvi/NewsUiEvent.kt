@@ -32,6 +32,8 @@ sealed interface NewsUiEvent {
 
     /** Takes no argument so there is one source of truth for which URL opens. */
     data object OpenArticleSource : NewsUiEvent
+    /** Opens the published privacy policy in a browser tab. */
+    data object OpenPrivacyPolicy : NewsUiEvent
 
     data class OpenDeepLink(val link: ArticleDeepLink) : NewsUiEvent
 
@@ -55,8 +57,17 @@ sealed interface NewsUiEvent {
     data object RequestNotificationPermissionIfDue : NewsUiEvent
 
     data object SignInWithGoogle : NewsUiEvent
-    data class SignInWithEmail(val email: String, val password: String) : NewsUiEvent
-    data class SignUpWithEmail(val email: String, val password: String) : NewsUiEvent
+    /** Emails a sign-in link. Signing in only happens once it is followed. */
+    data class SendSignInLink(val email: String) : NewsUiEvent
+    /** A followed link arrived from the OS, carrying no address of its own. */
+    data class SignInLinkOpened(val link: String) : NewsUiEvent
+    /**
+     * The address for a link opened on a device that never requested one, so
+     * nothing was stored to match it against.
+     */
+    data class SupplyLinkEmail(val email: String) : NewsUiEvent
+    /** Back out of the "check your inbox" state to send to a different address. */
+    data object CancelPendingSignInLink : NewsUiEvent
     data object SignOut : NewsUiEvent
     data object DeleteAccount : NewsUiEvent
     data object DismissAuthError : NewsUiEvent

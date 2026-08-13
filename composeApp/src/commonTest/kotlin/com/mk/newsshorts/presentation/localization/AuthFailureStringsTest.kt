@@ -28,7 +28,7 @@ class AuthFailureStringsTest {
     }
 
     @Test
-    fun `the Arabic text is actually Arabic, not the English string reused`() {
+    fun `the Arabic text is actually Arabic rather than the English string reused`() {
         AuthFailure.entries.forEach { failure ->
             val arabic = ArabicStrings.authFailure(failure)
             assertTrue(
@@ -62,14 +62,36 @@ class AuthFailureStringsTest {
     }
 
     @Test
-    fun `a wrong password and an unknown account read the same`() {
-        // Deliberate: distinguishing them would confirm to an attacker which
-        // email addresses have accounts.
-        assertTrue(EnglishStrings.authFailure(AuthFailure.INVALID_CREDENTIALS).isNotBlank())
-        assertFalse(
-            EnglishStrings.authFailure(AuthFailure.INVALID_CREDENTIALS)
-                .contains("not found", ignoreCase = true),
-        )
+    fun `a dead link tells the reader how to get a working one`() {
+        // Both cases are recoverable in exactly one way — ask for another link
+        // — and a message that does not say so leaves the reader stuck on a
+        // screen whose only other option is giving up.
+        listOf(AuthFailure.INVALID_LINK, AuthFailure.EXPIRED_LINK).forEach { failure ->
+            assertTrue(
+                EnglishStrings.authFailure(failure).contains("new one", ignoreCase = true),
+                "$failure does not tell the reader to ask for a new link",
+            )
+            assertTrue(
+                ArabicStrings.authFailure(failure).contains("جديد"),
+                "$failure does not tell the reader to ask for a new link, in Arabic",
+            )
+        }
+    }
+
+    @Test
+    fun `no failure mentions a password`() {
+        // There are none. A message that says otherwise sends the reader
+        // looking for a field that does not exist.
+        AuthFailure.entries.forEach { failure ->
+            assertFalse(
+                EnglishStrings.authFailure(failure).contains("password", ignoreCase = true),
+                "$failure mentions a password",
+            )
+            assertFalse(
+                ArabicStrings.authFailure(failure).contains("كلمة المرور"),
+                "$failure mentions a password, in Arabic",
+            )
+        }
     }
 
     private companion object {

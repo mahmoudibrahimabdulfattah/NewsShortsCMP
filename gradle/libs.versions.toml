@@ -23,7 +23,10 @@ sqldelight = "2.0.2"
 datastore = "1.1.7"
 androidx-browser = "1.8.0"
 googleServices = "4.4.2"
-firebaseBom = "33.7.0"
+# 34.x is required for email-link sign-in: firebase-auth only stopped depending
+# on Firebase Dynamic Links (shut down 2025-08-25) in 23.2.0, and the BoM that
+# carries it is 34.x. 33.7.0 pinned auth 23.1.0, which still used the dead service.
+firebaseBom = "34.17.0"
 firebaseCrashlyticsPlugin = "3.0.2"
 androidxCredentials = "1.3.0"
 googleId = "1.1.1"

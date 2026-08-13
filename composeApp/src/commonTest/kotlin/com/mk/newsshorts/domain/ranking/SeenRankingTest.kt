@@ -60,13 +60,13 @@ class SeenRankingTest {
     }
 
     @Test
-    fun `every article seen is still every article, just reordered to itself`() {
+    fun `every article seen is still every article just reordered to itself`() {
         val seen = listOf(a, b, c).map { it.articleUrl.value.hashCode() }.toSet()
         assertEquals(listOf(a, b, c), listOf(a, b, c).deprioritiseSeen(seen))
     }
 
     @Test
-    fun `nothing is dropped, only moved`() {
+    fun `nothing is dropped only moved`() {
         val seen = setOf(b.articleUrl.value.hashCode())
         val result = listOf(a, b, c).deprioritiseSeen(seen)
         assertEquals(3, result.size)
