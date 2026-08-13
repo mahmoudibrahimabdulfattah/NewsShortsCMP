@@ -49,6 +49,7 @@ import com.mk.newsshorts.notifications.PushSubscriber
 import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.getStrings
+import com.mk.newsshorts.presentation.localization.urlInLanguage
 import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
 import com.mk.newsshorts.presentation.mvi.CountryOption
 import com.mk.newsshorts.presentation.mvi.LanguageOption
@@ -498,7 +499,7 @@ class NewsViewModel(
             NewsUiEvent.DismissSecurityWarning -> handleDismissSecurityWarning()
             NewsUiEvent.OpenArticleSource -> handleOpenArticleSource()
             NewsUiEvent.OpenPrivacyPolicy -> viewModelScope.launch {
-                mutableEffect.emit(NewsUiEffect.OpenUrl(BuildConfig.PRIVACY_POLICY_URL))
+                mutableEffect.emit(NewsUiEffect.OpenUrl(privacyPolicyUrl()))
             }
             is NewsUiEvent.OpenDeepLink -> handleOpenDeepLink(event.link)
             is NewsUiEvent.ShareArticle -> handleShareArticle(event.article)
@@ -730,6 +731,10 @@ class NewsViewModel(
     private fun handleCloseOverlay() {
         mutableState.update { state -> state.copy(overlays = state.overlays.dropLast(1)) }
     }
+
+    /** The policy page picks its language from this, not from the browser. */
+    private fun privacyPolicyUrl(): String =
+        urlInLanguage(BuildConfig.PRIVACY_POLICY_URL, mutableState.value.appLocale.code)
 
     private fun handleOpenArticleSource() {
         val article = mutableState.value.articleDetails?.article ?: return
