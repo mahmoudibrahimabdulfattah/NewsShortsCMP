@@ -77,7 +77,7 @@ private class FirebaseAuthClient(
         }
     }
 
-    override suspend fun sendSignInLink(email: String): AuthResult {
+    override suspend fun sendSignInLink(email: String, languageCode: String): AuthResult {
         // The project's own Auth domain: authorized by default, and the same
         // host the manifest filter claims. Read from the app's own options so
         // it cannot drift from whichever project google-services.json names.
@@ -90,6 +90,11 @@ private class FirebaseAuthClient(
         // Without it the domain 404s and verification can never succeed.
         val projectId = auth.app.options.projectId
             ?: return AuthResult.Error(AuthFailure.NOT_CONFIGURED)
+        // Chooses the email template Firebase renders. Set per send rather than
+        // once at construction, because the reader can change the app's
+        // language between one link and the next. An unknown code falls back to
+        // the project's default template, so a new locale cannot break sending.
+        auth.setLanguageCode(languageCode)
         return runCatching {
             val settings = ActionCodeSettings.newBuilder()
                 .setUrl("https://$projectId.firebaseapp.com")

@@ -234,7 +234,8 @@ class NewsViewModel(
         }
         mutableState.update { it.copy(authInProgress = true, authError = null) }
         viewModelScope.launch {
-            when (val result = authClient.sendSignInLink(address)) {
+            val language = mutableState.value.appLocale.code
+            when (val result = authClient.sendSignInLink(address, language)) {
                 AuthResult.Success -> {
                     pendingSignInEmailStore.save(address)
                     mutableState.update {

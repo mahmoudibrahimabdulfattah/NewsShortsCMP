@@ -82,8 +82,13 @@ interface AuthClient {
      *
      * [AuthResult.Success] here means *the link was sent* — the reader is not
      * signed in until they follow it and [completeSignInWithLink] runs.
+     *
+     * [languageCode] picks which of the provider's email templates is used, so
+     * a reader on the Arabic app is not mailed English. It is the app's own
+     * language rather than the device's: the two disagree whenever the reader
+     * has overridden it in Settings, and the app's choice is the deliberate one.
      */
-    suspend fun sendSignInLink(email: String): AuthResult
+    suspend fun sendSignInLink(email: String, languageCode: String): AuthResult
 
     /** Whether an incoming link is one of ours, before trying to act on it. */
     fun isSignInLink(link: String): Boolean
@@ -112,7 +117,8 @@ object NoOpAuthClient : AuthClient {
     private val unsupported = AuthResult.Error(AuthFailure.UNSUPPORTED_PLATFORM)
 
     override suspend fun signInWithGoogle(): AuthResult = unsupported
-    override suspend fun sendSignInLink(email: String): AuthResult = unsupported
+    override suspend fun sendSignInLink(email: String, languageCode: String): AuthResult =
+        unsupported
     override fun isSignInLink(link: String): Boolean = false
     override suspend fun completeSignInWithLink(email: String, link: String): AuthResult = unsupported
     override suspend fun signOut() = Unit
