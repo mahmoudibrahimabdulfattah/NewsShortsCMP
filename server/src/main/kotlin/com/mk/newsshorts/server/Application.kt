@@ -73,7 +73,10 @@ fun Application.module() {
             val limit = (call.request.queryParameters["limit"]?.toIntOrNull() ?: 50).coerceIn(1, 100)
             val offset = (call.request.queryParameters["offset"]?.toLongOrNull() ?: 0L).coerceAtLeast(0)
 
-            val (articles, total) = store.feed(language, category, limit, offset, country)
+            // Same mix the published files get, so local development sees the
+            // feed the app will actually be served.
+            val (articles, total) =
+                store.feed(language, category, limit, offset, country, diversifyBySource = true)
             call.respond(FeedResponse(articles = articles, total = total))
         }
 
@@ -84,13 +87,13 @@ fun Application.module() {
             val (articles, total) = when {
                 name.startsWith("country-") -> {
                     val (country, language) = name.removePrefix("country-").split("-", limit = 2)
-                    store.feed(language, null, 100, 0, country = country)
+                    store.feed(language, null, 100, 0, country = country, diversifyBySource = true)
                 }
                 "-" in name -> {
                     val (language, category) = name.split("-", limit = 2)
-                    store.feed(language, category, 100, 0)
+                    store.feed(language, category, 100, 0, diversifyBySource = true)
                 }
-                else -> store.feed(name, null, 100, 0)
+                else -> store.feed(name, null, 100, 0, diversifyBySource = true)
             }
             call.respond(FeedResponse(articles = articles, total = total))
         }

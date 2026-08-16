@@ -203,6 +203,11 @@ class ArticleStore(dbPath: String) {
      * Ready-to-serve feed. Filtering is on the *text* language, not the
      * source's, so a translated article appears in the language the reader
      * asked for.
+     *
+     * [diversifyBySource] interleaves publishers instead of serving strict
+     * `published_at DESC` — see [interleaveBySource]. Off by default because
+     * one caller genuinely wants the single newest article and nothing else:
+     * the breaking-news push.
      */
     fun feed(
         language: String?,
@@ -210,6 +215,7 @@ class ArticleStore(dbPath: String) {
         limit: Int,
         offset: Long,
         country: String? = null,
+        diversifyBySource: Boolean = false,
     ): Pair<List<FeedArticleDto>, Long> =
         transaction {
             fun base() = Articles
@@ -222,9 +228,16 @@ class ArticleStore(dbPath: String) {
                 }
 
             val total = base().count()
+
+            // Interleaving has to happen before the window is cut, or it would
+            // only shuffle rows a dominant publisher had already filled. Reading
+            // a bounded multiple of the window keeps that affordable: with the
+            // cap at 5x, a source would need to hold four fifths of the newest
+            // rows before the tail ran short of others to alternate with.
+            val readAhead = if (diversifyBySource) (offset + limit) * SOURCE_MIX_WINDOW else offset + limit
             val rows = base()
                 .orderBy(Articles.publishedAt, SortOrder.DESC)
-                .limit(limit).offset(offset)
+                .limit(readAhead.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
                 .map {
                     FeedArticleDto(
                         id = it[Articles.id],
@@ -238,6 +251,41 @@ class ArticleStore(dbPath: String) {
                         publishedAt = it[Articles.publishedAt],
                     )
                 }
-            rows to total
+
+            val ordered = if (diversifyBySource) rows.interleaveBySource() else rows
+            ordered.drop(offset.toInt()).take(limit) to total
         }
+
+    private companion object {
+        /** How many windows deep to read before interleaving. */
+        const val SOURCE_MIX_WINDOW = 5
+    }
+}
+
+/**
+ * Rotates through publishers, newest first within each.
+ *
+ * Strict `published_at DESC` hands the top of a feed to whoever posts most
+ * often. Two Egyptian dailies publishing every few minutes took half of the
+ * first ten slots of the general Arabic feed, which made "For You" read as a
+ * copy of the Egypt tab — the same stories, in the same order.
+ *
+ * Round-robin over sources, so the front of the feed is a mix and no publisher
+ * can crowd the others out. Nothing is dropped: a source with more articles
+ * than the rest simply keeps taking its turn once they run out. Ordering within
+ * one publisher stays newest-first, and sources are visited in the order their
+ * newest article appeared, so the freshest story is still first overall.
+ *
+ * The same reasoning as [ArticleStore.pendingTexts], applied to reading rather
+ * than to rendering.
+ */
+internal fun List<FeedArticleDto>.interleaveBySource(): List<FeedArticleDto> {
+    if (size < 2) return this
+    val queues = groupBy { it.sourceName }.values.map { it.iterator() }
+    if (queues.size < 2) return this
+    val mixed = ArrayList<FeedArticleDto>(size)
+    while (mixed.size < size) {
+        queues.forEach { queue -> if (queue.hasNext()) mixed.add(queue.next()) }
+    }
+    return mixed
 }

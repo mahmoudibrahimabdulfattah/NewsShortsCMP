@@ -57,6 +57,7 @@ object StaticFeedGenerator {
                 val (articles, total) = store.feed(
                     language = language, category = null,
                     limit = ARTICLES_PER_FILE, offset = 0, country = country,
+                    diversifyBySource = true,
                 )
                 File(feedDir, "country-$country-$language.json")
                     .writeText(json.encodeToString(FeedResponse(articles = articles, total = total)))
@@ -155,7 +156,9 @@ object StaticFeedGenerator {
     }
 
     private fun write(target: File, store: ArticleStore, language: String, category: String?) {
-        val (articles, total) = store.feed(language, category, ARTICLES_PER_FILE, offset = 0)
+        val (articles, total) = store.feed(
+            language, category, ARTICLES_PER_FILE, offset = 0, diversifyBySource = true,
+        )
         target.writeText(json.encodeToString(FeedResponse(articles = articles, total = total)))
     }
 }
