@@ -3,6 +3,8 @@ package com.mk.newsshorts.server
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import com.mk.newsshorts.server.config.FeedCatalog
+import com.mk.newsshorts.server.feed.FeedPageNames
+import com.mk.newsshorts.server.feed.repaginate
 import com.mk.newsshorts.server.ingest.IngestionPipeline
 import com.mk.newsshorts.server.ingest.RssFetcher
 import com.mk.newsshorts.server.model.FeedResponse
@@ -21,9 +23,11 @@ import java.io.File
  * long-running server. The Ktor server in [main] stays for local development.
  *
  * Layout mirrors the live API's query parameters:
- *   v1/feed/{lang}.json              — all categories
- *   v1/feed/{lang}-{category}.json   — one category
+ *   v1/feed/{lang}.json              — all categories, first page
+ *   v1/feed/{lang}-{category}.json   — one category, first page
  *   v1/feed/country-{code}-{lang}.json — one country, in one language
+ *   v1/feed/{name}-p{n}.json         — a later page of {name}, reached by
+ *                                      following `nextPage` from the one before
  *   v1/meta.json                     — available languages, categories, countries
  */
 object StaticFeedGenerator {
@@ -31,9 +35,19 @@ object StaticFeedGenerator {
     private val log = LoggerFactory.getLogger(StaticFeedGenerator::class.java)
     private val json = Json { prettyPrint = false; encodeDefaults = true }
 
-    // Deep enough that a reader reaches the end of a session, not the end of
-    // the feed. One file keeps it a single request on the client.
-    private const val ARTICLES_PER_FILE = 200
+    /**
+     * Articles per file. Small enough that a cold start is one quick request
+     * rather than the whole feed, and the rest arrives while the reader is
+     * still on the first few cards.
+     */
+    const val PAGE_SIZE = 40
+
+    /**
+     * How deep the published feed goes in total. Beyond this a feed stops
+     * having more pages; in practice retention (four days) usually gets there
+     * first.
+     */
+    const val MAX_FEED_ARTICLES = 400
 
     fun generate(outputDir: File, dbPath: String) = runBlocking {
         val store = ArticleStore(dbPath)
@@ -43,25 +57,23 @@ object StaticFeedGenerator {
         var filesWritten = 0
 
         FeedCatalog.languages.forEach { language ->
-            write(File(feedDir, "$language.json"), store, language, category = null)
-            filesWritten++
+            filesWritten += write(feedDir, store, feedKey = language, language = language, category = null)
 
             FeedCatalog.categories.forEach { category ->
-                write(File(feedDir, "$language-$category.json"), store, language, category)
-                filesWritten++
+                filesWritten += write(
+                    feedDir, store,
+                    feedKey = "$language-$category", language = language, category = category,
+                )
             }
         }
 
         FeedCatalog.countries.forEach { country ->
             FeedCatalog.countryLanguages.forEach { language ->
-                val (articles, total) = store.feed(
-                    language = language, category = null,
-                    limit = ARTICLES_PER_FILE, offset = 0, country = country,
-                    diversifyBySource = true,
+                filesWritten += write(
+                    feedDir, store,
+                    feedKey = "country-$country-$language",
+                    language = language, category = null, country = country,
                 )
-                File(feedDir, "country-$country-$language.json")
-                    .writeText(json.encodeToString(FeedResponse(articles = articles, total = total)))
-                filesWritten++
             }
         }
 
@@ -121,6 +133,23 @@ object StaticFeedGenerator {
         File(outputDir, "v1/app.json").writeText(json.encodeToString(config))
     }
 
+    /**
+     * The number a feed's first page takes when there is no stored layout.
+     *
+     * The layout lives in the article database, which CI restores from a cache
+     * — best-effort by definition. If it is ever lost, every feed looks new and
+     * numbering would restart at 1, republishing `-p1.json` with a different set
+     * of articles under a name readers are already holding a link to. The run
+     * number never repeats, so a rebuilt layout takes names no earlier publish
+     * has used, and a reader following a stale link gets a 404 that the app
+     * already reads as the end of the feed.
+     *
+     * Falls back to 1 locally, where there is no run number and no published
+     * history to collide with.
+     */
+    private fun firstPageNumber(): Int =
+        System.getenv("GITHUB_RUN_NUMBER")?.trim()?.toIntOrNull()?.takeIf { it > 0 } ?: 1
+
     /** A malformed value would silently lock every reader out, so it is reported. */
     private fun envInt(name: String, default: Int): Int {
         val raw = System.getenv(name)?.takeUnless { it.isBlank() } ?: return default
@@ -155,11 +184,53 @@ object StaticFeedGenerator {
         return true
     }
 
-    private fun write(target: File, store: ArticleStore, language: String, category: String?) {
+    /**
+     * Writes one feed as a chain of page files and returns how many it wrote.
+     *
+     * The whole depth is read and interleaved in one go before it is split, so
+     * the publisher mix is right *across* a page boundary and not only inside
+     * one page — mixing each page separately would hand the first slots of
+     * every page to whoever publishes most often.
+     *
+     * The page split itself comes from [repaginate], which keeps already-sealed
+     * pages exactly as they were so a reader half way down the feed is not
+     * reading a boundary that moved under them since they started.
+     */
+    private fun write(
+        feedDir: File,
+        store: ArticleStore,
+        feedKey: String,
+        language: String,
+        category: String?,
+        country: String? = null,
+    ): Int {
         val (articles, total) = store.feed(
-            language, category, ARTICLES_PER_FILE, offset = 0, diversifyBySource = true,
+            language = language, category = category,
+            limit = MAX_FEED_ARTICLES, offset = 0, country = country,
+            diversifyBySource = true,
         )
-        target.writeText(json.encodeToString(FeedResponse(articles = articles, total = total)))
+
+        val layout = repaginate(
+            previous = store.feedLayout(feedKey),
+            order = articles.map { it.id },
+            pageSize = PAGE_SIZE,
+            firstNumber = firstPageNumber(),
+        )
+        store.saveFeedLayout(feedKey, layout)
+
+        val byId = articles.associateBy { it.id }
+        layout.pages.forEachIndexed { index, page ->
+            val next = layout.pages.getOrNull(index + 1)
+                ?.let { FeedPageNames.fileFor(feedKey, layout, index + 1) }
+            val body = FeedResponse(
+                articles = page.articleIds.mapNotNull(byId::get),
+                total = total,
+                nextPage = next,
+            )
+            File(feedDir, FeedPageNames.fileFor(feedKey, layout, index))
+                .writeText(json.encodeToString(body))
+        }
+        return layout.pages.size
     }
 }
 

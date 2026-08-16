@@ -31,6 +31,21 @@ object ApiConfig {
     fun countryFeedUrl(countryCode: String, language: String): String =
         "$baseUrl/v1/feed/country-$countryCode-$language.json"
 
+    /**
+     * A later page of a feed, named by the page before it.
+     *
+     * The name comes out of a downloaded file, so it is checked rather than
+     * pasted into a URL: a plain file name, no path of its own. Anything else
+     * returns null and the feed simply ends there — a feed file has no business
+     * sending the app to a directory, let alone another host.
+     */
+    fun feedPageUrl(pageFile: String): String? {
+        if (!PAGE_FILE.matches(pageFile)) return null
+        return "$baseUrl/v1/feed/$pageFile"
+    }
+
+    private val PAGE_FILE = Regex("[A-Za-z0-9_-]+\\.json")
+
     /** Minimum supported build and store link — see [AppUpdateClient]. */
     fun appConfigUrl(): String = "$baseUrl/v1/app.json"
 

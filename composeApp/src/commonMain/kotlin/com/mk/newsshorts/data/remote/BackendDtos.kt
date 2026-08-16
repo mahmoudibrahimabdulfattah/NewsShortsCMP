@@ -7,6 +7,11 @@ import kotlinx.serialization.Serializable
 data class BackendFeedResponse(
     val articles: List<BackendArticleDto>,
     val total: Long,
+    /**
+     * The file holding the next page, or null at the end of the feed. Defaulted
+     * so the app keeps reading a backend that predates pagination.
+     */
+    val nextPage: String? = null,
 )
 
 @Serializable

@@ -45,6 +45,12 @@ sealed interface NewsUiEvent {
 
     data object RefreshNews : NewsUiEvent
     data object RetryLoading : NewsUiEvent
+
+    /**
+     * Try the next page again after it failed. The feed keeps whatever is
+     * already loaded — this only resumes it from where it stopped.
+     */
+    data object RetryNextPage : NewsUiEvent
     data object DismissError : NewsUiEvent
     /** Acknowledges the device-integrity warning, which then stays dismissed. */
     data object DismissSecurityWarning : NewsUiEvent

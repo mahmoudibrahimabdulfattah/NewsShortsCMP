@@ -18,6 +18,8 @@ import com.mk.newsshorts.data.local.SeenArticlesStore
 import com.mk.newsshorts.data.local.SettingsManager
 import com.mk.newsshorts.data.local.currentTimeMillis
 import com.mk.newsshorts.data.local.isPlausibleEmail
+import com.mk.newsshorts.domain.feed.appendPage
+import com.mk.newsshorts.domain.feed.shouldLoadNextPage
 import com.mk.newsshorts.domain.ranking.deprioritiseSeen
 import com.mk.newsshorts.domain.sync.mergeSavedArticles
 import com.mk.newsshorts.sync.RemoteSyncClient
@@ -32,6 +34,7 @@ import com.mk.newsshorts.security.securityReasonFor
 import com.mk.newsshorts.data.remote.isDebugBuild
 import com.mk.newsshorts.data.remote.requiredUpdateFor
 import com.mk.newsshorts.domain.model.FeedLanguage
+import com.mk.newsshorts.domain.model.FeedPage
 import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.domain.model.NewsCategory
 import com.mk.newsshorts.domain.model.NewsResult
@@ -481,9 +484,26 @@ class NewsViewModel(
      * would just see yesterday's top story again. Applied at every site that
      * assigns [NewsUiState.articles], never to the list already on screen: a
      * reorder under a reader's thumb would move the card they are mid-swipe on.
+     *
+     * A later page is ranked the same way, but only within itself — see
+     * [handleNextPageLoaded]. Ranking the whole feed again once a page arrives
+     * would be exactly the reorder this avoids.
      */
     private fun applyRanking(articles: List<NewsArticle>): List<NewsArticle> =
         articles.deprioritiseSeen(seenArticlesStore.load())
+
+    /**
+     * Which feed the articles on screen belong to.
+     *
+     * A page load is a request that outlives the feed that started it: pull to
+     * refresh, or switch category, while page three is in flight, and it
+     * arrives to a feed that no longer has anything to do with it. Bumped
+     * whenever the feed is replaced, and checked before a page is appended.
+     */
+    private var feedGeneration: Int = 0
+
+    /** Marks the start of a new feed and returns the generation to check against. */
+    private fun startNewFeed(): Int = ++feedGeneration
 
     fun processEvent(event: NewsUiEvent) {
         when (event) {
@@ -508,6 +528,7 @@ class NewsViewModel(
             is NewsUiEvent.RemoveSavedArticle -> handleRemoveSavedArticle(event.article)
             NewsUiEvent.RefreshNews -> handleRefreshNews()
             NewsUiEvent.RetryLoading -> handleRetryLoading()
+            NewsUiEvent.RetryNextPage -> handleRetryNextPage()
             NewsUiEvent.DismissError -> handleDismissError()
             is NewsUiEvent.SelectThemeMode -> handleSelectThemeMode(event.mode)
             NewsUiEvent.ToggleNotificationsEnabled -> handleToggleNotificationsEnabled()
@@ -565,23 +586,10 @@ class NewsViewModel(
             language = currentState.selectedLanguage.code,
             useCountry = true
         )
-        val cachedResult = getTopHeadlinesUseCase.getCached(request)
-        if (cachedResult is NewsResult.Success && cachedResult.data.isNotEmpty()) {
-            mutableState.update { state ->
-                state.copy(
-                    isLoading = false,
-                    articles = applyRanking(cachedResult.data),
-                    errorMessage = null,
-                    isBackgroundRefreshing = true
-                )
-            }
-        } else {
-            mutableState.update { state ->
-                state.copy(isLoading = true, articles = emptyList())
-            }
-        }
+        showCachedFeed(request)
+        val generation = startNewFeed()
         viewModelScope.launch {
-            fetchNewsInBackground(request)
+            fetchNewsInBackground(request, generation)
         }
     }
 
@@ -658,6 +666,10 @@ class NewsViewModel(
         if (target != previousIndex) reportArticleLeft(previousIndex)
         mutableState.update { state -> state.copy(currentArticleIndex = target) }
         reportDepth(target)
+        // Ahead of the reader rather than at the end of the feed: a page has to
+        // be there before the last card is, or the swipe that would have
+        // reached it stops dead instead.
+        maybeLoadNextPage(target)
     }
 
     /**
@@ -937,44 +949,70 @@ class NewsViewModel(
     }
 
     private fun loadNewsWithCache() {
+        val request = currentRequest()
+        showCachedFeed(request)
+        val generation = startNewFeed()
+        viewModelScope.launch {
+            fetchNewsInBackground(request, generation)
+        }
+    }
+
+    private fun currentRequest(): GetTopHeadlinesRequest {
         val currentState: NewsUiState = mutableState.value
-        val isCountriesTab: Boolean = currentState.currentTab == NavigationTab.COUNTRIES
-        val request = GetTopHeadlinesRequest(
+        return GetTopHeadlinesRequest(
             category = currentState.selectedCategory,
             country = currentState.selectedCountry.code,
             countryName = currentState.selectedCountry.displayName,
             language = currentState.selectedLanguage.code,
-            useCountry = isCountriesTab
+            useCountry = currentState.currentTab == NavigationTab.COUNTRIES
         )
+    }
+
+    /**
+     * Something to read while the network answers. The cached copy carries its
+     * own next-page link, so a reader who opened the app offline can still
+     * scroll past the end of it once the connection comes back.
+     */
+    private fun showCachedFeed(request: GetTopHeadlinesRequest) {
         val cachedResult = getTopHeadlinesUseCase.getCached(request)
-        if (cachedResult is NewsResult.Success && cachedResult.data.isNotEmpty()) {
+        if (cachedResult is NewsResult.Success && cachedResult.data.articles.isNotEmpty()) {
             mutableState.update { state ->
                 state.copy(
                     isLoading = false,
-                    articles = applyRanking(cachedResult.data),
+                    articles = applyRanking(cachedResult.data.articles),
+                    nextPageFile = cachedResult.data.nextPage,
+                    isLoadingNextPage = false,
+                    nextPageFailed = false,
                     errorMessage = null,
                     isBackgroundRefreshing = true
                 )
             }
         } else {
             mutableState.update { state ->
-                state.copy(isLoading = true, articles = emptyList())
+                state.copy(
+                    isLoading = true,
+                    articles = emptyList(),
+                    nextPageFile = null,
+                    isLoadingNextPage = false,
+                    nextPageFailed = false
+                )
             }
-        }
-        viewModelScope.launch {
-            fetchNewsInBackground(request)
         }
     }
 
-    private suspend fun fetchNewsInBackground(request: GetTopHeadlinesRequest) {
+    private suspend fun fetchNewsInBackground(request: GetTopHeadlinesRequest, generation: Int) {
         when (val result = getTopHeadlinesUseCase.execute(request)) {
             is NewsResult.Success -> {
+                if (generation != feedGeneration) return
                 mutableState.update { state ->
                     state.copy(
                         isLoading = false,
                         isRefreshing = false,
                         isBackgroundRefreshing = false,
-                        articles = applyRanking(result.data),
+                        articles = applyRanking(result.data.articles),
+                        nextPageFile = result.data.nextPage,
+                        isLoadingNextPage = false,
+                        nextPageFailed = false,
                         errorMessage = null,
                         currentArticleIndex = 0,
                         isOfflineMode = false
@@ -1000,34 +1038,103 @@ class NewsViewModel(
     }
 
     private fun loadNews() {
+        val generation = startNewFeed()
         viewModelScope.launch {
-            val currentState: NewsUiState = mutableState.value
-            val isCountriesTab: Boolean = currentState.currentTab == NavigationTab.COUNTRIES
-            val request = GetTopHeadlinesRequest(
-                category = currentState.selectedCategory,
-                country = currentState.selectedCountry.code,
-                countryName = currentState.selectedCountry.displayName,
-                language = currentState.selectedLanguage.code,
-                useCountry = isCountriesTab
-            )
-            when (val result = getTopHeadlinesUseCase.execute(request)) {
+            when (val result = getTopHeadlinesUseCase.execute(currentRequest())) {
                 is NewsResult.Success -> {
+                    // A refresh that landed after the reader had already moved
+                    // on belongs to a feed that no longer exists.
+                    if (generation != feedGeneration) return@launch
                     mutableState.update { state ->
                         state.copy(
                             isLoading = false,
                             isRefreshing = false,
-                            articles = applyRanking(result.data),
+                            articles = applyRanking(result.data.articles),
+                            nextPageFile = result.data.nextPage,
+                            isLoadingNextPage = false,
+                            nextPageFailed = false,
                             errorMessage = null,
                             currentArticleIndex = 0,
                             isOfflineMode = false
                         )
                     }
+                    resetArticleTracking()
                 }
                 is NewsResult.Error -> {
                     handleNewsError(result.error.message)
                 }
             }
         }
+    }
+
+    /**
+     * Fetches the page below what is loaded, if the reader is close enough to
+     * the end of it to need one. Called on every card change, and cheap when
+     * the answer is no.
+     */
+    private fun maybeLoadNextPage(index: Int) {
+        val state = mutableState.value
+        val pageFile = state.nextPageFile ?: return
+        val due = shouldLoadNextPage(
+            currentIndex = index,
+            loadedCount = state.articles.size,
+            hasNextPage = true,
+            isLoading = state.isLoadingNextPage,
+            failed = state.nextPageFailed,
+        )
+        if (!due) return
+        loadNextPage(pageFile)
+    }
+
+    private fun loadNextPage(pageFile: String) {
+        val generation = feedGeneration
+        mutableState.update { it.copy(isLoadingNextPage = true, nextPageFailed = false) }
+        viewModelScope.launch {
+            when (val result = getTopHeadlinesUseCase.nextPage(pageFile)) {
+                is NewsResult.Success -> handleNextPageLoaded(result.data, pageFile, generation)
+                is NewsResult.Error -> {
+                    if (generation != feedGeneration) return@launch
+                    analytics.logEvent(
+                        AnalyticsEvent.FeedLoadFailed(result.error.message, servedFromCache = true)
+                    )
+                    // The feed on screen is untouched and keeps its cursor: the
+                    // reader carries on reading what they have, and reaching the
+                    // last card tries the same page again.
+                    mutableState.update {
+                        it.copy(isLoadingNextPage = false, nextPageFailed = true)
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Appends a page. Two things are deliberate here: the articles already on
+     * screen are passed through untouched, and the ranking is applied to the
+     * new page alone. Re-ranking the whole feed would move the card under the
+     * reader's thumb, which is the one thing a vertical pager cannot do.
+     */
+    private fun handleNextPageLoaded(page: FeedPage, requestedFrom: String, generation: Int) {
+        // The feed moved on while this was in flight — a refresh landed, or the
+        // reader switched category — so this page belongs to a list that is no
+        // longer on screen. Whatever replaced it has already cleared the
+        // in-flight flag on its own way in.
+        if (generation != feedGeneration) return
+        if (mutableState.value.nextPageFile != requestedFrom) return
+        mutableState.update { state ->
+            state.copy(
+                articles = appendPage(state.articles, applyRanking(page.articles)),
+                nextPageFile = page.nextPage,
+                isLoadingNextPage = false,
+                nextPageFailed = false
+            )
+        }
+    }
+
+    private fun handleRetryNextPage() {
+        val pageFile = mutableState.value.nextPageFile ?: return
+        if (mutableState.value.isLoadingNextPage) return
+        loadNextPage(pageFile)
     }
 
     /** A new feed is a new session for depth purposes. */

@@ -1,6 +1,6 @@
 package com.mk.newsshorts.domain.use_case
 
-import com.mk.newsshorts.domain.model.NewsArticle
+import com.mk.newsshorts.domain.model.FeedPage
 import com.mk.newsshorts.domain.model.NewsCategory
 import com.mk.newsshorts.domain.model.NewsResult
 import com.mk.newsshorts.domain.repository.NewsRepository
@@ -10,7 +10,7 @@ class GetTopHeadlinesUseCase(
 ) {
     suspend fun execute(
         request: GetTopHeadlinesRequest = GetTopHeadlinesRequest()
-    ): NewsResult<List<NewsArticle>> {
+    ): NewsResult<FeedPage> {
         return when {
             request.useCountry && request.language != null && request.language != DEFAULT_LANGUAGE -> {
                 newsRepository.fetchNewsByCountryAndLanguage(
@@ -38,9 +38,17 @@ class GetTopHeadlinesUseCase(
         }
     }
 
+    /**
+     * The page after [pageFile]'s own, wherever the reader currently is. The
+     * feed names its own next page, so this needs no request: which feed it
+     * belongs to is already baked into the name.
+     */
+    suspend fun nextPage(pageFile: String): NewsResult<FeedPage> =
+        newsRepository.fetchFeedPage(pageFile)
+
     fun getCached(
         request: GetTopHeadlinesRequest = GetTopHeadlinesRequest()
-    ): NewsResult<List<NewsArticle>>? {
+    ): NewsResult<FeedPage>? {
         return when {
             request.useCountry && request.language != null && request.language != DEFAULT_LANGUAGE -> {
                 newsRepository.getCachedNewsByCountryAndLanguage(

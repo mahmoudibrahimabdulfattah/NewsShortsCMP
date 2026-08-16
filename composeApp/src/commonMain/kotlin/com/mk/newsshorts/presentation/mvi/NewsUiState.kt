@@ -25,6 +25,21 @@ data class NewsUiState(
     val isOfflineMode: Boolean = false,
     val isFirstLaunch: Boolean = true,
     /**
+     * The file holding the page below the last one loaded, or null at the end
+     * of the feed. Comes from the feed itself — each published page names the
+     * one after it — so the app never has to work out where a page boundary
+     * falls, which is the part that would drift between publishes.
+     */
+    val nextPageFile: String? = null,
+    /** A page is in flight; keeps the prefetch from asking twice. */
+    val isLoadingNextPage: Boolean = false,
+    /**
+     * The last page load failed. [nextPageFile] is deliberately kept, so the
+     * feed can carry on from the same place once the reader reaches the end and
+     * it is tried again.
+     */
+    val nextPageFailed: Boolean = false,
+    /**
      * Screens pushed above the tabs — Profile → Settings, Profile → Saved,
      * a details screen. Last element is what is on screen; empty means none.
      * A list rather than one nullable field, because Settings needs Sign-in
@@ -77,6 +92,13 @@ data class NewsUiState(
 
     val hasSavedArticles: Boolean
         get() = savedArticles.isNotEmpty()
+
+    val hasMorePages: Boolean
+        get() = nextPageFile != null
+
+    /** The reader is on the last card and the feed genuinely stops there. */
+    val isAtEndOfFeed: Boolean
+        get() = hasArticles && !hasMorePages && currentArticleIndex >= articles.lastIndex
 
     /**
      * The details overlay, if that is what is on top. Kept as a derived

@@ -1,5 +1,7 @@
 package com.mk.newsshorts.server.store
 
+import com.mk.newsshorts.server.feed.FeedLayout
+import com.mk.newsshorts.server.feed.FeedPage
 import com.mk.newsshorts.server.model.FeedArticleDto
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.JoinType
@@ -50,6 +52,63 @@ object ArticleTexts : Table("article_texts") {
 }
 
 /**
+ * Which page of which feed an article was published on.
+ *
+ * This table is what makes a page boundary stable. Pages could otherwise only
+ * be "ranks 41-80 of whatever is published right now", which is a different set
+ * of articles after every ingestion cycle — see [com.mk.newsshorts.server.feed.repaginate].
+ * Persisted for the same reason as [PushLog]: every publish is a fresh process.
+ */
+object FeedPages : Table("feed_pages") {
+    /** The feed's published name, e.g. `en-general` or `country-eg-ar`. */
+    val feedKey = varchar("feed_key", 64).index()
+    val articleId = long("article_id")
+    val page = integer("page")
+    /** Position within the page, so a sealed page's order is frozen too. */
+    val position = integer("position")
+
+    override val primaryKey = PrimaryKey(feedKey, articleId)
+}
+
+/**
+ * Every article a feed has ever published, still on a page or not.
+ *
+ * Separate from [FeedPages], which is rewritten on every publish and so only
+ * ever describes the current layout. This one only grows, because the question
+ * it answers is "has this feed published this article before?" — and an article
+ * that has left the published depth must not be served again as though it were
+ * new. See [com.mk.newsshorts.server.feed.FeedLayout].
+ *
+ * [placedAt] exists to bound the table: rows outlive the articles they name by
+ * a wide margin (see [ArticleStore.PLACED_GRACE_MILLIS]) and are then dropped.
+ */
+object FeedPlaced : Table("feed_placed") {
+    val feedKey = varchar("feed_key", 64)
+    val articleId = long("article_id")
+    val placedAt = long("placed_at").index()
+
+    override val primaryKey = PrimaryKey(feedKey, articleId)
+}
+
+/**
+ * Per-feed paging state: the head page's number.
+ * See [com.mk.newsshorts.server.feed.FeedLayout].
+ */
+object FeedPageState : Table("feed_page_state") {
+    val feedKey = varchar("feed_key", 64)
+    val headPage = integer("head_page")
+
+    /**
+     * Dead, and kept only so a database cached from before [FeedPlaced] existed
+     * still accepts inserts — the column is NOT NULL there, and CI restores that
+     * database rather than starting clean. The value is never read.
+     */
+    val watermarkId = long("watermark_id").default(0L)
+
+    override val primaryKey = PrimaryKey(feedKey)
+}
+
+/**
  * When each push topic was last sent to. Persisted rather than held in memory
  * because every publish run is a fresh process — without it the rate limit
  * would reset on every cycle and readers would be notified every half hour.
@@ -68,7 +127,87 @@ class ArticleStore(dbPath: String) {
         Database.connect("jdbc:sqlite:$dbPath", driver = "org.sqlite.JDBC")
         // createMissingTablesAndColumns so a cached database from before a
         // column was added (CI restores it between runs) migrates in place.
-        transaction { SchemaUtils.createMissingTablesAndColumns(Articles, ArticleTexts, PushLog) }
+        transaction {
+            SchemaUtils.createMissingTablesAndColumns(
+                Articles, ArticleTexts, PushLog, FeedPages, FeedPlaced, FeedPageState,
+            )
+        }
+    }
+
+    /**
+     * The stored page layout for one feed, or [FeedLayout.EMPTY] the first time
+     * a feed is published.
+     *
+     * Pages come back in reading order — head first, then descending page
+     * number — which is the order [com.mk.newsshorts.server.feed.repaginate]
+     * expects and produces.
+     */
+    fun feedLayout(feedKey: String): FeedLayout = transaction {
+        val state = FeedPageState.selectAll().andWhere { FeedPageState.feedKey eq feedKey }.firstOrNull()
+            ?: return@transaction FeedLayout.EMPTY
+
+        val headPage = state[FeedPageState.headPage]
+        val byPage = FeedPages.selectAll()
+            .andWhere { FeedPages.feedKey eq feedKey }
+            .map { Triple(it[FeedPages.page], it[FeedPages.position], it[FeedPages.articleId]) }
+            .groupBy({ it.first }) { it.second to it.third }
+
+        val stored = byPage.map { (page, entries) ->
+            FeedPage(number = page, articleIds = entries.sortedBy { it.first }.map { it.second })
+        }
+        // A head page can legitimately hold nothing — a quiet feed that has just
+        // sealed everything it had — and then it has no rows to be read back
+        // from, so it is restored from the recorded number instead. Losing it
+        // would restart numbering and hand an existing page number to different
+        // articles.
+        val pages = (stored + FeedPage(headPage, emptyList()).takeIf { stored.none { p -> p.number == headPage } })
+            .filterNotNull()
+            // The head is the newest page and so the highest number, and reading
+            // order is the reverse of numbering: head first, oldest page last.
+            .sortedByDescending { it.number }
+
+        // Union with what is currently on a page, so a database written before
+        // FeedPlaced existed does not read as a feed that has published nothing
+        // and re-admit its whole current layout as new.
+        val placed = FeedPlaced.selectAll()
+            .andWhere { FeedPlaced.feedKey eq feedKey }
+            .mapTo(HashSet()) { it[FeedPlaced.articleId] }
+        placed += pages.flatMap { it.articleIds }
+
+        FeedLayout(pages = pages, placedIds = placed)
+    }
+
+    fun saveFeedLayout(feedKey: String, layout: FeedLayout) {
+        transaction {
+            FeedPages.deleteWhere { FeedPages.feedKey eq feedKey }
+            layout.pages.forEach { page ->
+                page.articleIds.forEachIndexed { position, id ->
+                    FeedPages.insert {
+                        it[FeedPages.feedKey] = feedKey
+                        it[articleId] = id
+                        it[FeedPages.page] = page.number
+                        it[FeedPages.position] = position
+                    }
+                }
+            }
+            // insertIgnore, not delete-then-write: the first time an id is
+            // placed is the timestamp that should decide when the row expires,
+            // and rewriting it every publish would keep the whole set alive
+            // forever.
+            val now = System.currentTimeMillis()
+            layout.placedIds.forEach { id ->
+                FeedPlaced.insertIgnore {
+                    it[FeedPlaced.feedKey] = feedKey
+                    it[articleId] = id
+                    it[placedAt] = now
+                }
+            }
+            FeedPageState.deleteWhere { FeedPageState.feedKey eq feedKey }
+            FeedPageState.insert {
+                it[FeedPageState.feedKey] = feedKey
+                it[headPage] = layout.head?.number ?: 1
+            }
+        }
     }
 
     fun lastPushAt(topic: String): Long? = transaction {
@@ -119,6 +258,12 @@ class ArticleStore(dbPath: String) {
      * grows without bound and the render budget drifts toward stale articles.
      */
     fun prune(cutoffMillis: Long): Int = transaction {
+        // Long after the article itself is gone. These rows are what stops a
+        // republished or restored article being served as new, so they have to
+        // outlive every copy of it — including one that comes back from a
+        // database CI restored from an older run.
+        FeedPlaced.deleteWhere { FeedPlaced.placedAt less (cutoffMillis - PLACED_GRACE_MILLIS) }
+
         val stale = Articles.selectAll()
             .andWhere { Articles.publishedAt less cutoffMillis }
             .map { it[Articles.id] }
@@ -259,6 +404,9 @@ class ArticleStore(dbPath: String) {
     private companion object {
         /** How many windows deep to read before interleaving. */
         const val SOURCE_MIX_WINDOW = 5
+
+        /** How long a [FeedPlaced] row outlives the article it names: 90 days. */
+        const val PLACED_GRACE_MILLIS = 90L * 24 * 60 * 60 * 1000
     }
 }
 

@@ -128,8 +128,24 @@ GitHub Pages:
 https://<user>.github.io/<repo>/v1/feed/{lang}.json
 https://<user>.github.io/<repo>/v1/feed/{lang}-{category}.json
 https://<user>.github.io/<repo>/v1/feed/country-{code}-{lang}.json
+https://<user>.github.io/<repo>/v1/feed/{name}-p{n}.json
 https://<user>.github.io/<repo>/v1/meta.json
 ```
+
+Each of those files holds one page of its feed and names the next one in
+`nextPage`, which the app follows as the reader gets near the end of what it
+has. The page boundary is baked in at publish time rather than worked out per
+request, because there is nothing to compute it: these are files on a CDN.
+
+Stories arrive at the front of the feed every half hour, so a page defined as
+"the next forty articles" would hold different articles on every publish — a
+reader who loaded the first page half an hour ago would meet some of it again
+on the second, or scroll straight past a story that had slid down into a page
+they had already left. So only the first file is allowed to move: when it grows
+past a page, its oldest articles are sealed off into a new numbered file that is
+never rewritten. A reader follows the chain frozen into the file they
+downloaded, and what arrived after they started is reached by refreshing, which
+is where new stories belong. `server/.../feed/FeedPaging.kt` has the details.
 
 Most countries only have sources in one language, so an article is rendered
 into every language its feeds are published in — the summarizer translates the

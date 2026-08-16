@@ -3,6 +3,7 @@ package com.mk.newsshorts.data.repository
 import com.mk.newsshorts.data.local.NewsLocalDataSource
 import com.mk.newsshorts.data.mapper.NewsMapper
 import com.mk.newsshorts.data.remote.NewsApiClient
+import com.mk.newsshorts.domain.model.FeedPage
 import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.domain.model.NewsCategory
 import com.mk.newsshorts.domain.model.NewsError
@@ -17,7 +18,7 @@ class NewsRepositoryImpl(
     override suspend fun fetchTopHeadlines(
         category: NewsCategory,
         country: String
-    ): NewsResult<List<NewsArticle>> {
+    ): NewsResult<FeedPage> {
         val cacheKey: String = createHeadlinesCacheKey(category, country)
         return fetchAndCache(cacheKey, category) {
             newsApiClient.fetchTopHeadlines(category, country)
@@ -26,7 +27,7 @@ class NewsRepositoryImpl(
 
     override suspend fun fetchTopHeadlinesByCountry(
         country: String
-    ): NewsResult<List<NewsArticle>> {
+    ): NewsResult<FeedPage> {
         val cacheKey: String = NewsLocalDataSource.createCacheKey("country", country)
         return fetchAndCache(cacheKey, NewsCategory.GENERAL) {
             newsApiClient.fetchTopHeadlinesByCountry(country)
@@ -36,7 +37,7 @@ class NewsRepositoryImpl(
     override suspend fun fetchNewsByLanguage(
         category: NewsCategory,
         language: String
-    ): NewsResult<List<NewsArticle>> {
+    ): NewsResult<FeedPage> {
         val cacheKey: String = createLanguageCacheKey(category, language)
         return fetchAndCache(cacheKey, category) {
             newsApiClient.fetchNewsByLanguage(category, language)
@@ -46,10 +47,35 @@ class NewsRepositoryImpl(
     override suspend fun fetchNewsByCountryAndLanguage(
         countryName: String,
         language: String
-    ): NewsResult<List<NewsArticle>> {
+    ): NewsResult<FeedPage> {
         val cacheKey: String = createCountryLanguageCacheKey(countryName, language)
         return fetchAndCache(cacheKey, NewsCategory.GENERAL) {
             newsApiClient.fetchNewsByCountryAndLanguage(countryName, language)
+        }
+    }
+
+    /**
+     * Straight to the network and never to the cache — see
+     * [NewsRepository.fetchFeedPage]. An empty page is an error rather than an
+     * empty success so the caller can offer a retry: the alternative reads to a
+     * scrolling reader as the feed having quietly ended.
+     *
+     * A page that is *not published* is the opposite case and really is the end
+     * of the feed — retention emptied it and the publish that followed stopped
+     * writing it — so it comes back as a page with nothing on it and nothing
+     * after it, which is exactly what the end of a feed looks like.
+     */
+    override suspend fun fetchFeedPage(pageFile: String): NewsResult<FeedPage> {
+        return when (val result = newsApiClient.fetchFeedPage(pageFile)) {
+            is NewsResult.Success -> {
+                val articles = NewsMapper.mapToDomain(result.data, NewsCategory.GENERAL)
+                if (articles.isEmpty()) {
+                    NewsResult.Error(NewsError.NoDataError)
+                } else {
+                    NewsResult.Success(FeedPage(articles, result.data.nextPage))
+                }
+            }
+            is NewsResult.Error -> endOfFeedFor(result.error)?.let { NewsResult.Success(it) } ?: result
         }
     }
 
@@ -73,7 +99,7 @@ class NewsRepositoryImpl(
     override fun getCachedTopHeadlines(
         category: NewsCategory,
         country: String
-    ): NewsResult<List<NewsArticle>>? {
+    ): NewsResult<FeedPage>? {
         val cacheKey: String = createHeadlinesCacheKey(category, country)
         return loadFromCache(cacheKey, category)
     }
@@ -81,7 +107,7 @@ class NewsRepositoryImpl(
     override fun getCachedNewsByLanguage(
         category: NewsCategory,
         language: String
-    ): NewsResult<List<NewsArticle>>? {
+    ): NewsResult<FeedPage>? {
         val cacheKey: String = createLanguageCacheKey(category, language)
         return loadFromCache(cacheKey, category)
     }
@@ -89,7 +115,7 @@ class NewsRepositoryImpl(
     override fun getCachedNewsByCountryAndLanguage(
         countryName: String,
         language: String
-    ): NewsResult<List<NewsArticle>>? {
+    ): NewsResult<FeedPage>? {
         val cacheKey: String = createCountryLanguageCacheKey(countryName, language)
         return loadFromCache(cacheKey, NewsCategory.GENERAL)
     }
@@ -106,13 +132,13 @@ class NewsRepositoryImpl(
         cacheKey: String,
         category: NewsCategory,
         networkCall: suspend () -> NewsResult<com.mk.newsshorts.data.remote.NewsApiResponse>
-    ): NewsResult<List<NewsArticle>> {
+    ): NewsResult<FeedPage> {
         return when (val result = networkCall()) {
             is NewsResult.Success -> {
                 val articles: List<NewsArticle> = NewsMapper.mapToDomain(result.data, category)
                 if (articles.isNotEmpty()) {
                     localDataSource.saveNewsToCache(cacheKey, result.data)
-                    NewsResult.Success(articles)
+                    NewsResult.Success(FeedPage(articles, result.data.nextPage))
                 } else {
                     tryLoadFromCache(cacheKey, category)
                 }
@@ -126,11 +152,11 @@ class NewsRepositoryImpl(
     private fun loadFromCache(
         cacheKey: String,
         category: NewsCategory
-    ): NewsResult<List<NewsArticle>>? {
+    ): NewsResult<FeedPage>? {
         val cachedResponse = localDataSource.getCachedNewsSync(cacheKey) ?: return null
         val articles: List<NewsArticle> = NewsMapper.mapToDomain(cachedResponse, category)
         return if (articles.isNotEmpty()) {
-            NewsResult.Success(articles)
+            NewsResult.Success(FeedPage(articles, cachedResponse.nextPage))
         } else {
             null
         }
@@ -139,12 +165,12 @@ class NewsRepositoryImpl(
     private fun tryLoadFromCache(
         cacheKey: String,
         category: NewsCategory
-    ): NewsResult<List<NewsArticle>> {
+    ): NewsResult<FeedPage> {
         val cachedResponse = localDataSource.getCachedNews(cacheKey)
         return if (cachedResponse != null) {
             val articles: List<NewsArticle> = NewsMapper.mapToDomain(cachedResponse, category)
             if (articles.isNotEmpty()) {
-                NewsResult.Success(articles)
+                NewsResult.Success(FeedPage(articles, cachedResponse.nextPage))
             } else {
                 NewsResult.Error(NewsError.NoDataError)
             }
@@ -165,3 +191,14 @@ class NewsRepositoryImpl(
         return NewsLocalDataSource.createCacheKey("country_lang", "${countryName}_$language")
     }
 }
+
+/**
+ * The page to serve instead of a failure, or null to keep the failure.
+ *
+ * Only a page that is *not published* ends a feed. Everything else — no
+ * network, a timeout, a server having a bad day — has to stay an error the
+ * reader can retry, because silently ending the feed on a flaky connection
+ * would look exactly like running out of news.
+ */
+internal fun endOfFeedFor(error: NewsError): FeedPage? =
+    if (error is NewsError.NotFound) FeedPage(articles = emptyList(), nextPage = null) else null

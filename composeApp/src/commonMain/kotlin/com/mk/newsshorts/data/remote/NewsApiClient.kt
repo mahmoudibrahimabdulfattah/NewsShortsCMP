@@ -3,6 +3,7 @@ package com.mk.newsshorts.data.remote
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.http.HttpStatusCode
 import com.mk.newsshorts.domain.model.FeedLanguage
 import com.mk.newsshorts.domain.model.NewsCategory
 import com.mk.newsshorts.domain.model.NewsError
@@ -50,7 +51,7 @@ class NewsApiClient(
      */
     private suspend fun fetchCountry(country: String, language: String): NewsResult<NewsApiResponse> {
         val code = countryToCode(country) ?: return fetchFeed(supportedLanguage(language), category = null)
-        return fetchUrl(ApiConfig.countryFeedUrl(code, supportedLanguage(language)))
+        return fetchFeedUrl(ApiConfig.countryFeedUrl(code, supportedLanguage(language)))
     }
 
     private fun supportedLanguage(language: String): String = FeedLanguage.resolve(language)
@@ -61,27 +62,54 @@ class NewsApiClient(
     private suspend fun fetchFeed(
         language: String?,
         category: String?,
-    ): NewsResult<NewsApiResponse> = fetchUrl(ApiConfig.feedUrl(language, category))
+    ): NewsResult<NewsApiResponse> = fetchFeedUrl(ApiConfig.feedUrl(language, category))
 
-    private suspend fun fetchUrl(url: String): NewsResult<NewsApiResponse> {
+    /**
+     * A later page, named by the page before it.
+     *
+     * A missing page is [NewsError.NotFound] rather than a failure: a reader
+     * following a chain from a file they downloaded earlier can reach a page
+     * that retention has since emptied, and the publish that followed stopped
+     * writing it. That is the end of their feed, not a broken request. A name
+     * the backend would never publish is treated the same way rather than
+     * requested at all.
+     */
+    suspend fun fetchFeedPage(pageFile: String): NewsResult<NewsApiResponse> {
+        val url = ApiConfig.feedPageUrl(pageFile)
+            ?: return NewsResult.Error(NewsError.NotFound)
+        return try {
+            val response = httpClient.get(url)
+            if (response.status == HttpStatusCode.NotFound) {
+                NewsResult.Error(NewsError.NotFound)
+            } else {
+                NewsResult.Success(response.body<BackendFeedResponse>().toNewsApiResponse())
+            }
+        } catch (exception: Exception) {
+            NewsResult.Error(exception.toNewsError())
+        }
+    }
+
+    private suspend fun fetchFeedUrl(url: String): NewsResult<NewsApiResponse> {
         return try {
             val response: BackendFeedResponse = httpClient.get(url).body()
             NewsResult.Success(response.toNewsApiResponse())
         } catch (exception: Exception) {
-            val error: NewsError = when {
-                exception.message?.contains("Unable to resolve host") == true -> NewsError.NetworkError
-                exception.message?.contains("timeout") == true -> NewsError.NetworkError
-                exception.message?.contains("connect", ignoreCase = true) == true -> NewsError.NetworkError
-                else -> NewsError.UnknownError(exception.message ?: "Unknown error occurred")
-            }
-            NewsResult.Error(error)
+            NewsResult.Error(exception.toNewsError())
         }
+    }
+
+    private fun Exception.toNewsError(): NewsError = when {
+        message?.contains("Unable to resolve host") == true -> NewsError.NetworkError
+        message?.contains("timeout") == true -> NewsError.NetworkError
+        message?.contains("connect", ignoreCase = true) == true -> NewsError.NetworkError
+        else -> NewsError.UnknownError(message ?: "Unknown error occurred")
     }
 
     private fun BackendFeedResponse.toNewsApiResponse(): NewsApiResponse =
         NewsApiResponse(
             status = "ok",
             totalResults = total.toInt(),
+            nextPage = nextPage,
             articles = articles.map { article ->
                 ArticleDto(
                     source = SourceDto(

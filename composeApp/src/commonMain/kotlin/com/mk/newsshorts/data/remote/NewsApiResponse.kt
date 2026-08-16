@@ -10,7 +10,10 @@ data class NewsApiResponse(
     @SerialName("totalResults")
     val totalResults: Int,
     @SerialName("articles")
-    val articles: List<ArticleDto>
+    val articles: List<ArticleDto>,
+    /** The next page's file name, carried through the cache and the mapper. */
+    @SerialName("nextPage")
+    val nextPage: String? = null
 )
 
 @Serializable

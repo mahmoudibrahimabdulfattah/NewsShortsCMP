@@ -15,7 +15,14 @@ data class CachedNewsData(
     val cacheKey: String,
     val articles: List<CachedArticle>,
     val timestamp: Long,
-    val lastAccessTime: Long = 0L
+    val lastAccessTime: Long = 0L,
+    /**
+     * The next page's file name, cached with the page it came from. Without it
+     * a reader who opened the app offline would reach the end of the cached
+     * page with nowhere to go, even once the network came back. Defaulted so
+     * entries written before pagination still deserialize.
+     */
+    val nextPage: String? = null
 )
 
 @Serializable
@@ -122,7 +129,8 @@ class NewsLocalDataSource(
             cacheKey = cacheKey,
             articles = cachedArticles,
             timestamp = currentTime,
-            lastAccessTime = currentTime
+            lastAccessTime = currentTime,
+            nextPage = response.nextPage
         )
         evictIfNeeded()
         memoryCache[cacheKey] = cachedData
@@ -224,7 +232,8 @@ class NewsLocalDataSource(
         return NewsApiResponse(
             status = "ok",
             totalResults = articles.size,
-            articles = articles
+            articles = articles,
+            nextPage = cachedData.nextPage
         )
     }
 
@@ -235,7 +244,15 @@ class NewsLocalDataSource(
     }
 
     companion object {
-        private const val MAX_ARTICLES_PER_CACHE: Int = 20
+        /**
+         * A whole page, never part of one. The cached copy is served with the
+         * page's own `nextPage`, so truncating it would leave the articles
+         * between the cut and the page boundary unreachable: the reader would
+         * scroll off the end of the cached twenty straight into the page that
+         * starts at forty. Kept above the backend's page size so a page still
+         * fits after it grows.
+         */
+        private const val MAX_ARTICLES_PER_CACHE: Int = 60
         private const val MAX_CACHE_ENTRIES: Int = 10
         private const val CACHE_EXPIRY_MS: Long = 24 * 60 * 60 * 1000L // 24 hours
         private const val CACHE_PREFIX: String = "news_cache_"
