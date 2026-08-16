@@ -46,6 +46,16 @@ object ApiConfig {
 
     private val PAGE_FILE = Regex("[A-Za-z0-9_-]+\\.json")
 
+    /**
+     * Everything published in one language, as one file.
+     *
+     * A static host cannot answer `?q=`, so there is no search endpoint to call
+     * — the corpus comes down whole and the app matches against it. [language]
+     * has already been narrowed to one the backend publishes, the same as every
+     * feed URL above, or this would request a file that was never generated.
+     */
+    fun searchIndexUrl(language: String): String = "$baseUrl/v1/search/$language.json"
+
     /** Minimum supported build and store link — see [AppUpdateClient]. */
     fun appConfigUrl(): String = "$baseUrl/v1/app.json"
 

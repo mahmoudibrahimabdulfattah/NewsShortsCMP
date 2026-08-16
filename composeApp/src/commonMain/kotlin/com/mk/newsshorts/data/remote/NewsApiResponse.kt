@@ -33,7 +33,17 @@ data class ArticleDto(
     @SerialName("publishedAt")
     val publishedAt: String,
     @SerialName("content")
-    val content: String?
+    val content: String?,
+    /**
+     * The article's own category, when the response carries one.
+     *
+     * A category feed can label its articles from the feed it came from, but
+     * the all-categories feed and the search corpus both mix them, and there
+     * the article has to say so itself. Null for the cache, which predates
+     * this and stores one category per cached feed.
+     */
+    @SerialName("category")
+    val category: String? = null
 )
 
 @Serializable

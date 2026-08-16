@@ -103,6 +103,19 @@ interface AppStrings {
     val deleteAccountConfirmMessage: String
     val deleteAccountConfirmButton: String
     val cancelLabel: String
+    val search: String
+    val searchHint: String
+    val searchEmptyTitle: String
+    val searchEmptyBody: String
+    val searchNoResultsTitle: String
+    /** Names the query back, so a typo is visible without reopening the field. */
+    fun searchNoResultsBody(query: String): String
+    val searchFailedTitle: String
+    val searchFailedBody: String
+    val clearSearchQuery: String
+    val recentSearches: String
+    val clearRecentSearches: String
+    val removeRecentSearch: String
 
     /** Keyed by [com.mk.newsshorts.domain.model.NewsCategory.apiValue]. */
     val categoryNames: Map<String, String>
@@ -130,6 +143,9 @@ interface AppStrings {
      * chosen by the number itself.
      */
     fun savedArticlesCount(count: Int): String
+
+    /** "3 results" — the same four Arabic forms as [savedArticlesCount]. */
+    fun searchResultsCount(count: Int): String
 }
 
 object EnglishStrings : AppStrings {
@@ -315,6 +331,24 @@ object EnglishStrings : AppStrings {
             "this device stay right where they are."
     override val deleteAccountConfirmButton: String = "Delete"
     override val cancelLabel: String = "Cancel"
+    override val search: String = "Search"
+    override val searchHint: String = "Search the news"
+    override val searchEmptyTitle: String = "Search recent news"
+    override val searchEmptyBody: String =
+        "Type a word, a name or a publisher. Headlines and summaries are both searched."
+    override val searchNoResultsTitle: String = "Nothing found"
+    override fun searchNoResultsBody(query: String): String =
+        "No stories match “$query”. Try a shorter word, or a different one."
+    override val searchFailedTitle: String = "Search unavailable"
+    override val searchFailedBody: String =
+        "Searching needs a connection the first time. Check your network and try again."
+    override val clearSearchQuery: String = "Clear"
+    override val recentSearches: String = "Recent searches"
+    override val clearRecentSearches: String = "Clear all"
+    override val removeRecentSearch: String = "Remove"
+
+    override fun searchResultsCount(count: Int): String =
+        if (count == 1) "1 result" else "$count results"
 }
 
 object ArabicStrings : AppStrings {
@@ -504,6 +538,29 @@ object ArabicStrings : AppStrings {
             "هذا الجهاز تبقى كما هي."
     override val deleteAccountConfirmButton: String = "حذف"
     override val cancelLabel: String = "إلغاء"
+    override val search: String = "بحث"
+    override val searchHint: String = "ابحث في الأخبار"
+    override val searchEmptyTitle: String = "ابحث في أخبار الأيام الأخيرة"
+    override val searchEmptyBody: String =
+        "اكتب كلمة أو اسماً أو اسم مصدر. البحث يشمل العناوين والملخصات معاً."
+    override val searchNoResultsTitle: String = "لا توجد نتائج"
+    override fun searchNoResultsBody(query: String): String =
+        "لا توجد أخبار تطابق «$query». جرّب كلمة أقصر أو كلمة أخرى."
+    override val searchFailedTitle: String = "البحث غير متاح"
+    override val searchFailedBody: String =
+        "البحث يحتاج اتصالاً بالإنترنت في المرة الأولى. تحقّق من الشبكة وحاول مرة أخرى."
+    override val clearSearchQuery: String = "مسح"
+    override val recentSearches: String = "عمليات البحث الأخيرة"
+    override val clearRecentSearches: String = "مسح الكل"
+    override val removeRecentSearch: String = "إزالة"
+
+    /** Singular, dual, then the two plural forms Arabic uses either side of 10. */
+    override fun searchResultsCount(count: Int): String = when {
+        count == 1 -> "نتيجة واحدة"
+        count == 2 -> "نتيجتان"
+        count <= 10 -> "$count نتائج"
+        else -> "$count نتيجة"
+    }
 }
 
 fun getStrings(locale: AppLocale): AppStrings {

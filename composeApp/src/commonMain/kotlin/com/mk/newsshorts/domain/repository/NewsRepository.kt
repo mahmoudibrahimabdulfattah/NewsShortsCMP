@@ -1,9 +1,9 @@
 package com.mk.newsshorts.domain.repository
 
 import com.mk.newsshorts.domain.model.FeedPage
-import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.domain.model.NewsCategory
 import com.mk.newsshorts.domain.model.NewsResult
+import com.mk.newsshorts.domain.search.SearchIndex
 
 interface NewsRepository {
     suspend fun fetchTopHeadlines(
@@ -34,7 +34,16 @@ interface NewsRepository {
      */
     suspend fun fetchFeedPage(pageFile: String): NewsResult<FeedPage>
 
-    suspend fun fetchNewsByQuery(query: String): NewsResult<List<NewsArticle>>
+    /**
+     * The searchable corpus for one language, ready to match against.
+     *
+     * Returns the corpus rather than results because the backend cannot answer
+     * a query: it is static JSON on a CDN. The matching lives in
+     * [com.mk.newsshorts.domain.use_case.SearchNewsUseCase] and the fetching
+     * lives here, which also keeps the query text out of the data layer
+     * entirely — nothing in this interface has ever seen it.
+     */
+    suspend fun searchIndex(language: String): NewsResult<SearchIndex>
 
     fun getCachedTopHeadlines(
         category: NewsCategory,

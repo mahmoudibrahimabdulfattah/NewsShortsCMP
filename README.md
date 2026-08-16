@@ -129,6 +129,7 @@ https://<user>.github.io/<repo>/v1/feed/{lang}.json
 https://<user>.github.io/<repo>/v1/feed/{lang}-{category}.json
 https://<user>.github.io/<repo>/v1/feed/country-{code}-{lang}.json
 https://<user>.github.io/<repo>/v1/feed/{name}-p{n}.json
+https://<user>.github.io/<repo>/v1/search/{lang}.json
 https://<user>.github.io/<repo>/v1/meta.json
 ```
 
@@ -154,6 +155,34 @@ English even though the sources are Arabic.
 
 The local Ktor server serves the same paths, so `BACKEND_BASE_URL` can point at
 either one.
+
+### Search
+
+A CDN cannot answer `?q=`, so nothing on the backend searches. Instead each
+publish writes `v1/search/{lang}.json` — everything published in that language,
+across every category and country, in one file — and the app downloads it the
+first time a reader opens search in a session and matches against it on the
+device.
+
+That costs one file (a few hundred kilobytes, well under a hundred gzipped) per
+language per session, and means search does not work offline and is as fresh as
+the last publish. What it buys is a search that reaches stories the feed has
+already scrolled past, no server to keep running, and — the part that decides
+it — a query that never leaves the phone. The alternative, a real endpoint,
+would put every search anyone runs into a request log.
+
+Matching is not substring matching, because for Arabic that finds a story only
+when the reader spells it the way the publisher did. Both the article text and
+the query are folded first: hamza is dropped (أحمد ≡ احمد, مسؤول ≡ مسئول), ة
+and ه are the same ending, so are ى and ي, diacritics and tatweel are removed,
+and Arabic-Indic digits become Western ones. Latin text gets the same treatment
+for café ≡ cafe. `domain/search/SearchText.kt` has the rules, one test per
+habit in `SearchMatchingTest`.
+
+Recent searches are kept on the device only — not synced with the account, and
+never reported. `search_performed` carries how many results came back, how long
+the query was, and which language corpus was searched; the query text itself is
+not a parameter and must not become one.
 
 To publish from a fork:
 

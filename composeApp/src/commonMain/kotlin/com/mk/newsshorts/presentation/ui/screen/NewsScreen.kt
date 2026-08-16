@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,7 +21,11 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -210,6 +215,13 @@ private fun NewsScreenContent(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+            Overlay.Search -> {
+                SearchScreen(
+                    uiState = uiState,
+                    onEvent = onEvent,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
             Overlay.SignIn -> {
                 SignInScreen(
                     isLoading = uiState.authInProgress,
@@ -307,13 +319,29 @@ private fun NewsScreenHeader(
             .windowInsetsPadding(WindowInsets.statusBars)
             .padding(top = 8.dp)
     ) {
-        Text(
-            text = strings.appName,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.ExtraBold,
-            color = Color.White,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = strings.appName,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.White,
+                modifier = Modifier.weight(1f)
+            )
+            // Search lives on the feed rather than in the tab bar: it is a
+            // thing you do to the news, not a fourth place the news lives.
+            IconButton(onClick = { onEvent(NewsUiEvent.OpenSearch) }) {
+                Icon(
+                    imageVector = Icons.Filled.Search,
+                    contentDescription = strings.search,
+                    tint = Color.White,
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = getHeaderSubtitle(uiState, strings),
@@ -375,7 +403,12 @@ private fun NewsArticlesPager(
             onEvent(NewsUiEvent.ScrollToArticle(page))
         }
     }
-    LaunchedEffect(uiState.selectedCategory, uiState.selectedCountry, uiState.currentTab) {
+    // Keyed on the revision rather than on what caused it: a refresh replaces
+    // the list with one the same length whose first card is often the same
+    // article, so nothing else here changes when the feed underneath the reader
+    // does. Appending a page deliberately does not bump it — that must leave
+    // the reader exactly where they are.
+    LaunchedEffect(uiState.feedRevision) {
         if (uiState.articles.isNotEmpty()) {
             pagerState.scrollToPage(0)
         }

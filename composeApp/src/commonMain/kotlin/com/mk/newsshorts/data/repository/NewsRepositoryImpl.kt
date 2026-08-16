@@ -1,6 +1,7 @@
 package com.mk.newsshorts.data.repository
 
 import com.mk.newsshorts.data.local.NewsLocalDataSource
+import com.mk.newsshorts.data.local.currentTimeMillis
 import com.mk.newsshorts.data.mapper.NewsMapper
 import com.mk.newsshorts.data.remote.NewsApiClient
 import com.mk.newsshorts.domain.model.FeedPage
@@ -9,6 +10,7 @@ import com.mk.newsshorts.domain.model.NewsCategory
 import com.mk.newsshorts.domain.model.NewsError
 import com.mk.newsshorts.domain.model.NewsResult
 import com.mk.newsshorts.domain.repository.NewsRepository
+import com.mk.newsshorts.domain.search.SearchIndex
 
 class NewsRepositoryImpl(
     private val newsApiClient: NewsApiClient,
@@ -79,22 +81,53 @@ class NewsRepositoryImpl(
         }
     }
 
-    override suspend fun fetchNewsByQuery(query: String): NewsResult<List<NewsArticle>> {
-        return when (val result = newsApiClient.fetchNewsByQuery(query)) {
+    /**
+     * The search corpus for one language, downloaded once and folded once.
+     *
+     * Held in memory rather than in [localDataSource]: the corpus is an order
+     * of magnitude larger than a feed page, and the settings-backed cache is
+     * sized for pages (and on the JVM target is backed by `java.util.prefs`,
+     * which throws past a few kilobytes per value). The cost of that choice is
+     * that search needs the network once per session and does not work offline
+     * at all, which is the honest trade for not writing a megabyte of article
+     * text to disk for a feature most sessions never open.
+     *
+     * A failed refresh serves the corpus already held rather than an error:
+     * results a publish or two old are worth far more to someone typing a name
+     * than an empty screen is.
+     */
+    override suspend fun searchIndex(language: String): NewsResult<SearchIndex> {
+        val cached = cachedSearchIndex?.takeIf { it.language == language }
+        if (cached != null && currentTimeMillis() - cached.builtAtMillis < SEARCH_INDEX_TTL_MILLIS) {
+            return NewsResult.Success(cached.index)
+        }
+        return when (val result = newsApiClient.fetchSearchIndex(language)) {
             is NewsResult.Success -> {
                 val articles: List<NewsArticle> = NewsMapper.mapToDomain(
                     result.data,
-                    NewsCategory.GENERAL
+                    // Only the fallback: the corpus spans every category, and
+                    // each article carries its own — see NewsMapper.
+                    NewsCategory.GENERAL,
                 )
                 if (articles.isEmpty()) {
-                    NewsResult.Error(NewsError.NoDataError)
+                    cached?.let { NewsResult.Success(it.index) } ?: NewsResult.Error(NewsError.NoDataError)
                 } else {
-                    NewsResult.Success(articles)
+                    val index = SearchIndex.from(articles)
+                    cachedSearchIndex = CachedSearchIndex(language, index, currentTimeMillis())
+                    NewsResult.Success(index)
                 }
             }
-            is NewsResult.Error -> result
+            is NewsResult.Error -> cached?.let { NewsResult.Success(it.index) } ?: result
         }
     }
+
+    private var cachedSearchIndex: CachedSearchIndex? = null
+
+    private data class CachedSearchIndex(
+        val language: String,
+        val index: SearchIndex,
+        val builtAtMillis: Long,
+    )
 
     override fun getCachedTopHeadlines(
         category: NewsCategory,
@@ -189,6 +222,16 @@ class NewsRepositoryImpl(
 
     private fun createCountryLanguageCacheKey(countryName: String, language: String): String {
         return NewsLocalDataSource.createCacheKey("country_lang", "${countryName}_$language")
+    }
+
+    private companion object {
+        /**
+         * How long a downloaded corpus is reused before it is fetched again.
+         * Matched to how often the feed is published — refetching more often
+         * than the backend publishes would spend a reader's data on a file
+         * they already have.
+         */
+        const val SEARCH_INDEX_TTL_MILLIS: Long = 30 * 60 * 1000L
     }
 }
 

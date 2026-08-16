@@ -3,6 +3,7 @@ package com.mk.newsshorts.di
 import com.mk.newsshorts.data.local.NewsLocalDataSource
 import com.mk.newsshorts.data.local.SavedArticlesStore
 import com.mk.newsshorts.data.local.PendingSignInEmailStore
+import com.mk.newsshorts.data.local.RecentSearchesStore
 import com.mk.newsshorts.data.local.SeenArticlesStore
 import com.mk.newsshorts.data.local.SettingsManager
 import com.mk.newsshorts.data.remote.RemoteConfigClient
@@ -25,6 +26,7 @@ val dataModule = module {
     single(createdAtStart = false) { SettingsManager(settingsStorage = get()) }
     single(createdAtStart = false) { SavedArticlesStore(settingsStorage = get()) }
     single(createdAtStart = false) { SeenArticlesStore(settingsStorage = get()) }
+    single(createdAtStart = false) { RecentSearchesStore(settingsStorage = get()) }
     single(createdAtStart = false) { PendingSignInEmailStore(settingsStorage = get()) }
     single<NewsRepository>(createdAtStart = false) {
         NewsRepositoryImpl(

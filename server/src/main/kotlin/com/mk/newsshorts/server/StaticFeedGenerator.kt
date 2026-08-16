@@ -28,6 +28,8 @@ import java.io.File
  *   v1/feed/country-{code}-{lang}.json — one country, in one language
  *   v1/feed/{name}-p{n}.json         — a later page of {name}, reached by
  *                                      following `nextPage` from the one before
+ *   v1/search/{lang}.json            — everything published in one language, in
+ *                                      one file, for the app to search offline
  *   v1/meta.json                     — available languages, categories, countries
  */
 object StaticFeedGenerator {
@@ -48,6 +50,22 @@ object StaticFeedGenerator {
      * first.
      */
     const val MAX_FEED_ARTICLES = 400
+
+    /**
+     * How many articles per language the published search corpus holds.
+     *
+     * A CDN serving static files has no query API, so search is answered on the
+     * device against a corpus published here — see the `v1/search` layout above.
+     * That makes the number a download budget rather than a database limit: at
+     * this size the file is a few hundred kilobytes uncompressed and well under
+     * a hundred gzipped, which is what a reader pays once, on their first
+     * search of a session.
+     *
+     * Deliberately deeper than [MAX_FEED_ARTICLES]: a reader searching is
+     * looking for a story they remember, which is exactly the story that has
+     * already fallen off the end of the feed.
+     */
+    const val SEARCH_INDEX_ARTICLES = 800
 
     fun generate(outputDir: File, dbPath: String) = runBlocking {
         val store = ArticleStore(dbPath)
@@ -75,6 +93,11 @@ object StaticFeedGenerator {
                     language = language, category = null, country = country,
                 )
             }
+        }
+
+        val searchDir = File(outputDir, "v1/search").apply { mkdirs() }
+        FeedCatalog.languages.forEach { language ->
+            filesWritten += writeSearchIndex(searchDir, store, language)
         }
 
         File(outputDir, "v1/meta.json").writeText(
@@ -185,6 +208,34 @@ object StaticFeedGenerator {
     }
 
     /**
+     * Writes one language's search corpus and returns how many files it wrote.
+     *
+     * Everything published in that language in one file, newest first, with no
+     * category or country filter — a reader searching does not care which tab a
+     * story would have appeared under. Country articles are included because
+     * [ArticleStore.feed] only filters on country when asked to.
+     *
+     * Not interleaved by source, unlike a feed: the mix exists so no publisher
+     * owns the top of a feed nobody asked for, and a search result list is
+     * ordered by how well it matches, which the app decides.
+     *
+     * The shape is [FeedResponse] with no `nextPage`, so the app parses it with
+     * the same code that reads a feed page — one file, and the feed's own
+     * mapper and article model all the way through.
+     */
+    private fun writeSearchIndex(searchDir: File, store: ArticleStore, language: String): Int {
+        val (articles, total) = store.feed(
+            language = language, category = null,
+            limit = SEARCH_INDEX_ARTICLES, offset = 0, country = null,
+            diversifyBySource = false,
+        )
+        File(searchDir, "$language.json").writeText(
+            json.encodeToString(FeedResponse(articles = articles, total = total, nextPage = null))
+        )
+        return 1
+    }
+
+    /**
      * Writes one feed as a chain of page files and returns how many it wrote.
      *
      * The whole depth is read and interleaved in one go before it is split, so
@@ -208,6 +259,10 @@ object StaticFeedGenerator {
             language = language, category = category,
             limit = MAX_FEED_ARTICLES, offset = 0, country = country,
             diversifyBySource = true,
+            // A country's sources belong to that country's feed and nowhere
+            // else. Without this every Egyptian daily also filled For You, and
+            // the two tabs served the same stories in nearly the same order.
+            excludeCountryTagged = country == null,
         )
 
         val layout = repaginate(

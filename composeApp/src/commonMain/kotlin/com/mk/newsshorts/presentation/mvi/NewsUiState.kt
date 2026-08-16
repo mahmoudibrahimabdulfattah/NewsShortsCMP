@@ -25,6 +25,16 @@ data class NewsUiState(
     val isOfflineMode: Boolean = false,
     val isFirstLaunch: Boolean = true,
     /**
+     * Bumped every time [articles] is *replaced* — a refresh, a new category, a
+     * new country — and deliberately not when a page is appended to it.
+     *
+     * The pager scrolls back to the top when this changes, which nothing else
+     * in the state can tell it: after a refresh the list is a different list,
+     * but its size and often its first card are the same, so the pager would
+     * otherwise sit exactly where it was on a feed that had moved underneath it.
+     */
+    val feedRevision: Int = 0,
+    /**
      * The file holding the page below the last one loaded, or null at the end
      * of the feed. Comes from the feed itself — each published page names the
      * one after it — so the app never has to work out where a page boundary
@@ -80,6 +90,21 @@ data class NewsUiState(
      * screen can ask who it belongs to instead of discarding it.
      */
     val unclaimedSignInLink: String? = null,
+    /** Exactly what the reader has typed, unfolded — this is what the field shows. */
+    val searchQuery: String = "",
+    val searchResults: List<NewsArticle> = emptyList(),
+    val isSearching: Boolean = false,
+    /**
+     * A search finished for the query currently in the field. Without it an
+     * empty result list is ambiguous — it looks the same before the first
+     * search runs as it does after one that found nothing, and those are two
+     * different screens.
+     */
+    val searchSettled: Boolean = false,
+    /** The corpus could not be reached and nothing was held from earlier. */
+    val searchFailed: Boolean = false,
+    /** Most recent first. Never leaves the device — see `RecentSearchesStore`. */
+    val recentSearches: List<String> = emptyList(),
 ) {
     val hasArticles: Boolean
         get() = articles.isNotEmpty()
@@ -100,6 +125,10 @@ data class NewsUiState(
     val isAtEndOfFeed: Boolean
         get() = hasArticles && !hasMorePages && currentArticleIndex >= articles.lastIndex
 
+    /** A search ran for what is in the field and came back with nothing. */
+    val hasNoSearchResults: Boolean
+        get() = searchSettled && !searchFailed && searchResults.isEmpty()
+
     /**
      * The details overlay, if that is what is on top. Kept as a derived
      * property under the old name so every existing read site — the pager,
@@ -118,6 +147,7 @@ sealed interface Overlay {
     data object Settings : Overlay
     data object SavedArticles : Overlay
     data object SignIn : Overlay
+    data object Search : Overlay
 }
 
 /**
@@ -153,7 +183,9 @@ enum class ArticleOpenOrigin(val analyticsValue: String) {
     SAVED("saved"),
     PUSH("push"),
     /** A shared link. Kept apart from PUSH so the two can be compared. */
-    SHARE("share")
+    SHARE("share"),
+    /** A search result. Says whether search finds people anything worth opening. */
+    SEARCH("search")
 }
 
 enum class NavigationTab(

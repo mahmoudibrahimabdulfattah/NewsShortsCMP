@@ -133,6 +133,29 @@ sealed class AnalyticsEvent(val name: String, val params: Map<String, String> = 
         ),
     )
 
+    /**
+     * A search ran and settled.
+     *
+     * **The query text is not a parameter here and must never become one.** The
+     * privacy policy tells readers that analytics carry a story's category,
+     * publisher and language — that "article addresses and headlines are never
+     * sent" — and a search query is more revealing than either. What is
+     * reported is the shape of the search, not its subject: how many results
+     * came back (a zero rate is the number that says whether the corpus is deep
+     * enough and the Arabic folding is working), how long the query was, and
+     * which corpus was searched.
+     *
+     * [queryLength] is a count of characters, not a sample of them.
+     */
+    class SearchPerformed(resultCount: Int, queryLength: Int, language: String) : AnalyticsEvent(
+        name = "search_performed",
+        params = mapOf(
+            "result_count" to resultCount.toString(),
+            "query_length" to queryLength.toString(),
+            "language" to language,
+        ),
+    )
+
     /** An empty or failed feed load, split by whether the cache covered it. */
     class FeedLoadFailed(reason: String, servedFromCache: Boolean) : AnalyticsEvent(
         name = "feed_load_failed",

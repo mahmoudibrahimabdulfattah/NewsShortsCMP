@@ -43,6 +43,29 @@ sealed interface NewsUiEvent {
     /** Pops the top of the overlay stack — one back-press rule for all of them. */
     data object CloseOverlay : NewsUiEvent
 
+    /** Opens search from the feed, with the recent searches already loaded. */
+    data object OpenSearch : NewsUiEvent
+
+    /**
+     * A keystroke. Debounced before it becomes a search — matching runs over
+     * the whole corpus, and doing that per character would burn a phone's
+     * battery to show results nobody has finished asking for.
+     */
+    data class SearchQueryChanged(val query: String) : NewsUiEvent
+
+    /**
+     * Search this, now: the keyboard's search key, or a tap on a recent one.
+     * Skips the debounce, and is the moment a query is worth remembering —
+     * unlike a debounced keystroke, which is usually a prefix of what the
+     * reader actually meant.
+     */
+    data class RunSearch(val query: String) : NewsUiEvent
+
+    /** Empties the field without leaving search. */
+    data object ClearSearchQuery : NewsUiEvent
+    data class RemoveRecentSearch(val query: String) : NewsUiEvent
+    data object ClearRecentSearches : NewsUiEvent
+
     data object RefreshNews : NewsUiEvent
     data object RetryLoading : NewsUiEvent
 

@@ -50,7 +50,10 @@ object NewsMapper {
             imageUrl = dto.urlToImage?.takeIf { it.isNotBlank() }?.let { ImageUrl(it) },
             articleUrl = ArticleUrl(dto.url),
             publishedAt = parsePublishedDate(dto.publishedAt),
-            category = category
+            // The article's own category when it has one; the caller's feed
+            // otherwise. The search corpus spans every category at once, so
+            // taking the caller's word there would label all of it "general".
+            category = dto.category?.let { NewsCategory.fromApiValue(it) } ?: category
         )
     }
 

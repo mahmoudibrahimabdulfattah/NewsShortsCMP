@@ -56,8 +56,17 @@ class NewsApiClient(
 
     private fun supportedLanguage(language: String): String = FeedLanguage.resolve(language)
 
-    suspend fun fetchNewsByQuery(query: String): NewsResult<NewsApiResponse> =
-        fetchFeed(language = null, category = null)
+    /**
+     * A language's whole published corpus, in one file, for the app to search
+     * on the device.
+     *
+     * The backend is static JSON on a CDN, so there is nothing to send a query
+     * to — see [ApiConfig.searchIndexUrl]. This replaced a `fetchNewsByQuery`
+     * that took a query and quietly fetched the default feed, so every search
+     * returned the front page no matter what was typed.
+     */
+    suspend fun fetchSearchIndex(language: String): NewsResult<NewsApiResponse> =
+        fetchFeedUrl(ApiConfig.searchIndexUrl(supportedLanguage(language)))
 
     private suspend fun fetchFeed(
         language: String?,
@@ -123,6 +132,7 @@ class NewsApiClient(
                     urlToImage = article.imageUrl,
                     publishedAt = epochMillisToIso8601(article.publishedAt),
                     content = article.summary,
+                    category = article.category,
                 )
             },
         )

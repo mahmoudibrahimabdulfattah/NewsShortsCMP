@@ -7,6 +7,8 @@ val presentationModule = module {
     single(createdAtStart = false) {
         NewsViewModel(
             getTopHeadlinesUseCase = get(),
+            searchNewsUseCase = get(),
+            recentSearchesStore = get(),
             settingsManager = get(),
             analytics = get(),
             pushSubscriber = get(),

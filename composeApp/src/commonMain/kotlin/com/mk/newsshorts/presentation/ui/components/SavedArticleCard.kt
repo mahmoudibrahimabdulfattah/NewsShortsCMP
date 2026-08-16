@@ -31,14 +31,18 @@ import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.presentation.localization.appStrings
 
 /**
- * One bookmark row. Shared by the Profile preview and the full Saved Articles
- * screen — the same card either way, just in a shorter or longer list.
+ * One article row. Shared by the Profile preview, the full Saved Articles
+ * screen, and the search results — the same card every time, so a reader
+ * learns it once.
+ *
+ * [onRemove] is null where the row is not a bookmark and there is nothing to
+ * delete, which is what search results are.
  */
 @Composable
 fun SavedArticleCard(
     article: NewsArticle,
     onClick: () -> Unit,
-    onRemove: () -> Unit,
+    onRemove: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -75,21 +79,23 @@ fun SavedArticleCard(
                     color = MaterialTheme.colorScheme.secondary
                 )
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f))
-                    .clickable(onClick = onRemove),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Delete,
-                    contentDescription = strings.articleRemoved,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(20.dp)
-                )
+            if (onRemove != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f))
+                        .clickable(onClick = onRemove),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = strings.articleRemoved,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
             Spacer(modifier = Modifier.width(8.dp))
             Icon(

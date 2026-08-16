@@ -15,6 +15,7 @@ import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertIgnore
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNull
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 
@@ -353,6 +354,13 @@ class ArticleStore(dbPath: String) {
      * `published_at DESC` — see [interleaveBySource]. Off by default because
      * one caller genuinely wants the single newest article and nothing else:
      * the breaking-news push.
+     *
+     * [excludeCountryTagged] keeps a country's own sources out. The general
+     * feed is what a reader sees before choosing anything, and a country feed
+     * is what they see after choosing; publishing an article in both made the
+     * Countries tab look like a copy of For You, which for an Egyptian reader
+     * it largely was. Country sources publish far more often than the
+     * international ones, so interleaving alone only spread the duplicates out.
      */
     fun feed(
         language: String?,
@@ -361,6 +369,7 @@ class ArticleStore(dbPath: String) {
         offset: Long,
         country: String? = null,
         diversifyBySource: Boolean = false,
+        excludeCountryTagged: Boolean = false,
     ): Pair<List<FeedArticleDto>, Long> =
         transaction {
             fun base() = Articles
@@ -370,6 +379,7 @@ class ArticleStore(dbPath: String) {
                     language?.let { query.andWhere { ArticleTexts.language eq it } }
                     category?.let { query.andWhere { Articles.category eq it } }
                     country?.let { query.andWhere { Articles.country eq it } }
+                    if (excludeCountryTagged) query.andWhere { Articles.country.isNull() }
                 }
 
             val total = base().count()
