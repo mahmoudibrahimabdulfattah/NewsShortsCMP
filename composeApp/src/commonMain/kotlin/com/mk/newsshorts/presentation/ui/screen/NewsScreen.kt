@@ -3,8 +3,6 @@ package com.mk.newsshorts.presentation.ui.screen
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,6 +19,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -47,7 +46,6 @@ import com.mk.newsshorts.presentation.mvi.NewsUiEffect
 import com.mk.newsshorts.presentation.mvi.NewsUiEvent
 import com.mk.newsshorts.presentation.mvi.NewsUiState
 import com.mk.newsshorts.presentation.mvi.Overlay
-import com.mk.newsshorts.presentation.ui.components.ArticleIndicator
 import com.mk.newsshorts.presentation.ui.components.BottomNavigationBar
 import com.mk.newsshorts.presentation.ui.components.CategoryRow
 import com.mk.newsshorts.presentation.ui.components.CountrySelector
@@ -152,19 +150,13 @@ private fun NewsScreenContent(
                             onEvent = onEvent,
                             modifier = Modifier.align(Alignment.TopCenter)
                         )
-                        AnimatedVisibility(
-                            visible = uiState.hasArticles,
-                            enter = fadeIn() + slideInVertically { it },
-                            exit = fadeOut() + slideOutVertically { it },
+                        NextPageStatus(
+                            uiState = uiState,
+                            onEvent = onEvent,
                             modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .padding(end = 8.dp)
-                        ) {
-                            ArticleIndicator(
-                                totalCount = uiState.articles.size,
-                                currentIndex = uiState.currentArticleIndex
-                            )
-                        }
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 96.dp)
+                        )
                     }
                 }
             }
@@ -232,6 +224,52 @@ private fun NewsScreenContent(
             }
             null -> Unit
         }
+    }
+}
+
+/**
+ * What is happening below the last loaded card, shown only when there is
+ * something to say.
+ *
+ * A prefetch that succeeds is silent: the feed simply keeps going, which is the
+ * point. This appears when the reader has actually caught up with the loading —
+ * they are on one of the last few cards — or when a page failed and the feed
+ * would otherwise look like it had ended for no reason.
+ */
+@Composable
+private fun NextPageStatus(
+    uiState: NewsUiState,
+    onEvent: (NewsUiEvent) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val strings = appStrings()
+    val nearTheEnd: Boolean = uiState.hasArticles &&
+        uiState.currentArticleIndex >= uiState.articles.size - 2
+    val label: String? = when {
+        uiState.nextPageFailed && nearTheEnd -> strings.tryAgain
+        uiState.isLoadingNextPage && nearTheEnd -> strings.loading
+        else -> null
+    }
+    AnimatedVisibility(
+        visible = label != null,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = modifier
+    ) {
+        Text(
+            text = label.orEmpty(),
+            style = MaterialTheme.typography.labelLarge,
+            color = Color.White,
+            modifier = Modifier
+                .background(
+                    color = Color.Black.copy(alpha = 0.55f),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                .clickable(enabled = uiState.nextPageFailed) {
+                    onEvent(NewsUiEvent.RetryNextPage)
+                }
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        )
     }
 }
 
