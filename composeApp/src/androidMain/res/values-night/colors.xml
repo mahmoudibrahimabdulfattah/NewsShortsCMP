@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the dark scheme's `background` in NewsShortsTheme.kt.
+
+         The system picks between this and values/colors.xml before any of the
+         app's code runs, so it follows the device's dark-mode setting rather
+         than the in-app Appearance choice. Those agree for the default
+         (Appearance: Automatic) and whenever a reader's app setting matches
+         their phone; where they disagree the first frame is the system's
+         colour, and the Compose splash — which does read the app setting —
+         paints over it. -->
+    <color name="splash_background">#081726</color>
+</resources>

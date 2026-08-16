@@ -144,7 +144,7 @@ private fun SignInOptions(
     OutlinedButton(
         onClick = onGoogleClick,
         enabled = !isLoading,
-        shape = RoundedCornerShape(14.dp),
+        shape = MaterialTheme.shapes.small,
         modifier = Modifier.fillMaxWidth().height(52.dp),
     ) {
         Text(text = strings.continueWithGoogle, fontWeight = FontWeight.SemiBold)
@@ -220,7 +220,7 @@ private fun CheckInboxPrompt(
     FailureText(errorFailure)
 
     TextButton(onClick = { onEvent(NewsUiEvent.CancelPendingSignInLink) }) {
-        Text(text = strings.useDifferentEmail, color = MaterialTheme.colorScheme.secondary)
+        Text(text = strings.useDifferentEmail, color = MaterialTheme.colorScheme.primary)
     }
 }
 
@@ -324,7 +324,7 @@ private fun PrimaryButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        shape = RoundedCornerShape(14.dp),
+        shape = MaterialTheme.shapes.small,
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,

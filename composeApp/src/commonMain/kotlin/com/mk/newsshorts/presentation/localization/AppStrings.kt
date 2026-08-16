@@ -22,6 +22,7 @@ interface AppStrings {
     val poweredBy: String
     val readFullArticle: String
     val save: String
+    val unsave: String
     val share: String
     val swipeUpForMore: String
     val newsFromCountry: String
@@ -168,6 +169,7 @@ object EnglishStrings : AppStrings {
     override val poweredBy: String = "Powered by"
     override val readFullArticle: String = "Read Article"
     override val save: String = "Save"
+    override val unsave: String = "Remove from saved"
     override val share: String = "Share"
     override val swipeUpForMore: String = "✨ Swipe up for more stories"
     override val newsFromCountry: String = "🌍 News from"
@@ -371,6 +373,7 @@ object ArabicStrings : AppStrings {
     override val poweredBy: String = "مدعوم من"
     override val readFullArticle: String = "قراءة المقال"
     override val save: String = "حفظ"
+    override val unsave: String = "إزالة من المحفوظات"
     override val share: String = "مشاركة"
     override val swipeUpForMore: String = "✨ اسحب للأعلى لمزيد من الأخبار"
     override val newsFromCountry: String = "🌍 أخبار من"

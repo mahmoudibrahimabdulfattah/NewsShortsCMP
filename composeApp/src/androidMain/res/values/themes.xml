@@ -3,8 +3,9 @@
     <style name="Theme.NewsShorts" parent="android:Theme.Material.Light.NoActionBar">
         <!-- Window background same as splash gradient start color -->
         <item name="android:windowBackground">@color/splash_background</item>
-        <item name="android:statusBarColor">@color/splash_background</item>
-        <item name="android:navigationBarColor">@color/splash_background</item>
+        <!-- No statusBarColor or navigationBarColor here: the platform ignores
+             both from API 35, and the app draws behind the bars anyway. The
+             icon tint is set per screen from Compose — see SystemBarAppearance. -->
         <!-- Android 12+: Make system splash transparent/minimal -->
         <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/splash_background</item>
         <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="31">@android:color/transparent</item>

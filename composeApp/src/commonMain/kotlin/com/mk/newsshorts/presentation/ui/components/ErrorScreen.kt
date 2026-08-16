@@ -24,6 +24,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.mk.newsshorts.presentation.localization.appStrings
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.Icons
 
 @Composable
 fun ErrorScreen(
@@ -77,22 +79,11 @@ fun ErrorScreen(
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(32.dp))
-            Button(
+            AppButton(
+                text = appStrings().tryAgain,
                 onClick = onRetry,
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ),
-                modifier = Modifier.height(52.dp)
-            ) {
-                Text(
-                    text = "🔄 ${appStrings().tryAgain}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
+                icon = Icons.Filled.Refresh,
+            )
         }
     }
 }

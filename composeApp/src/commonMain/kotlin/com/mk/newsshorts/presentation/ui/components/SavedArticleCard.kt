@@ -53,7 +53,7 @@ fun SavedArticleCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = MaterialTheme.shapes.small
     ) {
         Row(
             modifier = Modifier
@@ -76,7 +76,9 @@ fun SavedArticleCard(
                 Text(
                     text = article.source.name.value,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.secondary
+                    // Metadata, not an action — it was taking an accent colour
+                    // that made it look tappable.
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             if (onRemove != null) {
@@ -84,7 +86,7 @@ fun SavedArticleCard(
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(MaterialTheme.shapes.extraSmall)
                         .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f))
                         .clickable(onClick = onRemove),
                     contentAlignment = Alignment.Center

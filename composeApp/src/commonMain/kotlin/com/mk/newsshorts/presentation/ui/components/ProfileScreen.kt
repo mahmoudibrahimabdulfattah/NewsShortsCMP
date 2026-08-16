@@ -9,9 +9,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.add
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -73,9 +76,15 @@ fun ProfileScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(bottom = 100.dp),
-            contentPadding = PaddingValues(vertical = 16.dp)
+                .windowInsetsPadding(WindowInsets.statusBars),
+            // Clearance for the bottom bar belongs in contentPadding, not in a
+            // fixed modifier: as padding it cropped the list, so the last card
+            // could never be scrolled clear of the bar. The system inset is
+            // added rather than assumed — it is zero on gesture navigation and
+            // a real bar's worth on three-button.
+            contentPadding = WindowInsets.navigationBars
+                .add(WindowInsets(top = 16.dp, bottom = 16.dp + BottomNavBarHeight))
+                .asPaddingValues()
         ) {
             item {
                 ProfileHeader(
@@ -135,10 +144,13 @@ private fun ProfileHeader(
                 .size(80.dp)
                 .clip(CircleShape)
                 .background(
+                    // Both ends from the azure family. This used to run into
+                    // tertiary, which is now crimson and reserved for urgency —
+                    // an avatar placeholder is not that.
                     brush = Brush.linearGradient(
                         colors = listOf(
                             MaterialTheme.colorScheme.secondary,
-                            MaterialTheme.colorScheme.tertiary,
+                            MaterialTheme.colorScheme.primary,
                         )
                     )
                 ),
@@ -180,9 +192,9 @@ private fun ProfileHeader(
                 text = strings.signIn,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.secondary,
+                color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(MaterialTheme.shapes.extraSmall)
                     .clickable(onClick = onSignInClick)
                     .padding(horizontal = 12.dp, vertical = 6.dp),
             )
@@ -245,7 +257,7 @@ private fun SeeAllRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(MaterialTheme.shapes.small)
             .clickable(onClick = onClick)
             .padding(vertical = 10.dp),
         horizontalArrangement = Arrangement.Center,
@@ -288,7 +300,7 @@ private fun SettingsEntryRow(
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(MaterialTheme.shapes.extraSmall)
                 .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)),
             contentAlignment = Alignment.Center
         ) {
@@ -300,7 +312,10 @@ private fun SettingsEntryRow(
             )
         }
         Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
             Text(
                 text = strings.settings,
                 style = MaterialTheme.typography.titleMedium,
@@ -342,7 +357,7 @@ private fun AppInfoSection(
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
             ),
-            shape = RoundedCornerShape(16.dp)
+            shape = MaterialTheme.shapes.medium
         ) {
             Column(
                 modifier = Modifier
@@ -365,7 +380,7 @@ private fun AppInfoSection(
                 Text(
                     text = strings.privacyPolicy,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.secondary,
+                    color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onEvent(NewsUiEvent.OpenPrivacyPolicy) }

@@ -3,6 +3,7 @@ package com.mk.newsshorts.presentation.ui.screen
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import com.mk.newsshorts.presentation.localization.appStrings
@@ -43,7 +44,10 @@ fun SecurityWarningDialog(reason: SecurityReason, onDismiss: () -> Unit) {
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text(text = strings.continueAnyway, color = Color(0xFFE63946))
+                // Carrying on past a security warning is the risky choice here,
+                // so it takes the error colour rather than a literal that only
+                // resembled one.
+                Text(text = strings.continueAnyway, color = MaterialTheme.colorScheme.error)
             }
         },
     )

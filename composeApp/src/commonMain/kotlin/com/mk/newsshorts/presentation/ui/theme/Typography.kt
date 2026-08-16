@@ -1,118 +1,120 @@
 package com.mk.newsshorts.presentation.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import com.mk.newsshorts.presentation.localization.AppLocale
+import newsshorts.composeapp.generated.resources.Res
+import newsshorts.composeapp.generated.resources.poppins_bold
+import newsshorts.composeapp.generated.resources.poppins_light
+import newsshorts.composeapp.generated.resources.poppins_medium
+import newsshorts.composeapp.generated.resources.poppins_regular
+import newsshorts.composeapp.generated.resources.poppins_semibold
+import newsshorts.composeapp.generated.resources.poppins_thin
+import newsshorts.composeapp.generated.resources.tajawal_bold
+import newsshorts.composeapp.generated.resources.tajawal_extrabold
+import newsshorts.composeapp.generated.resources.tajawal_light
+import newsshorts.composeapp.generated.resources.tajawal_medium
+import newsshorts.composeapp.generated.resources.tajawal_regular
+import org.jetbrains.compose.resources.Font
 
-// Using system fonts for cross-platform compatibility
-// Custom fonts can be loaded via composeResources for more distinctive typography
-val NewsShortsTypography = Typography(
-    displayLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Black,
-        fontSize = 57.sp,
-        lineHeight = 64.sp,
-        letterSpacing = (-0.25).sp
-    ),
-    displayMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 45.sp,
-        lineHeight = 52.sp,
-        letterSpacing = 0.sp
-    ),
-    displaySmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 36.sp,
-        lineHeight = 44.sp,
-        letterSpacing = 0.sp
-    ),
-    headlineLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.ExtraBold,
-        fontSize = 32.sp,
-        lineHeight = 40.sp,
-        letterSpacing = 0.sp
-    ),
-    headlineMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 28.sp,
-        lineHeight = 36.sp,
-        letterSpacing = 0.sp
-    ),
-    headlineSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 24.sp,
-        lineHeight = 32.sp,
-        letterSpacing = 0.sp
-    ),
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 0.sp
-    ),
-    titleMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.15.sp
-    ),
-    titleSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.1.sp
-    ),
-    bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.5.sp
-    ),
-    bodyMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.25.sp
-    ),
-    bodySmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.4.sp
-    ),
-    labelLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.1.sp
-    ),
-    labelMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
-    ),
-    labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
-    )
+/*
+ * One family per script: Tajawal for Arabic, Poppins for Latin, chosen from the
+ * reader's app language rather than per glyph. Both are bundled, so a headline
+ * weighs the same on Android, iOS and desktop — before this every style asked
+ * for FontFamily.Default, which meant the platform chose, and the Black and
+ * ExtraBold steps often had no matching face to choose at all.
+ *
+ * Two things differ for Arabic beyond the family, and neither is cosmetic:
+ *
+ * Tracking is forced to zero. Arabic is a connected script, and positive
+ * letter-spacing pulls joined letters apart — the M3 scale ships tracking on
+ * nine of its fifteen styles because it is designed around Latin.
+ *
+ * Line height is opened up. Arabic carries dots and diacritics above and below
+ * the baseline that Latin metrics leave no room for, so lines set to Latin
+ * leading collide.
+ */
+
+/*
+ * Arabic needs more leading than the Latin-derived M3 scale allows, and it needs
+ * it unevenly: small text is where lines actually collide, because the dots and
+ * diacritics stay roughly the same size while the leading shrinks with the font.
+ * A display line at 57sp has room to spare at 1.1; a 12sp label does not.
+ */
+private const val ARABIC_LEADING_DISPLAY: Float = 1.12f
+private const val ARABIC_LEADING_TITLE: Float = 1.22f
+private const val ARABIC_LEADING_BODY: Float = 1.40f
+
+@Composable
+private fun poppins(): FontFamily = FontFamily(
+    Font(Res.font.poppins_thin, weight = FontWeight.Thin),
+    Font(Res.font.poppins_light, weight = FontWeight.Light),
+    Font(Res.font.poppins_regular, weight = FontWeight.Normal),
+    Font(Res.font.poppins_medium, weight = FontWeight.Medium),
+    Font(Res.font.poppins_semibold, weight = FontWeight.SemiBold),
+    Font(Res.font.poppins_bold, weight = FontWeight.Bold),
 )
 
+@Composable
+private fun tajawal(): FontFamily = FontFamily(
+    Font(Res.font.tajawal_light, weight = FontWeight.Light),
+    Font(Res.font.tajawal_regular, weight = FontWeight.Normal),
+    Font(Res.font.tajawal_medium, weight = FontWeight.Medium),
+    Font(Res.font.tajawal_bold, weight = FontWeight.Bold),
+    Font(Res.font.tajawal_extrabold, weight = FontWeight.ExtraBold),
+)
+
+/**
+ * The type scale for a given reading language.
+ *
+ * Styles still name weights the families do not both carry — Poppins stops at
+ * Bold, Tajawal at ExtraBold — and that is fine: Compose resolves to the
+ * nearest registered face, so each family lands on its own heaviest cut rather
+ * than being synthetically smeared into one.
+ */
+@Composable
+fun newsShortsTypography(locale: AppLocale): Typography {
+    val isArabic: Boolean = locale.isRtl
+    val family: FontFamily = if (isArabic) tajawal() else poppins()
+
+    fun style(
+        weight: FontWeight,
+        size: TextUnit,
+        lineHeight: TextUnit,
+        tracking: TextUnit,
+        leading: Float,
+    ): TextStyle = TextStyle(
+        fontFamily = family,
+        fontWeight = weight,
+        fontSize = size,
+        lineHeight = if (isArabic) lineHeight * leading else lineHeight,
+        letterSpacing = if (isArabic) 0.sp else tracking,
+    )
+
+    val display = ARABIC_LEADING_DISPLAY
+    val title = ARABIC_LEADING_TITLE
+    val body = ARABIC_LEADING_BODY
+
+    return Typography(
+        displayLarge = style(FontWeight.Black, 57.sp, 64.sp, (-0.25).sp, display),
+        displayMedium = style(FontWeight.Bold, 45.sp, 52.sp, 0.sp, display),
+        displaySmall = style(FontWeight.Bold, 36.sp, 44.sp, 0.sp, display),
+        headlineLarge = style(FontWeight.ExtraBold, 32.sp, 40.sp, 0.sp, display),
+        headlineMedium = style(FontWeight.Bold, 28.sp, 36.sp, 0.sp, title),
+        headlineSmall = style(FontWeight.SemiBold, 24.sp, 32.sp, 0.sp, title),
+        titleLarge = style(FontWeight.Bold, 22.sp, 28.sp, 0.sp, title),
+        titleMedium = style(FontWeight.SemiBold, 16.sp, 24.sp, 0.15.sp, title),
+        titleSmall = style(FontWeight.Medium, 14.sp, 20.sp, 0.1.sp, body),
+        bodyLarge = style(FontWeight.Normal, 16.sp, 24.sp, 0.5.sp, body),
+        bodyMedium = style(FontWeight.Normal, 14.sp, 20.sp, 0.25.sp, body),
+        bodySmall = style(FontWeight.Normal, 12.sp, 16.sp, 0.4.sp, body),
+        labelLarge = style(FontWeight.SemiBold, 14.sp, 20.sp, 0.1.sp, body),
+        labelMedium = style(FontWeight.Medium, 12.sp, 16.sp, 0.5.sp, body),
+        labelSmall = style(FontWeight.Medium, 11.sp, 16.sp, 0.5.sp, body),
+    )
+}

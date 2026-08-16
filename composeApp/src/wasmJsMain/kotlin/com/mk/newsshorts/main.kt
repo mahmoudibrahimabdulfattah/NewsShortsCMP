@@ -13,7 +13,7 @@ fun main() {
     val rootElement = document.getElementById("root") ?: return
     ComposeViewport(rootElement) {
         App(
-            onOpenUrl = { url -> openUrlWeb(url) },
+            onOpenUrl = { url, _ -> openUrlWeb(url) },
             onShareContent = { title, url, _ -> shareContentWeb(title, url) },
             onShowToast = { message -> showToastWeb(message) }
         )
