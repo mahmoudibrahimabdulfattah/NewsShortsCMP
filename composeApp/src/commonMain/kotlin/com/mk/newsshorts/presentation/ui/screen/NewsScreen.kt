@@ -355,6 +355,7 @@ private fun NewsScreenHeader(
         when (uiState.currentTab) {
             NavigationTab.FOR_YOU -> {
                 CategoryRow(
+                    categories = uiState.categoryOrder,
                     selectedCategory = uiState.selectedCategory,
                     onCategorySelected = { category ->
                         onEvent(NewsUiEvent.SelectCategory(category))

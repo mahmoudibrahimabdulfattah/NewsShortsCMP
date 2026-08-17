@@ -154,9 +154,20 @@ fun NewsShortsTheme(
     CompositionLocalProvider(LocalIsDarkTheme provides isDarkTheme) {
         MaterialTheme(
             colorScheme = colorScheme,
-            typography = newsShortsTypography(appLocale()),
+            typography = newsShortsTypography(appLocale(), LocalTextScale.current),
             shapes = NewsShortsShapes,
             content = content
         )
     }
 }
+
+/**
+ * The reader's text-size multiplier, so every [NewsShortsTheme] picks it up —
+ * including the forced-dark one the feed builds for itself, which would
+ * otherwise be the one screen the setting never reached.
+ *
+ * A composition local rather than a parameter for exactly that reason: the
+ * theme is entered from more than one place, and a parameter is something a
+ * call site can forget.
+ */
+val LocalTextScale = androidx.compose.runtime.staticCompositionLocalOf { 1f }

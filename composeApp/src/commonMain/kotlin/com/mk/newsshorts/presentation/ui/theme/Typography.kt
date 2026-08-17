@@ -78,10 +78,14 @@ private fun tajawal(): FontFamily = FontFamily(
  * than being synthetically smeared into one.
  */
 @Composable
-fun newsShortsTypography(locale: AppLocale): Typography {
+fun newsShortsTypography(locale: AppLocale, scale: Float = 1f): Typography {
     val isArabic: Boolean = locale.isRtl
     val family: FontFamily = if (isArabic) tajawal() else poppins()
 
+    // Everything in the style scales together — size, leading and tracking —
+    // so a larger setting is the same typography at another size rather than
+    // the same lines with bigger letters crammed into them. Sizes stay in sp,
+    // so the platform's own accessibility scale still applies underneath.
     fun style(
         weight: FontWeight,
         size: TextUnit,
@@ -91,9 +95,9 @@ fun newsShortsTypography(locale: AppLocale): Typography {
     ): TextStyle = TextStyle(
         fontFamily = family,
         fontWeight = weight,
-        fontSize = size,
-        lineHeight = if (isArabic) lineHeight * leading else lineHeight,
-        letterSpacing = if (isArabic) 0.sp else tracking,
+        fontSize = size * scale,
+        lineHeight = (if (isArabic) lineHeight * leading else lineHeight) * scale,
+        letterSpacing = if (isArabic) 0.sp else tracking * scale,
     )
 
     val display = ARABIC_LEADING_DISPLAY

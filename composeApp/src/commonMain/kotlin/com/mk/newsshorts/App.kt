@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,8 +29,10 @@ import com.mk.newsshorts.presentation.ui.screen.SecurityWarningDialog
 import com.mk.newsshorts.security.SecurityNotice
 import com.mk.newsshorts.security.SecurityReason
 import com.mk.newsshorts.presentation.ui.screen.NewsScreen
+import com.mk.newsshorts.presentation.ui.screen.OnboardingScreen
 import com.mk.newsshorts.presentation.ui.screen.SplashScreen
 import com.mk.newsshorts.presentation.ui.theme.ApplyAppNightMode
+import com.mk.newsshorts.presentation.ui.theme.LocalTextScale
 import com.mk.newsshorts.presentation.ui.theme.NewsShortsTheme
 import com.mk.newsshorts.presentation.ui.theme.SystemBarAppearance
 import org.jetbrains.compose.resources.painterResource
@@ -83,6 +86,9 @@ fun App(
     // per-screen theme: the feed is forced dark, but a reader who chose Light
     // should still get a light browser when they open an article from it.
     val openUrl: (String) -> Unit = { url -> onOpenUrl(url, isDarkTheme) }
+    // Provided outside every theme so the feed's own forced-dark theme picks
+    // the reader's text size up too.
+    CompositionLocalProvider(LocalTextScale provides uiState.textScale.multiplier) {
     LocaleProvider(locale = uiState.appLocale) {
         // The one place the resolved app theme is applied. The two blocking
         // screens below override it back to forced-dark — full-bleed branded
@@ -142,6 +148,15 @@ fun App(
                         onSplashComplete = { showSplash = false },
                         modifier = Modifier.fillMaxSize()
                     )
+                } else if (uiState.onboarding != null) {
+                    // After the splash, before the feed. The feed is already
+                    // loading behind this, and the category chosen here decides
+                    // which feed that should have been — see finishOnboarding.
+                    OnboardingScreen(
+                        uiState = uiState,
+                        onEvent = viewModel::processEvent,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 } else {
                     NewsScreen(
                         viewModel = viewModel,
@@ -165,5 +180,6 @@ fun App(
             }
         }
         }
+    }
     }
 }

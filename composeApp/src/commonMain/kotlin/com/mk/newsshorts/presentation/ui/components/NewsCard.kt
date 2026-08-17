@@ -49,6 +49,7 @@ import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.domain.model.PublishedTimestamp
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.localization.categoryName
+import com.mk.newsshorts.presentation.ui.theme.LocalTextScale
 import com.mk.newsshorts.presentation.ui.theme.OnImagery
 import com.mk.newsshorts.presentation.ui.theme.PillShape
 
@@ -221,7 +222,7 @@ private fun NewsCardTitle(
         style = MaterialTheme.typography.headlineMedium,
         fontWeight = FontWeight.ExtraBold,
         color = OnImagery.content,
-        maxLines = 4,
+        maxLines = feedTitleMaxLines(LocalTextScale.current),
         overflow = TextOverflow.Ellipsis,
         modifier = modifier
     )
@@ -237,7 +238,7 @@ private fun NewsCardDescription(
             text = description,
             style = MaterialTheme.typography.bodyLarge,
             color = OnImagery.contentMuted,
-            maxLines = 3,
+            maxLines = feedSummaryMaxLines(LocalTextScale.current),
             overflow = TextOverflow.Ellipsis,
             modifier = modifier
         )

@@ -100,6 +100,20 @@ sealed interface NewsUiEvent {
     data object SignOut : NewsUiEvent
     data object DeleteAccount : NewsUiEvent
     data object DismissAuthError : NewsUiEvent
+
+    /** Ticks a category on or off during onboarding; nothing is saved yet. */
+    data class OnboardingToggleCategory(val category: NewsCategory) : NewsUiEvent
+
+    /** Advances a step, or finishes and keeps whatever was chosen. */
+    data object OnboardingNext : NewsUiEvent
+
+    /**
+     * Leaves onboarding early. Not a cancel — the defaults are real settings
+     * and the reader gets a working app, they just did not pick.
+     */
+    data object OnboardingSkip : NewsUiEvent
+
+    data class SelectTextScale(val scale: TextScale) : NewsUiEvent
 }
 
 /**

@@ -19,6 +19,23 @@ interface AppStrings {
     /** Names the row rather than repeating the app's own name in it. */
     val appNameLabel: String
     val openSourceLicenses: String
+    val onboardingContinue: String
+    val onboardingStart: String
+    val onboardingSkip: String
+    val onboardingLanguageTitle: String
+    val onboardingLanguageSubtitle: String
+    val onboardingCategoriesTitle: String
+    val onboardingCategoriesSubtitle: String
+    val onboardingNotificationsTitle: String
+    val onboardingNotificationsSubtitle: String
+    val onboardingNotificationsOn: String
+    val onboardingNotificationsOff: String
+    val textSize: String
+    val textSizeSubtitle: String
+    val textSizeSmall: String
+    val textSizeDefault: String
+    val textSizeLarge: String
+    val textSizeExtraLarge: String
     val openSourceLicensesSubtitle: String
     val licenseFontsHeading: String
     val licenseNoticePoppins: String
@@ -173,6 +190,26 @@ object EnglishStrings : AppStrings {
     override val privacyPolicy: String = "Privacy policy"
     override val appNameLabel: String = "App name"
     override val openSourceLicenses: String = "Open source licences"
+    override val onboardingContinue: String = "Continue"
+    override val onboardingStart: String = "Start reading"
+    override val onboardingSkip: String = "Skip"
+    override val onboardingLanguageTitle: String = "Choose your language"
+    override val onboardingLanguageSubtitle: String =
+        "You can change this any time in Settings."
+    override val onboardingCategoriesTitle: String = "What do you want to read?"
+    override val onboardingCategoriesSubtitle: String =
+        "Your picks come first. Nothing is hidden \u2014 every category stays available."
+    override val onboardingNotificationsTitle: String = "Breaking news?"
+    override val onboardingNotificationsSubtitle: String =
+        "A few a day at most, and only for stories that matter."
+    override val onboardingNotificationsOn: String = "Yes, notify me"
+    override val onboardingNotificationsOff: String = "No, thanks"
+    override val textSize: String = "Text size"
+    override val textSizeSubtitle: String = "Adjusts on top of your device setting"
+    override val textSizeSmall: String = "Small"
+    override val textSizeDefault: String = "Default"
+    override val textSizeLarge: String = "Large"
+    override val textSizeExtraLarge: String = "Largest"
     override val openSourceLicensesSubtitle: String =
         "Software bundled with this app"
     override val licenseFontsHeading: String = "Fonts"
@@ -387,6 +424,26 @@ object ArabicStrings : AppStrings {
     override val privacyPolicy: String = "سياسة الخصوصية"
     override val appNameLabel: String = "اسم التطبيق"
     override val openSourceLicenses: String = "تراخيص مفتوحة المصدر"
+    override val onboardingContinue: String = "متابعة"
+    override val onboardingStart: String = "ابدأ القراءة"
+    override val onboardingSkip: String = "تخطٍ"
+    override val onboardingLanguageTitle: String = "اختر لغتك"
+    override val onboardingLanguageSubtitle: String =
+        "يمكنك تغييرها في أي وقت من الإعدادات."
+    override val onboardingCategoriesTitle: String = "ماذا تحب أن تقرأ؟"
+    override val onboardingCategoriesSubtitle: String =
+        "اختياراتك تأتي أولاً. ولا يُخفى شيء \u2014 كل الأقسام تبقى متاحة."
+    override val onboardingNotificationsTitle: String = "الأخبار العاجلة؟"
+    override val onboardingNotificationsSubtitle: String =
+        "بضعة إشعارات يومياً على الأكثر، وللأخبار المهمة فقط."
+    override val onboardingNotificationsOn: String = "نعم، أشعرني"
+    override val onboardingNotificationsOff: String = "لا، شكراً"
+    override val textSize: String = "حجم الخط"
+    override val textSizeSubtitle: String = "يُضاف إلى إعداد جهازك"
+    override val textSizeSmall: String = "صغير"
+    override val textSizeDefault: String = "افتراضي"
+    override val textSizeLarge: String = "كبير"
+    override val textSizeExtraLarge: String = "الأكبر"
     override val openSourceLicensesSubtitle: String =
         "برمجيات مضمّنة في هذا التطبيق"
     override val licenseFontsHeading: String = "الخطوط"

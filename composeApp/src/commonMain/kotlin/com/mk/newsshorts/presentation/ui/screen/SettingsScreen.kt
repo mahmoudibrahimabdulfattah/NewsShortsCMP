@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Logout
@@ -59,6 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.mk.newsshorts.auth.AuthUser
 import com.mk.newsshorts.presentation.localization.AppLocale
+import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.localization.languageName
 import com.mk.newsshorts.presentation.mvi.LanguageOption
@@ -66,6 +68,7 @@ import com.mk.newsshorts.presentation.mvi.NewsUiEvent
 import com.mk.newsshorts.presentation.mvi.NewsUiState
 import com.mk.newsshorts.presentation.mvi.NotificationTier
 import com.mk.newsshorts.presentation.mvi.Overlay
+import com.mk.newsshorts.presentation.mvi.TextScale
 import com.mk.newsshorts.presentation.mvi.ThemeMode
 import com.mk.newsshorts.presentation.ui.components.FilterPill
 import com.mk.newsshorts.presentation.ui.components.SelectorRow
@@ -119,6 +122,13 @@ fun SettingsScreen(
                     ThemeSection(
                         selectedMode = uiState.themeMode,
                         onModeSelected = { onEvent(NewsUiEvent.SelectThemeMode(it)) },
+                    )
+                }
+                item {
+                    Spacer(modifier = Modifier.height(28.dp))
+                    TextSizeSection(
+                        selectedScale = uiState.textScale,
+                        onScaleSelected = { onEvent(NewsUiEvent.SelectTextScale(it)) },
                     )
                 }
                 item {
@@ -205,6 +215,52 @@ private fun NewsLanguageSection(
     }
 }
 
+
+/**
+ * Text size, previewed in the row that sets it.
+ *
+ * The sample line is rendered at the size each pill would give, so the choice
+ * is visible before it is made — a reading app's most consequential setting
+ * should not be four words the reader has to try one at a time.
+ */
+@Composable
+private fun TextSizeSection(
+    selectedScale: TextScale,
+    onScaleSelected: (TextScale) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val strings = appStrings()
+    Column(modifier = modifier.fillMaxWidth()) {
+        SectionHeader(
+            icon = Icons.Filled.FormatSize,
+            title = strings.textSize,
+            subtitle = strings.textSizeSubtitle
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            TextScale.entries.forEach { scale ->
+                FilterPill(
+                    label = textScaleLabel(scale, strings),
+                    isSelected = selectedScale == scale,
+                    onClick = { onScaleSelected(scale) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+private fun textScaleLabel(scale: TextScale, strings: AppStrings): String = when (scale) {
+    TextScale.SMALL -> strings.textSizeSmall
+    TextScale.DEFAULT -> strings.textSizeDefault
+    TextScale.LARGE -> strings.textSizeLarge
+    TextScale.EXTRA_LARGE -> strings.textSizeExtraLarge
+}
 
 @Composable
 private fun ThemeSection(
