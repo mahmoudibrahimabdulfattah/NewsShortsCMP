@@ -9,10 +9,13 @@ import com.mk.newsshorts.presentation.localization.categoryName
 fun CategoryRow(
     selectedCategory: NewsCategory,
     onCategorySelected: (NewsCategory) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Ordered by what the reader picked at onboarding, defaulting to the
+    // declared order for anyone who skipped. Nothing is ever removed from it.
+    categories: List<NewsCategory> = NewsCategory.entries,
 ) {
     SelectorRow(
-        items = NewsCategory.entries,
+        items = categories,
         selected = selectedCategory,
         key = { category -> category.name },
         onSelect = onCategorySelected,

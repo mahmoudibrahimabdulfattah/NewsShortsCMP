@@ -25,6 +25,22 @@ data class NewsUiState(
     val isOfflineMode: Boolean = false,
     val isFirstLaunch: Boolean = true,
     /**
+     * Which onboarding step is showing, or null once it is done or was never
+     * needed. Null rather than a boolean plus an index, so "not onboarding" is
+     * one state instead of two that can disagree.
+     */
+    val onboarding: OnboardingStep? = null,
+    /** Ticked during onboarding; written to settings only when it finishes. */
+    val onboardingCategories: List<NewsCategory> = emptyList(),
+    /** How large the reader wants text. Applied by the theme, not per screen. */
+    val textScale: TextScale = TextScale.DEFAULT,
+    /**
+     * The category row's order — the reader's picks first. Held in state rather
+     * than read from settings at each call site, so the row and the feed can
+     * never disagree about which category comes first.
+     */
+    val categoryOrder: List<NewsCategory> = NewsCategory.entries,
+    /**
      * Bumped every time [articles] is *replaced* — a refresh, a new category, a
      * new country — and deliberately not when a page is appended to it.
      *
@@ -151,6 +167,20 @@ sealed interface Overlay {
     /** Third-party notices. The bundled fonts are under the OFL, which
      *  requires its notice to travel with them. */
     data object Licenses : Overlay
+}
+
+/**
+ * The three things worth asking before the first headline: what language to
+ * read in, what to read about, and whether to be told when something breaks.
+ *
+ * Ordered by how much the answer changes what the reader sees next — language
+ * rewrites every screen including this one, categories decide what the feed
+ * opens on, and notifications only matter after they have left.
+ */
+enum class OnboardingStep {
+    LANGUAGE, CATEGORIES, NOTIFICATIONS;
+
+    val next: OnboardingStep? get() = entries.getOrNull(ordinal + 1)
 }
 
 /**

@@ -40,6 +40,8 @@ import com.mk.newsshorts.domain.model.FeedLanguage
 import com.mk.newsshorts.domain.model.FeedPage
 import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.domain.model.NewsCategory
+import com.mk.newsshorts.domain.preferences.openingCategory
+import com.mk.newsshorts.domain.preferences.orderedCategories
 import com.mk.newsshorts.domain.model.NewsResult
 import com.mk.newsshorts.domain.search.isSearchable
 import com.mk.newsshorts.domain.use_case.GetTopHeadlinesRequest
@@ -67,6 +69,8 @@ import com.mk.newsshorts.presentation.mvi.NewsUiEffect
 import com.mk.newsshorts.presentation.mvi.NewsUiEvent
 import com.mk.newsshorts.presentation.mvi.NewsUiState
 import com.mk.newsshorts.presentation.mvi.NotificationTier
+import com.mk.newsshorts.presentation.mvi.OnboardingStep
+import com.mk.newsshorts.presentation.mvi.TextScale
 import com.mk.newsshorts.presentation.mvi.Overlay
 import com.mk.newsshorts.presentation.mvi.ThemeMode
 
@@ -466,8 +470,17 @@ class NewsViewModel(
                 ?: CountryOption.UNITED_STATES
             val themeMode: ThemeMode = ThemeMode.entries.find { it.name.equals(savedThemeMode, ignoreCase = true) }
                 ?: ThemeMode.SYSTEM
+            val textScale: TextScale = TextScale.fromStored(settingsManager.textScaleFlow.first())
+            val preferred: List<String> = settingsManager.preferredCategories()
+            // Read once, at the only moment it can be true. Asked again later
+            // it would re-open the flow the reader has just finished.
+            val needsOnboarding: Boolean = !settingsManager.onboardingComplete()
             mutableState.update { state ->
                 state.copy(
+                    onboarding = if (needsOnboarding) OnboardingStep.LANGUAGE else null,
+                    textScale = textScale,
+                    selectedCategory = openingCategory(preferred),
+                    categoryOrder = orderedCategories(preferred),
                     selectedLanguage = newsLanguage,
                     appLocale = appLocale,
                     selectedCountry = country,
@@ -556,6 +569,10 @@ class NewsViewModel(
             NewsUiEvent.SignOut -> handleSignOut()
             NewsUiEvent.DeleteAccount -> handleDeleteAccount()
             NewsUiEvent.DismissAuthError -> handleDismissAuthError()
+            is NewsUiEvent.OnboardingToggleCategory -> handleOnboardingToggleCategory(event.category)
+            NewsUiEvent.OnboardingNext -> handleOnboardingNext()
+            NewsUiEvent.OnboardingSkip -> handleOnboardingSkip()
+            is NewsUiEvent.SelectTextScale -> handleSelectTextScale(event.scale)
         }
     }
 
@@ -682,6 +699,95 @@ class NewsViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * Advances onboarding, or finishes it on the last step.
+     *
+     * Finishing writes what was chosen; there is no separate confirm, because
+     * every step already applied its own answer the moment it was tapped —
+     * language rewrites the screen under the reader's hand, and a category is
+     * ticked, not submitted.
+     */
+    private fun handleOnboardingNext() {
+        val current: OnboardingStep = mutableState.value.onboarding ?: return
+        val next: OnboardingStep? = current.next
+        if (next != null) {
+            mutableState.update { it.copy(onboarding = next) }
+            return
+        }
+        finishOnboarding(answeredNotifications = true)
+    }
+
+    /**
+     * Leaves early, keeping anything already ticked. The notification
+     * permission is deliberately *not* requested here: a reader who skipped
+     * past the question has not answered it, so the contextual prompt after a
+     * few articles stays armed, which is the whole point of having it.
+     */
+    private fun handleOnboardingSkip() {
+        finishOnboarding(answeredNotifications = false)
+    }
+
+    /**
+     * [answeredNotifications] is whether the reader reached the last step and
+     * pressed through it — which is an answer either way, including "no".
+     *
+     * Only that closes the question. A "no" here used to leave the contextual
+     * prompt armed, so the reader who had just declined got the system dialog
+     * anyway a few articles later; declining that is what permanently blocks
+     * the app from ever asking again, so the reask was not merely rude, it
+     * spent the one thing it was trying to win. Skipping leaves it armed on
+     * purpose: a reader who skipped past the question has not answered it.
+     */
+    private fun finishOnboarding(answeredNotifications: Boolean) {
+        val chosen: List<NewsCategory> = mutableState.value.onboardingCategories
+        val preferred: List<String> = chosen.map { it.apiValue }
+        mutableState.update { state ->
+            state.copy(
+                onboarding = null,
+                categoryOrder = orderedCategories(preferred),
+                selectedCategory = openingCategory(preferred),
+                currentArticleIndex = 0,
+            )
+        }
+        viewModelScope.launch {
+            settingsManager.savePreferredCategories(preferred)
+            settingsManager.markOnboardingComplete()
+            if (answeredNotifications) {
+                // Marked seen on either answer, so the after-a-few-articles
+                // prompt never asks a question the reader has already answered.
+                settingsManager.markNotificationPromptSeen()
+                // The system dialog only for a yes. Showing it to someone who
+                // just said no would collect the denial that locks the
+                // permission for good.
+                if (mutableState.value.notificationsEnabled) {
+                    mutableEffect.emit(NewsUiEffect.RequestNotificationPermission)
+                }
+            }
+        }
+        // The category may have changed, so the feed is reloaded rather than
+        // left showing whatever the default had already fetched behind us.
+        loadNewsWithCache()
+    }
+
+    private fun handleOnboardingToggleCategory(category: NewsCategory) {
+        mutableState.update { state ->
+            val chosen = state.onboardingCategories
+            state.copy(
+                onboardingCategories = if (category in chosen) {
+                    chosen - category
+                } else {
+                    chosen + category
+                }
+            )
+        }
+    }
+
+    private fun handleSelectTextScale(scale: TextScale) {
+        if (scale == mutableState.value.textScale) return
+        mutableState.update { it.copy(textScale = scale) }
+        viewModelScope.launch { settingsManager.saveTextScale(scale.stored) }
     }
 
     /** Start of the current card's time on screen, for the viewed/skipped split. */
