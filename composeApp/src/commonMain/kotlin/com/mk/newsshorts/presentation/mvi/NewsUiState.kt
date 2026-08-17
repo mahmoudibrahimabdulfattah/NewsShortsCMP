@@ -148,6 +148,9 @@ sealed interface Overlay {
     data object SavedArticles : Overlay
     data object SignIn : Overlay
     data object Search : Overlay
+    /** Third-party notices. The bundled fonts are under the OFL, which
+     *  requires its notice to travel with them. */
+    data object Licenses : Overlay
 }
 
 /**

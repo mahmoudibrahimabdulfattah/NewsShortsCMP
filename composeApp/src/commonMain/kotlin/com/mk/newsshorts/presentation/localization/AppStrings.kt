@@ -16,6 +16,14 @@ interface AppStrings {
     val savedArticlesDescription: String
     val about: String
     val privacyPolicy: String
+    /** Names the row rather than repeating the app's own name in it. */
+    val appNameLabel: String
+    val openSourceLicenses: String
+    val openSourceLicensesSubtitle: String
+    val licenseFontsHeading: String
+    val licenseNoticePoppins: String
+    val licenseNoticeTajawal: String
+    val licenseName: String
     val aboutDescription: String
     val appVersion: String
     val platform: String
@@ -163,6 +171,16 @@ object EnglishStrings : AppStrings {
     override val savedArticlesDescription: String = "Tap the bookmark icon on any article to save it for later"
     override val about: String = "About"
     override val privacyPolicy: String = "Privacy policy"
+    override val appNameLabel: String = "App name"
+    override val openSourceLicenses: String = "Open source licences"
+    override val openSourceLicensesSubtitle: String =
+        "Software bundled with this app"
+    override val licenseFontsHeading: String = "Fonts"
+    override val licenseNoticePoppins: String =
+        "Poppins\nCopyright 2020 The Poppins Project Authors"
+    override val licenseNoticeTajawal: String =
+        "Tajawal\nCopyright 2018 Boutros International"
+    override val licenseName: String = "SIL Open Font License 1.1"
     override val aboutDescription: String = "App information"
     override val appVersion: String = "Version"
     override val platform: String = "Platform"
@@ -367,6 +385,16 @@ object ArabicStrings : AppStrings {
     override val savedArticlesDescription: String = "اضغط على أيقونة الإشارة المرجعية على أي مقال لحفظه"
     override val about: String = "حول التطبيق"
     override val privacyPolicy: String = "سياسة الخصوصية"
+    override val appNameLabel: String = "اسم التطبيق"
+    override val openSourceLicenses: String = "تراخيص مفتوحة المصدر"
+    override val openSourceLicensesSubtitle: String =
+        "برمجيات مضمّنة في هذا التطبيق"
+    override val licenseFontsHeading: String = "الخطوط"
+    override val licenseNoticePoppins: String =
+        "Poppins\nحقوق النشر 2020 The Poppins Project Authors"
+    override val licenseNoticeTajawal: String =
+        "Tajawal\nحقوق النشر 2018 Boutros International"
+    override val licenseName: String = "رخصة SIL للخطوط المفتوحة 1.1"
     override val aboutDescription: String = "معلومات التطبيق"
     override val appVersion: String = "الإصدار"
     override val platform: String = "المنصة"

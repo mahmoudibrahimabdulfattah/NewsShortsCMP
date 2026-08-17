@@ -220,6 +220,12 @@ private fun NewsScreenContent(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+            Overlay.Licenses -> {
+                LicensesScreen(
+                    onEvent = onEvent,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
             Overlay.Search -> {
                 SearchScreen(
                     uiState = uiState,

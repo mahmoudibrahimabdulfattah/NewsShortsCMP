@@ -364,7 +364,10 @@ private fun AppInfoSection(
                     .fillMaxWidth()
                     .padding(16.dp)
             ) {
-                InfoRow(label = strings.appName, value = "News Shorts")
+                // Labelled, not named twice: `appName` is "News Shorts" in
+                // English, so using it as the label put the same words on
+                // both sides of the row.
+                InfoRow(label = strings.appNameLabel, value = "News Shorts")
                 Spacer(modifier = Modifier.height(12.dp))
                 InfoRow(label = strings.appVersion, value = BuildConfig.VERSION_NAME)
                 Spacer(modifier = Modifier.height(12.dp))
@@ -384,6 +387,15 @@ private fun AppInfoSection(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onEvent(NewsUiEvent.OpenPrivacyPolicy) }
+                        .padding(vertical = 4.dp),
+                )
+                Text(
+                    text = strings.openSourceLicenses,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onEvent(NewsUiEvent.OpenOverlay(Overlay.Licenses)) }
                         .padding(vertical = 4.dp),
                 )
             }
