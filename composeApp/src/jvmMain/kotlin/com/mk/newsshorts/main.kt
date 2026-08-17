@@ -20,7 +20,7 @@ fun main() {
             state = rememberWindowState(width = 420.dp, height = 900.dp)
         ) {
             App(
-                onOpenUrl = { url -> openUrlDesktop(url) },
+                onOpenUrl = { url, _ -> openUrlDesktop(url) },
                 onShareContent = { title, url, _ -> copyToClipboardDesktop("$title\n\n$url") },
                 onShowToast = { /* Desktop notification could be added */ }
             )

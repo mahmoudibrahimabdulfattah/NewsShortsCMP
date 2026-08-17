@@ -48,6 +48,8 @@ import com.mk.newsshorts.presentation.localization.categoryName
 import com.mk.newsshorts.presentation.mvi.NewsUiEvent
 import com.mk.newsshorts.presentation.ui.components.formatPublishedTime
 import com.mk.newsshorts.presentation.ui.components.isolateBidi
+import com.mk.newsshorts.presentation.ui.components.AppButton
+import com.mk.newsshorts.presentation.ui.theme.PillShape
 
 /**
  * A single article, full screen.
@@ -121,27 +123,12 @@ fun ArticleDetailsScreen(
                 )
             }
             Spacer(modifier = Modifier.height(28.dp))
-            Button(
+            AppButton(
+                text = strings.readAtSource,
                 onClick = { onEvent(NewsUiEvent.OpenArticleSource) },
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
-                modifier = Modifier.fillMaxWidth().height(54.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = strings.readAtSource,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
+                icon = Icons.AutoMirrored.Filled.OpenInNew,
+                modifier = Modifier.fillMaxWidth(),
+            )
             Spacer(
                 modifier = Modifier
                     .windowInsetsPadding(WindowInsets.navigationBars)
@@ -191,9 +178,12 @@ private fun DetailsTopBar(
         IconButton(onClick = onSave) {
             Icon(
                 imageVector = if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                contentDescription = appStrings().save,
+                contentDescription = if (isSaved) appStrings().unsave else appStrings().save,
+                // Crimson, matching the feed card's bookmark. It was azure,
+                // which is the colour of everything tappable, so a saved
+                // article looked no different from a link.
                 tint = if (isSaved) {
-                    MaterialTheme.colorScheme.primary
+                    MaterialTheme.colorScheme.tertiary
                 } else {
                     MaterialTheme.colorScheme.onBackground
                 },
@@ -236,17 +226,20 @@ private fun DetailsHeroImage(
 
 @Composable
 private fun CategoryBadge(label: String, modifier: Modifier = Modifier) {
+    // Neutral, and a pill, matching the badge on the feed card. It names the
+    // article's category — it is a label, not something to press and not a
+    // selection, so it takes neither accent.
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f))
+            .clip(PillShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onPrimary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -262,22 +255,19 @@ private fun SourceRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.tertiary)
-        )
+        // The dot that used to sit here was decoration wearing the urgency
+        // colour, and the bullet two elements along already separates these.
+        // The feed card's metadata row lost the same dot.
         Text(
             text = isolateBidi(sourceName),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f),
+            color = MaterialTheme.colorScheme.onBackground,
         )
         Text(
             text = "•",
             style = MaterialTheme.typography.labelLarge,
-            color = Color.Gray,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
             text = publishedLabel,

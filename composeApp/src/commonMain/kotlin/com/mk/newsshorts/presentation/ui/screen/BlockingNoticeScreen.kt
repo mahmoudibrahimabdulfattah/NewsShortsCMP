@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mk.newsshorts.presentation.ui.components.AppButton
+import com.mk.newsshorts.presentation.ui.theme.brandBackdrop
 
 /**
  * A dead end the reader cannot dismiss: the app has decided it should not keep
@@ -44,11 +47,7 @@ fun BlockingNoticeScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Color(0xFF0D1B2A), Color(0xFF1B263B))
-                )
-            ),
+            .background(brush = brandBackdrop()),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -59,36 +58,30 @@ fun BlockingNoticeScreen(
             Text(text = icon, fontSize = 48.sp)
             Text(
                 text = title,
-                color = Color.White,
-                fontSize = 24.sp,
+                color = MaterialTheme.colorScheme.onBackground,
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 24.dp)
             )
             Text(
                 text = message,
-                color = Color.White.copy(alpha = 0.75f),
-                fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 12.dp)
             )
             if (actionLabel != null && onAction != null) {
-                Button(
+                // Updating is the way forward, not a destructive act — this was
+                // an off-palette red, which framed the only way out of the
+                // screen as something to be wary of.
+                AppButton(
+                    text = actionLabel,
                     onClick = onAction,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE63946)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 32.dp)
-                ) {
-                    Text(
-                        text = actionLabel,
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(vertical = 6.dp)
-                    )
-                }
+                )
             }
         }
     }

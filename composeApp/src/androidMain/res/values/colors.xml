@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="splash_background">#0D1B2A</color>
-</resources>
+    <!-- The window's colour before Compose has drawn anything, and on API 31+
+         the system splash behind the (deliberately transparent) icon.
 
+         Must stay equal to the light scheme's `background` in
+         NewsShortsTheme.kt, with values-night matching the dark scheme's. Any
+         drift is a visible flash of the wrong colour at every cold start —
+         which is exactly what a single hardcoded dark value here used to cause
+         for readers in light mode. -->
+    <color name="splash_background">#F5F8FB</color>
+</resources>

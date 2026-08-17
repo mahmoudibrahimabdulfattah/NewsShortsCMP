@@ -5,7 +5,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.add
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -51,7 +55,12 @@ fun SavedArticlesScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    // The app draws behind the system navigation bar, so the
+                    // last card needs the inset added or it sits under it on
+                    // three-button navigation.
+                    contentPadding = WindowInsets.navigationBars
+                        .add(WindowInsets(left = 16.dp, top = 12.dp, right = 16.dp, bottom = 12.dp))
+                        .asPaddingValues(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(savedArticles, key = { it.articleUrl.value }) { article ->

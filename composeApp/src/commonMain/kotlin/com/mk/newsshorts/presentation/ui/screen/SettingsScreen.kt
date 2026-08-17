@@ -11,15 +11,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.add
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -62,6 +67,8 @@ import com.mk.newsshorts.presentation.mvi.NewsUiState
 import com.mk.newsshorts.presentation.mvi.NotificationTier
 import com.mk.newsshorts.presentation.mvi.Overlay
 import com.mk.newsshorts.presentation.mvi.ThemeMode
+import com.mk.newsshorts.presentation.ui.components.FilterPill
+import com.mk.newsshorts.presentation.ui.components.SelectorRow
 import com.mk.newsshorts.presentation.ui.components.OverlayTopBar
 import com.mk.newsshorts.presentation.ui.components.SectionHeader
 
@@ -87,7 +94,12 @@ fun SettingsScreen(
             OverlayTopBar(title = strings.settings, onBack = { onEvent(NewsUiEvent.CloseOverlay) })
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(vertical = 16.dp)
+                // The app draws behind the system navigation bar, so the last
+                // row needs the inset added or it sits under it on
+                // three-button navigation.
+                contentPadding = WindowInsets.navigationBars
+                    .add(WindowInsets(top = 16.dp, bottom = 16.dp))
+                    .asPaddingValues()
             ) {
                 item {
                     AppLanguageSection(
@@ -143,87 +155,30 @@ private fun AppLanguageSection(
             subtitle = strings.appLanguageDescription
         )
         Spacer(modifier = Modifier.height(12.dp))
+        // The same pill as every other selector on this screen. This was the
+        // last hand-rolled variant left — a pair of cards with their own fill,
+        // their own check mark and their own idea of what selected looks like,
+        // sitting directly above a row of pills that answer the same question.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 16.dp)
+                .selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            AppLocaleChip(
-                locale = AppLocale.ENGLISH,
-                isSelected = selectedLocale == AppLocale.ENGLISH,
-                onClick = { onLocaleSelected(AppLocale.ENGLISH) },
-                modifier = Modifier.weight(1f)
-            )
-            AppLocaleChip(
-                locale = AppLocale.ARABIC,
-                isSelected = selectedLocale == AppLocale.ARABIC,
-                onClick = { onLocaleSelected(AppLocale.ARABIC) },
-                modifier = Modifier.weight(1f)
-            )
+            AppLocale.entries.forEach { locale ->
+                FilterPill(
+                    label = languageName(locale.code, locale.displayName),
+                    isSelected = selectedLocale == locale,
+                    onClick = { onLocaleSelected(locale) },
+                    leading = if (locale == AppLocale.ENGLISH) "🇺🇸" else "🇸🇦",
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }
 
-@Composable
-private fun AppLocaleChip(
-    locale: AppLocale,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val backgroundColor: Color by animateColorAsState(
-        targetValue = if (isSelected) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        },
-        animationSpec = tween(durationMillis = ANIMATION_DURATION_MILLIS),
-        label = "AppLocaleChipBackground"
-    )
-    Card(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = backgroundColor),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = if (locale == AppLocale.ENGLISH) "🇺🇸" else "🇸🇦",
-                style = MaterialTheme.typography.titleLarge
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = languageName(locale.code, locale.displayName),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Text(
-                    text = locale.nativeName,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-                )
-            }
-            if (isSelected) {
-                Icon(
-                    imageVector = Icons.Filled.Check,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.height(20.dp).width(20.dp)
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun NewsLanguageSection(
@@ -239,84 +194,17 @@ private fun NewsLanguageSection(
             subtitle = strings.newsLanguageDescription
         )
         Spacer(modifier = Modifier.height(12.dp))
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(LanguageOption.entries) { language ->
-                LanguageChip(
-                    language = language,
-                    isSelected = language == selectedLanguage,
-                    onClick = { onLanguageSelected(language) }
-                )
-            }
-        }
+        SelectorRow(
+            items = LanguageOption.entries,
+            selected = selectedLanguage,
+            key = { language -> language.code },
+            onSelect = onLanguageSelected,
+            leading = { language -> language.flag },
+            label = { language -> languageName(language.code, language.nativeName) },
+        )
     }
 }
 
-@Composable
-private fun LanguageChip(
-    language: LanguageOption,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val backgroundColor: Color by animateColorAsState(
-        targetValue = if (isSelected) {
-            MaterialTheme.colorScheme.secondary
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        },
-        animationSpec = tween(durationMillis = ANIMATION_DURATION_MILLIS),
-        label = "LanguageChipBackground"
-    )
-    val borderColor: Color by animateColorAsState(
-        targetValue = if (isSelected) {
-            MaterialTheme.colorScheme.secondary
-        } else {
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-        },
-        animationSpec = tween(durationMillis = ANIMATION_DURATION_MILLIS),
-        label = "LanguageChipBorder"
-    )
-    val contentColor = if (isSelected) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onBackground
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(backgroundColor)
-            .border(width = 1.dp, color = borderColor, shape = RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(text = language.flag, style = MaterialTheme.typography.titleMedium)
-            Column {
-                Text(
-                    text = languageName(language.code, language.displayName),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    color = contentColor
-                )
-                Text(
-                    text = language.nativeName,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = contentColor.copy(alpha = 0.75f)
-                )
-            }
-            if (isSelected) {
-                Icon(
-                    imageVector = Icons.Filled.Check,
-                    contentDescription = null,
-                    tint = contentColor,
-                    modifier = Modifier.height(16.dp).width(16.dp)
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun ThemeSection(
@@ -336,21 +224,21 @@ private fun ThemeSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            ThemeModeChip(
+            FilterPill(
                 label = strings.themeSystem,
                 isSelected = selectedMode == ThemeMode.SYSTEM,
                 onClick = { onModeSelected(ThemeMode.SYSTEM) },
                 modifier = Modifier.weight(1f)
             )
-            ThemeModeChip(
+            FilterPill(
                 label = strings.themeLight,
                 isSelected = selectedMode == ThemeMode.LIGHT,
                 onClick = { onModeSelected(ThemeMode.LIGHT) },
                 modifier = Modifier.weight(1f)
             )
-            ThemeModeChip(
+            FilterPill(
                 label = strings.themeDark,
                 isSelected = selectedMode == ThemeMode.DARK,
                 onClick = { onModeSelected(ThemeMode.DARK) },
@@ -360,38 +248,6 @@ private fun ThemeSection(
     }
 }
 
-@Composable
-private fun ThemeModeChip(
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val backgroundColor: Color by animateColorAsState(
-        targetValue = if (isSelected) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        },
-        animationSpec = tween(durationMillis = ANIMATION_DURATION_MILLIS),
-        label = "ThemeModeChipBackground"
-    )
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(backgroundColor)
-            .clickable(onClick = onClick)
-            .padding(vertical = 14.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
-        )
-    }
-}
 
 @Composable
 private fun NotificationsSection(
@@ -414,7 +270,7 @@ private fun NotificationsSection(
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
             ),
-            shape = RoundedCornerShape(16.dp)
+            shape = MaterialTheme.shapes.medium
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 SettingsSwitchRow(
@@ -478,7 +334,7 @@ private fun AccountSection(
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
             ),
-            shape = RoundedCornerShape(16.dp)
+            shape = MaterialTheme.shapes.medium
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 if (authUser == null) {

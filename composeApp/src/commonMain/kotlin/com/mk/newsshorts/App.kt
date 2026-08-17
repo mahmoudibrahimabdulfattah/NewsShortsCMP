@@ -20,6 +20,7 @@ import newsshorts.composeapp.generated.resources.logo
 import com.mk.newsshorts.di.provideNewsViewModel
 import com.mk.newsshorts.presentation.localization.LocaleProvider
 import com.mk.newsshorts.presentation.localization.appStrings
+import com.mk.newsshorts.presentation.mvi.NavigationTab
 import com.mk.newsshorts.presentation.mvi.NewsUiEvent
 import com.mk.newsshorts.presentation.mvi.NewsUiState
 import com.mk.newsshorts.presentation.ui.screen.BlockingNoticeScreen
@@ -28,7 +29,9 @@ import com.mk.newsshorts.security.SecurityNotice
 import com.mk.newsshorts.security.SecurityReason
 import com.mk.newsshorts.presentation.ui.screen.NewsScreen
 import com.mk.newsshorts.presentation.ui.screen.SplashScreen
+import com.mk.newsshorts.presentation.ui.theme.ApplyAppNightMode
 import com.mk.newsshorts.presentation.ui.theme.NewsShortsTheme
+import com.mk.newsshorts.presentation.ui.theme.SystemBarAppearance
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
@@ -37,7 +40,11 @@ private const val CROSSFADE_DURATION_MS: Int = 150
 @Composable
 @Preview
 fun App(
-    onOpenUrl: (String) -> Unit = {},
+    // Carries the resolved app theme with the URL: an in-app browser is a
+    // separate process and cannot see the reader's Appearance setting, so it
+    // has to be told. Passed here rather than plumbed through every screen —
+    // the resolution only exists at this level.
+    onOpenUrl: (String, Boolean) -> Unit = { _, _ -> },
     onShareContent: (String, String, String) -> Unit = { _, _, _ -> },
     onShowToast: (String) -> Unit = {},
     onRequestNotificationPermission: () -> Unit = {}
@@ -53,6 +60,29 @@ fun App(
     // its own, so the resolution has to be visible at this level to differ
     // from what gets passed down.
     val isDarkTheme: Boolean = uiState.themeMode.resolveIsDark(isSystemInDarkTheme())
+    // Resolved here for the same reason, and in one place rather than per
+    // screen: two of these branches are drawn by a Crossfade, and rival
+    // SideEffects would fight over the bars for the length of the animation.
+    val barsUseDarkIcons: Boolean = when {
+        // Splash and the two blocking screens are branded full-bleed dark.
+        showSplash -> false
+        uiState.requiredUpdate != null -> false
+        uiState.securityNotice == SecurityNotice.BLOCKED -> false
+        // Details, Settings, Saved and Search all paint colorScheme.background.
+        uiState.overlays.isNotEmpty() -> !isDarkTheme
+        uiState.currentTab == NavigationTab.PROFILE -> !isDarkTheme
+        // What is left is the feed, which is forced dark whatever the setting.
+        else -> false
+    }
+    SystemBarAppearance(useDarkIcons = barsUseDarkIcons)
+    // Covers the one frame the two lines above cannot: the launch window the
+    // system paints from `values-night` before the app is running.
+    ApplyAppNightMode(themeMode = uiState.themeMode)
+    // Screens below take a plain (String) -> Unit; the theme is bound here so
+    // none of them has to carry it. Deliberately `isDarkTheme` and not the
+    // per-screen theme: the feed is forced dark, but a reader who chose Light
+    // should still get a light browser when they open an article from it.
+    val openUrl: (String) -> Unit = { url -> onOpenUrl(url, isDarkTheme) }
     LocaleProvider(locale = uiState.appLocale) {
         // The one place the resolved app theme is applied. The two blocking
         // screens below override it back to forced-dark — full-bleed branded
@@ -81,7 +111,7 @@ fun App(
                             title = strings.updateRequiredTitle,
                             message = strings.updateRequiredMessage,
                             actionLabel = strings.updateNow,
-                            onAction = { onOpenUrl(requiredUpdate.storeUrl) },
+                            onAction = { openUrl(requiredUpdate.storeUrl) },
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -115,7 +145,7 @@ fun App(
                 } else {
                     NewsScreen(
                         viewModel = viewModel,
-                        onOpenUrl = onOpenUrl,
+                        onOpenUrl = openUrl,
                         onShareContent = onShareContent,
                         onShowToast = onShowToast,
                         onRequestNotificationPermission = onRequestNotificationPermission,

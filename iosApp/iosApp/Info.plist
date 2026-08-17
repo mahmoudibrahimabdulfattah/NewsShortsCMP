@@ -4,5 +4,10 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<!-- The whole app is a single ComposeUIViewController, so there is no
+	     controller to override preferredStatusBarStyle on per screen. The
+	     Kotlin side sets the style on UIApplication instead. -->
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
 </dict>
 </plist>

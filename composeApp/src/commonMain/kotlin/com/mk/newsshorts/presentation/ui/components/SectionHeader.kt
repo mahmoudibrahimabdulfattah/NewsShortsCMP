@@ -1,6 +1,7 @@
 package com.mk.newsshorts.presentation.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,7 +43,7 @@ fun SectionHeader(
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(MaterialTheme.shapes.extraSmall)
                 .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)),
             contentAlignment = Alignment.Center
         ) {
@@ -54,7 +55,9 @@ fun SectionHeader(
             )
         }
         Spacer(modifier = Modifier.width(12.dp))
-        Column {
+        // A title and its subtitle stacked with nothing between them collided
+        // once Arabic replaced the system font — Tajawal sets tighter metrics.
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,

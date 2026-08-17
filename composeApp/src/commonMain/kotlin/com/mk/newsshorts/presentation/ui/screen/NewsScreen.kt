@@ -59,6 +59,9 @@ import com.mk.newsshorts.presentation.ui.components.LoadingScreen
 import com.mk.newsshorts.presentation.ui.components.NewsCard
 import com.mk.newsshorts.presentation.ui.components.ProfileScreen
 import com.mk.newsshorts.presentation.ui.theme.NewsShortsTheme
+import com.mk.newsshorts.presentation.ui.theme.ImageryScrim
+import com.mk.newsshorts.presentation.ui.theme.OnImagery
+import com.mk.newsshorts.presentation.ui.theme.PillShape
 import com.mk.newsshorts.presentation.viewmodel.NewsViewModel
 
 @Composable
@@ -170,6 +173,8 @@ private fun NewsScreenContent(
             BottomNavigationBar(
                 selectedTab = uiState.currentTab,
                 onTabSelected = { tab -> onEvent(NewsUiEvent.SelectTab(tab)) },
+                // Every tab but Profile is the feed, drawn over photographs.
+                isOverImagery = uiState.currentTab != NavigationTab.PROFILE,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
@@ -211,6 +216,12 @@ private fun NewsScreenContent(
             Overlay.SavedArticles -> {
                 SavedArticlesScreen(
                     savedArticles = uiState.savedArticles,
+                    onEvent = onEvent,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            Overlay.Licenses -> {
+                LicensesScreen(
                     onEvent = onEvent,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -271,11 +282,11 @@ private fun NextPageStatus(
         Text(
             text = label.orEmpty(),
             style = MaterialTheme.typography.labelLarge,
-            color = Color.White,
+            color = OnImagery.content,
             modifier = Modifier
                 .background(
-                    color = Color.Black.copy(alpha = 0.55f),
-                    shape = RoundedCornerShape(16.dp)
+                    color = ImageryScrim.copy(alpha = 0.55f),
+                    shape = PillShape
                 )
                 .clickable(enabled = uiState.nextPageFailed) {
                     onEvent(NewsUiEvent.RetryNextPage)
@@ -293,16 +304,7 @@ private fun TopGradientOverlay(
         modifier = modifier
             .fillMaxWidth()
             .height(220.dp)
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color.Black.copy(alpha = 0.9f),
-                        Color.Black.copy(alpha = 0.7f),
-                        Color.Black.copy(alpha = 0.4f),
-                        Color.Transparent
-                    )
-                )
-            )
+            .background(brush = OnImagery.topScrim)
     )
 }
 
@@ -329,7 +331,7 @@ private fun NewsScreenHeader(
                 text = strings.appName,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold,
-                color = Color.White,
+                color = OnImagery.content,
                 modifier = Modifier.weight(1f)
             )
             // Search lives on the feed rather than in the tab bar: it is a
@@ -338,7 +340,7 @@ private fun NewsScreenHeader(
                 Icon(
                     imageVector = Icons.Filled.Search,
                     contentDescription = strings.search,
-                    tint = Color.White,
+                    tint = OnImagery.content,
                 )
             }
         }
@@ -346,7 +348,7 @@ private fun NewsScreenHeader(
         Text(
             text = getHeaderSubtitle(uiState, strings),
             style = MaterialTheme.typography.bodySmall,
-            color = Color.White.copy(alpha = 0.7f),
+            color = OnImagery.contentMuted,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
         Spacer(modifier = Modifier.height(12.dp))

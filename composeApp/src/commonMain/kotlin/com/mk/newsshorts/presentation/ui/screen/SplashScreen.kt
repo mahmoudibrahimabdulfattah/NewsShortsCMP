@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -30,6 +31,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import com.mk.newsshorts.presentation.localization.appStrings
+import com.mk.newsshorts.presentation.ui.theme.brandBackdrop
 
 private const val ANIMATION_DURATION_MS: Int = 400
 private const val TEXT_ANIMATION_DURATION_MS: Int = 300
@@ -61,14 +63,7 @@ fun SplashScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF0D1B2A),
-                        Color(0xFF1B263B)
-                    )
-                )
-            ),
+            .background(brush = brandBackdrop()),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -84,23 +79,16 @@ fun SplashScreen(
             )
             Text(
                 text = appStrings().appName,
-                style = TextStyle(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 32.sp,
-                    letterSpacing = 0.sp
-                ),
-                color = Color.White,
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier
                     .padding(top = 24.dp)
                     .alpha(alpha)
             )
             Text(
                 text = appStrings().appTagline,
-                style = TextStyle(
-                    fontSize = 16.sp,
-                    letterSpacing = 0.5.sp
-                ),
-                color = Color(0xFFB0B8C1),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .padding(top = 8.dp)
                     .alpha(alpha)

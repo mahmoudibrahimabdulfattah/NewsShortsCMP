@@ -1,13 +1,9 @@
 package com.mk.newsshorts.presentation.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.mk.newsshorts.domain.model.NewsCategory
+import com.mk.newsshorts.presentation.localization.categoryName
 
 @Composable
 fun CategoryRow(
@@ -15,21 +11,14 @@ fun CategoryRow(
     onCategorySelected: (NewsCategory) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    LazyRow(
+    SelectorRow(
+        items = NewsCategory.entries,
+        selected = selectedCategory,
+        key = { category -> category.name },
+        onSelect = onCategorySelected,
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp)
-    ) {
-        items(
-            items = NewsCategory.entries,
-            key = { category -> category.name }
-        ) { category ->
-            CategoryChip(
-                category = category,
-                isSelected = category == selectedCategory,
-                onClick = { onCategorySelected(category) }
-            )
-        }
-    }
+        onImagery = true,
+        leading = { category -> category.emoji },
+        label = { category -> categoryName(category.apiValue, category.displayName) },
+    )
 }
-
