@@ -716,7 +716,7 @@ class NewsViewModel(
             mutableState.update { it.copy(onboarding = next) }
             return
         }
-        finishOnboarding(askForNotifications = mutableState.value.notificationsEnabled)
+        finishOnboarding(answeredNotifications = true)
     }
 
     /**
@@ -726,10 +726,21 @@ class NewsViewModel(
      * few articles stays armed, which is the whole point of having it.
      */
     private fun handleOnboardingSkip() {
-        finishOnboarding(askForNotifications = false)
+        finishOnboarding(answeredNotifications = false)
     }
 
-    private fun finishOnboarding(askForNotifications: Boolean) {
+    /**
+     * [answeredNotifications] is whether the reader reached the last step and
+     * pressed through it — which is an answer either way, including "no".
+     *
+     * Only that closes the question. A "no" here used to leave the contextual
+     * prompt armed, so the reader who had just declined got the system dialog
+     * anyway a few articles later; declining that is what permanently blocks
+     * the app from ever asking again, so the reask was not merely rude, it
+     * spent the one thing it was trying to win. Skipping leaves it armed on
+     * purpose: a reader who skipped past the question has not answered it.
+     */
+    private fun finishOnboarding(answeredNotifications: Boolean) {
         val chosen: List<NewsCategory> = mutableState.value.onboardingCategories
         val preferred: List<String> = chosen.map { it.apiValue }
         mutableState.update { state ->
@@ -743,11 +754,16 @@ class NewsViewModel(
         viewModelScope.launch {
             settingsManager.savePreferredCategories(preferred)
             settingsManager.markOnboardingComplete()
-            if (askForNotifications) {
-                // Asked here and marked seen, so the after-a-few-articles
-                // prompt does not ask the same question a second time.
+            if (answeredNotifications) {
+                // Marked seen on either answer, so the after-a-few-articles
+                // prompt never asks a question the reader has already answered.
                 settingsManager.markNotificationPromptSeen()
-                mutableEffect.emit(NewsUiEffect.RequestNotificationPermission)
+                // The system dialog only for a yes. Showing it to someone who
+                // just said no would collect the denial that locks the
+                // permission for good.
+                if (mutableState.value.notificationsEnabled) {
+                    mutableEffect.emit(NewsUiEffect.RequestNotificationPermission)
+                }
             }
         }
         // The category may have changed, so the feed is reloaded rather than
