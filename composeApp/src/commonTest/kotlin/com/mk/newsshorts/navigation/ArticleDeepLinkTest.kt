@@ -89,35 +89,35 @@ class ArticleDeepLinkTest {
         assertNull(link.toNewsArticle())
     }
 
+    /**
+     * The link is now a page name, so its length no longer depends on the
+     * article at all — which is the point. The old form carried the summary in
+     * a query string and had to be trimmed to survive a chat bubble.
+     */
     @Test
-    fun `a share link stays short enough for a chat bubble`() {
-        // Arabic is the worst case: percent-encoding costs ~9 bytes a character,
-        // and chat clients truncate long URLs mid-string.
+    fun `a share link names a page rather than carrying the article`() {
         val article = ArticleDeepLinks.parse(validLink)!!.toNewsArticle()!!.copy(
             description = ArticleDescription("ملخص طويل جدا ".repeat(300)),
         )
+
         val shared = ArticleDeepLinks.shareUrl(article, "https://example.com/site", "ar")
 
-        assertTrue(shared.length <= 1200, "share link was ${shared.length} characters")
-        assertTrue(shared.startsWith("https://example.com/site/a/?"))
-        assertTrue(shared.contains("lang=ar"))
+        val slug = ShareSlug.of(article.articleUrl.value)
+        assertEquals("https://example.com/site/a/ar/$slug/", shared)
     }
 
     @Test
-    fun `a share link keeps a short summary intact`() {
+    fun `a share link carries the article's language, not the reader's`() {
         val article = ArticleDeepLinks.parse(validLink)!!.toNewsArticle()!!
-        val shared = ArticleDeepLinks.shareUrl(article, "https://example.com/site/", "en")
 
         // Trailing slash on the base must not double up.
-        assertTrue(shared.startsWith("https://example.com/site/a/?"))
-        assertTrue(shared.contains("lang=en"))
-        // Round-trips through the parser the landing page hands back to the app.
-        val roundTripped = ArticleDeepLinks.parse(
-            "newsshorts://article?" + shared.substringAfter("/a/?")
-        )!!
-        assertEquals(article.articleUrl.value, roundTripped.url)
-        assertEquals(article.title.value, roundTripped.title)
-        assertEquals(article.description.value, roundTripped.summary)
+        val english = ArticleDeepLinks.shareUrl(article, "https://example.com/site/", "en")
+        val arabic = ArticleDeepLinks.shareUrl(article, "https://example.com/site", "AR")
+
+        val slug = ShareSlug.of(article.articleUrl.value)
+        assertEquals("https://example.com/site/a/en/$slug/", english)
+        // Same story, different page: the two say different things.
+        assertEquals("https://example.com/site/a/ar/$slug/", arabic)
     }
 
     @Test
@@ -130,18 +130,58 @@ class ArticleDeepLinkTest {
         assertNull(ArticleDeepLinks.parse(validLink)!!.referrer)
     }
 
+    /**
+     * Released builds are still producing this form and their links are already
+     * sent, so the parser has to keep reading it for as long as those installs
+     * exist. The site keeps publishing the page that serves them.
+     */
     @Test
-    fun `accepts the https share link the app itself produces`() {
-        // This is the App Links path: Android hands the https URL to the app,
-        // so the parser must read it exactly as it reads the custom scheme.
-        val article = ArticleDeepLinks.parse(validLink)!!.toNewsArticle()!!
-        val shared = ArticleDeepLinks.shareUrl(
-            article, "https://mahmoudibrahimabdulfattah.github.io/NewsShortsCMP", "ar"
-        )
+    fun `still accepts the query-string share link older builds produce`() {
+        val legacy = "https://mahmoudibrahimabdulfattah.github.io/NewsShortsCMP/a/" +
+            "?url=https%3A%2F%2Fexample.com%2Fa&title=Headline&summary=Body&lang=ar"
 
-        val parsed = ArticleDeepLinks.parse(shared)!!
-        assertEquals(article.articleUrl.value, parsed.url)
-        assertEquals(article.title.value, parsed.title)
+        val parsed = ArticleDeepLinks.parse(legacy)!!
+
+        assertEquals("https://example.com/a", parsed.url)
+        assertEquals("Headline", parsed.title)
+    }
+
+    /**
+     * A per-article page names a story instead of describing one, so there is
+     * nothing in the URL to build an article from. It is recognised rather than
+     * parsed, and fetched afterwards — see SharePageResolver.
+     */
+    @Test
+    fun `recognises a per-article page it cannot parse`() {
+        val article = ArticleDeepLinks.parse(validLink)!!.toNewsArticle()!!
+        val shared = ArticleDeepLinks.shareUrl(article, SITE, "ar")
+
+        assertNull(ArticleDeepLinks.parse(shared))
+        assertEquals(shared, ArticleDeepLinks.sharePageUrl(shared, SITE))
+    }
+
+    /**
+     * Whatever recovers an article from one of these goes and fetches it, and
+     * the activity that receives them is exported — so a URL from another app
+     * must not be able to aim that fetch wherever it likes.
+     */
+    @Test
+    fun `refuses a page on another host`() {
+        assertNull(ArticleDeepLinks.sharePageUrl("https://evil.example.com/NewsShortsCMP/a/ar/abc/", SITE))
+        assertNull(ArticleDeepLinks.sharePageUrl("http://mahmoudibrahimabdulfattah.github.io/NewsShortsCMP/a/ar/abc/", SITE))
+    }
+
+    /** Everything else under the same prefix is a file, or the legacy page. */
+    @Test
+    fun `refuses paths under a-slash that are not an article`() {
+        listOf(
+            "$SITE/a/",
+            "$SITE/a/page.css",
+            "$SITE/a/page.js",
+            "$SITE/a/ar/",
+            "$SITE/a/ar/abc/extra/",
+            "$SITE/v1/feed/ar.json",
+        ).forEach { assertNull(ArticleDeepLinks.sharePageUrl(it, SITE), it) }
     }
 
     @Test
@@ -152,6 +192,10 @@ class ArticleDeepLinkTest {
             )
         )
         assertNull(ArticleDeepLinks.parse("https://evil.example.com/b/?url=https%3A%2F%2Fx.com&title=x"))
+    }
+
+    private companion object {
+        const val SITE = "https://mahmoudibrahimabdulfattah.github.io/NewsShortsCMP"
     }
 
     @Test

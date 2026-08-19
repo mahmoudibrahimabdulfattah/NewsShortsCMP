@@ -37,6 +37,13 @@ sealed interface NewsUiEvent {
 
     data class OpenDeepLink(val link: ArticleDeepLink) : NewsUiEvent
 
+    /**
+     * A shared link that names a landing page rather than carrying the article.
+     * Resolving it is a network round trip, so it arrives as its own event and
+     * becomes an [OpenDeepLink] once the article is in hand.
+     */
+    data class OpenSharePage(val url: String) : NewsUiEvent
+
     /** Pushes a screen above the tabs. See [com.mk.newsshorts.presentation.mvi.Overlay]. */
     data class OpenOverlay(val overlay: Overlay) : NewsUiEvent
 

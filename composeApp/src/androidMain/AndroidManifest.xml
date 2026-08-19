@@ -54,6 +54,12 @@
                 time and, when the signing fingerprint matches, hand these links
                 straight here with no chooser. Without verification the same
                 link still works — it just lands on the web page instead.
+
+                A prefix, so it covers both shapes: the landing page older builds
+                still share, which carries the whole article in its query string,
+                and the per-article pages, which only name one. The second kind
+                is resolved over the network — see SharePageResolver — and falls
+                back to the page itself when that cannot be done.
             -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
