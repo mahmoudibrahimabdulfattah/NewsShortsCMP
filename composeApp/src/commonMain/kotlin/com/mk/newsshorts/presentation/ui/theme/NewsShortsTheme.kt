@@ -47,6 +47,16 @@ private val AzureLift: Color = Color(0xFF5FAAE8)
 /** The logo's crimson, darkened just enough to carry white text on white. */
 private val Crimson: Color = Color(0xFFC8003C)
 
+/**
+ * The unread mark: the badge on the bell and the dot on a row.
+ *
+ * Deliberately one colour in both themes, and not `tertiary` — that lifts to a
+ * pink on dark surfaces, so the same mark would read as two different states to
+ * anyone who switches. The logo's crimson carries white text on either
+ * background, which is the only constraint the mark actually has.
+ */
+val UnreadMark: Color = Color(0xFFC8003C)
+
 /** The crimson lifted for dark surfaces. */
 private val CrimsonLift: Color = Color(0xFFFF4D74)
 

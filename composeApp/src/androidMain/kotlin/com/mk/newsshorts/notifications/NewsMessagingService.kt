@@ -15,7 +15,10 @@ import com.mk.newsshorts.MainActivity
 import com.mk.newsshorts.data.local.NotificationPreferenceKeys
 import com.mk.newsshorts.data.local.SettingsStorage
 import com.mk.newsshorts.navigation.ArticleDeepLinks
+import com.mk.newsshorts.navigation.NotificationBus
+import com.mk.newsshorts.presentation.mvi.InboxNotification
 import com.mk.newsshorts.R
+import org.koin.mp.KoinPlatformTools
 
 /**
  * Receives breaking-news pushes.
@@ -37,6 +40,12 @@ class NewsMessagingService : FirebaseMessagingService() {
         // A reminder carries no article, so the title is the only thing that
         // identifies it — without this every one of them would reuse id 0.
         val notificationId = (deepLink ?: title).hashCode()
+
+        // Announced before either gate below, and deliberately so. The inbox
+        // lists what a reader was sent, not what their phone chose to show —
+        // the published list makes no distinction either, and a reader who has
+        // muted a tier is exactly the one who opens the inbox to catch up.
+        announce(title, body, deepLink)
 
         if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) return
         if (!isAllowedByInAppSettings(payload["tier"])) return
@@ -81,6 +90,37 @@ class NewsMessagingService : FirebaseMessagingService() {
         // Delivery is by topic, so there is no per-device token to register;
         // re-subscribing keeps a rotated token attached to the same topics.
         NewsTopics.resubscribe(applicationContext)
+    }
+
+    /**
+     * Hands the notification to whoever is listening inside the app.
+     *
+     * The backend publishes the same list, but through a static deploy that
+     * lands minutes after the push — long enough for a reader who taps straight
+     * in to look for what they were just shown and not find it. This closes that
+     * gap; the published list then agrees with it.
+     *
+     * Reminders are left out: they carry no article, so an inbox row for one
+     * would open nothing.
+     *
+     * Koin is reached through the global registry rather than injected, for the
+     * same reason [isAllowedByInAppSettings] reads storage directly — the system
+     * instantiates this class, so there is no constructor to inject into. A
+     * process where Koin has not started yet is a process with no ViewModel
+     * listening, so failing quietly is the whole of the handling needed.
+     */
+    private fun announce(title: String, body: String, deepLink: String?) {
+        val link = deepLink ?: return
+        runCatching {
+            KoinPlatformTools.defaultContext().get().get<NotificationBus>().post(
+                InboxNotification(
+                    sentAt = System.currentTimeMillis(),
+                    title = title,
+                    body = body,
+                    deepLink = link,
+                )
+            )
+        }
     }
 
     /**

@@ -1,5 +1,7 @@
 package com.mk.newsshorts.presentation.mvi
 
+import com.mk.newsshorts.data.local.InboxReadState
+
 import com.mk.newsshorts.auth.AuthFailure
 import com.mk.newsshorts.auth.AuthUser
 import com.mk.newsshorts.data.remote.RequiredUpdate
@@ -73,6 +75,14 @@ data class NewsUiState(
      * stack — they switch, they do not push.
      */
     val overlays: List<Overlay> = emptyList(),
+    /** What the backend has pushed in the reader's language, newest first. */
+    val inboxNotifications: List<InboxNotification> = emptyList(),
+    /**
+     * Which notifications the reader has dealt with. Mirrored into state rather
+     * than read from the store per frame, so the marks hold still while the
+     * screen is up instead of flickering off row by row.
+     */
+    val inboxRead: InboxReadState = InboxReadState(),
     /** Non-null when the backend no longer supports this build; blocks the UI. */
     val requiredUpdate: RequiredUpdate? = null,
     /** Result of the device-integrity check under the backend's policy. */
@@ -141,6 +151,21 @@ data class NewsUiState(
     val isAtEndOfFeed: Boolean
         get() = hasArticles && !hasMorePages && currentArticleIndex >= articles.lastIndex
 
+    /**
+     * The notifications the reader has not dealt with.
+     *
+     * Two things take one off this list and nothing else does: opening it, or
+     * marking everything read. Opening the inbox itself deliberately does not —
+     * the marks are how a reader tells which stories they have already been
+     * into, and clearing them on sight would answer the question by erasing it.
+     */
+    val unreadInboxIds: Set<Long>
+        get() = inboxNotifications.filterNot { inboxRead.isRead(it.sentAt) }
+            .map { it.sentAt }
+            .toSet()
+
+    val unreadInboxCount: Int get() = unreadInboxIds.size
+
     /** A search ran for what is in the field and came back with nothing. */
     val hasNoSearchResults: Boolean
         get() = searchSettled && !searchFailed && searchResults.isEmpty()
@@ -157,6 +182,19 @@ data class NewsUiState(
         }
 }
 
+/**
+ * One notification the backend has sent, as the inbox lists it.
+ *
+ * [deepLink] is the same `newsshorts://article` link the notification carried,
+ * so opening a row and tapping the notification itself go through one parser.
+ */
+data class InboxNotification(
+    val sentAt: Long,
+    val title: String,
+    val body: String,
+    val deepLink: String,
+)
+
 /** One screen pushed above the tabs. See [NewsUiState.overlays]. */
 sealed interface Overlay {
     data class Details(val article: NewsArticle, val origin: ArticleOpenOrigin) : Overlay
@@ -164,6 +202,7 @@ sealed interface Overlay {
     data object SavedArticles : Overlay
     data object SignIn : Overlay
     data object Search : Overlay
+    data object NotificationInbox : Overlay
     /** Third-party notices. The bundled fonts are under the OFL, which
      *  requires its notice to travel with them. */
     data object Licenses : Overlay

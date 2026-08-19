@@ -152,4 +152,44 @@ class BreakingNewsPusherTest {
         // includes the Arabic reminder as well.
         assertEquals(2, failing.sent.count { it.first == "news_en" })
     }
+
+    /** What the in-app inbox is published from, so an unrecorded send is a gap. */
+    @Test
+    fun `a delivered notification joins the history`() = runBlocking {
+        seedArticle("en", now - 30.minutes.inWholeMilliseconds)
+
+        BreakingNewsPusher(store, RecordingNotifier()).run(now)
+
+        val sent = store.pushHistory("en", limit = 10).single()
+        assertEquals("Headline", sent.title)
+        assertEquals("breaking", sent.tier)
+        assertTrue(sent.deepLink.startsWith("newsshorts://article?"), sent.deepLink)
+        assertEquals(now, sent.sentAt)
+    }
+
+    /**
+     * The same rule the pacing record follows: a send that did not happen must
+     * leave nothing behind, or the inbox lists a notification nobody received.
+     */
+    @Test
+    fun `a failed delivery leaves no history`() = runBlocking {
+        seedArticle("en", now - 30.minutes.inWholeMilliseconds)
+
+        BreakingNewsPusher(store, RecordingNotifier(succeeds = false)).run(now)
+
+        assertTrue(store.pushHistory("en", limit = 10).isEmpty())
+    }
+
+    /** A reminder has no article, so it is sent but never listed. */
+    @Test
+    fun `a reminder is delivered but stays out of the inbox`() = runBlocking {
+        // Nothing seeded, so no language has a story and both fall to a reminder.
+        val notifier = RecordingNotifier()
+
+        BreakingNewsPusher(store, notifier).run(now)
+
+        assertTrue(notifier.sent.all { it.second.tier == PushTier.REMINDER })
+        assertTrue(store.pushHistory("ar", limit = 10).isEmpty())
+        assertTrue(store.pushHistory("en", limit = 10).isEmpty())
+    }
 }

@@ -56,6 +56,9 @@ object ApiConfig {
      */
     fun searchIndexUrl(language: String): String = "$baseUrl/v1/search/$language.json"
 
+    /** What has been pushed in one language, for the in-app inbox. */
+    fun notificationsUrl(language: String): String = "$baseUrl/v1/notifications/$language.json"
+
     /** Minimum supported build and store link — see [AppUpdateClient]. */
     fun appConfigUrl(): String = "$baseUrl/v1/app.json"
 

@@ -29,7 +29,9 @@ import com.mk.newsshorts.presentation.localization.appStrings
 fun OverlayTopBar(
     title: String,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Optional trailing control, pushed to the far end of the bar. */
+    action: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -51,7 +53,10 @@ fun OverlayTopBar(
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(horizontal = 4.dp),
+            // Takes the slack so an action sits at the far end rather than
+            // beside the title, in both reading directions.
+            modifier = Modifier.padding(horizontal = 4.dp).weight(1f),
         )
+        action?.invoke()
     }
 }

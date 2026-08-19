@@ -10,6 +10,7 @@ import com.mk.newsshorts.server.ingest.RssFetcher
 import com.mk.newsshorts.server.model.FeedArticleDto
 import com.mk.newsshorts.server.model.FeedResponse
 import com.mk.newsshorts.server.push.BreakingNewsPusher
+import com.mk.newsshorts.server.push.NotificationsResponse
 import com.mk.newsshorts.server.push.PushNotifier
 import com.mk.newsshorts.server.share.SharePage
 import com.mk.newsshorts.server.share.ShareSlug
@@ -34,6 +35,7 @@ import java.io.File
  *                                      following `nextPage` from the one before
  *   v1/search/{lang}.json            — everything published in one language, in
  *                                      one file, for the app to search offline
+ *   v1/notifications/{lang}.json     — what has been pushed, for the in-app inbox
  *   v1/meta.json                     — available languages, categories, countries
  *   a/{lang}/{slug}/index.html       — one shared article's landing page
  *   404.html                         — what a link older than the archive gets
@@ -182,14 +184,19 @@ object StaticFeedGenerator {
         // Without this, GitHub Pages runs the output through Jekyll.
         File(outputDir, ".nojekyll").writeText("")
 
-        log.info("Wrote $filesWritten JSON files to ${outputDir.absolutePath}")
-
         // After publishing, not before: a notification should never point at a
         // story the feed has not caught up with yet.
         // fromEnvironment reports why it declined, so this only notes the effect.
         val notifier = PushNotifier.fromEnvironment()
         if (notifier == null) log.info("Push is not configured — skipping")
         else BreakingNewsPusher(store, notifier).run()
+
+        // After the pusher, not with the rest of the files: a notification sent
+        // by this run belongs in this run's inbox, or the app is half an hour
+        // behind the notification a reader just tapped.
+        filesWritten += writeNotifications(outputDir, store)
+
+        log.info("Wrote $filesWritten files to ${outputDir.absolutePath}")
     }
 
     /**
@@ -274,6 +281,43 @@ object StaticFeedGenerator {
             .writeText(template.replace("__PLAY_STORE_URL__", storeUrl))
         return true
     }
+
+    /**
+     * How long a sent notification stays in the inbox.
+     *
+     * A month, which is well past the point where a reader would go back for a
+     * story — and comfortably inside the ninety days a shared page survives, so
+     * every row in the inbox still opens something.
+     */
+    private const val DEFAULT_INBOX_RETENTION_DAYS = 30
+
+    /**
+     * Publishes what has been pushed, per language, for the in-app inbox.
+     *
+     * Published rather than collected on the device: a local copy would start
+     * empty on a new install, would miss whatever arrived while the app was
+     * force-stopped, and — because the app drops tiers the reader has switched
+     * off before they are ever shown — would be missing exactly the
+     * notifications an inbox exists to show.
+     *
+     * Small enough to ignore: four sends a day per language at most, so a month
+     * is on the order of a hundred rows.
+     */
+    private fun writeNotifications(outputDir: File, store: ArticleStore): Int {
+        val retentionDays = envInt("INBOX_RETENTION_DAYS", DEFAULT_INBOX_RETENTION_DAYS)
+        store.prunePushHistory(System.currentTimeMillis() - retentionDays * MILLIS_PER_DAY)
+
+        val dir = File(outputDir, "v1/notifications").apply { mkdirs() }
+        FeedCatalog.languages.forEach { language ->
+            val sent = store.pushHistory(language, limit = INBOX_LIMIT)
+            File(dir, "$language.json")
+                .writeText(json.encodeToString(NotificationsResponse(notifications = sent)))
+        }
+        return FeedCatalog.languages.size
+    }
+
+    /** Four a day for a month, with room to spare if the pacing ever changes. */
+    private const val INBOX_LIMIT = 300
 
     /**
      * Writes a landing page for every archived article, and returns the file
