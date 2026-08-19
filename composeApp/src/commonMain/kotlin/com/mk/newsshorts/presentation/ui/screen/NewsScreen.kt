@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -74,14 +75,26 @@ fun NewsScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState: NewsUiState by viewModel.uiState.collectAsState()
+    // Read through rememberUpdatedState, not captured directly: the collector
+    // below is started once and never restarts, so it would otherwise hold the
+    // handlers from the first composition for the life of the process. That
+    // costs nothing for three of these, but `onOpenUrl` closes over the
+    // resolved app theme — which at first composition is still the SYSTEM
+    // default, before settings have loaded. A reader on Light with the phone
+    // on Dark got a dark browser toolbar every time, and changing Appearance
+    // afterwards never reached it.
+    val openUrl by rememberUpdatedState(onOpenUrl)
+    val shareContent by rememberUpdatedState(onShareContent)
+    val showToast by rememberUpdatedState(onShowToast)
+    val requestNotificationPermission by rememberUpdatedState(onRequestNotificationPermission)
     LaunchedEffect(Unit) {
         viewModel.uiEffect.collect { effect ->
             when (effect) {
-                is NewsUiEffect.OpenUrl -> onOpenUrl(effect.url)
+                is NewsUiEffect.OpenUrl -> openUrl(effect.url)
                 is NewsUiEffect.ShareContent ->
-                    onShareContent(effect.title, effect.url, effect.chooserTitle)
-                is NewsUiEffect.ShowToast -> onShowToast(effect.message)
-                NewsUiEffect.RequestNotificationPermission -> onRequestNotificationPermission()
+                    shareContent(effect.title, effect.url, effect.chooserTitle)
+                is NewsUiEffect.ShowToast -> showToast(effect.message)
+                NewsUiEffect.RequestNotificationPermission -> requestNotificationPermission()
             }
         }
     }
