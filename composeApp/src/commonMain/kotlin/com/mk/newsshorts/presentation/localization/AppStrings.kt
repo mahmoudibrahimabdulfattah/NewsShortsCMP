@@ -130,6 +130,15 @@ interface AppStrings {
     val deleteAccountConfirmButton: String
     val cancelLabel: String
     val search: String
+
+    /** The bell on the feed, and the title of the screen it opens. */
+    val notificationInbox: String
+    val markAllNotificationsRead: String
+    val notificationInboxEmptyTitle: String
+    val notificationInboxEmptyBody: String
+    /** Reads as a badge label, so it stays a bare number past the cap. */
+    fun unreadNotifications(count: Int): String
+
     val searchHint: String
     val searchEmptyTitle: String
     val searchEmptyBody: String
@@ -389,7 +398,13 @@ object EnglishStrings : AppStrings {
     override val deleteAccountConfirmButton: String = "Delete"
     override val cancelLabel: String = "Cancel"
     override val search: String = "Search"
-    override val searchHint: String = "Search the news"
+    override val notificationInbox: String = "Notifications"
+    override val markAllNotificationsRead: String = "Mark all read"
+    override val notificationInboxEmptyTitle: String = "Nothing yet"
+    override val notificationInboxEmptyBody: String =
+        "Breaking stories you were sent show up here, so you can catch one you missed."
+    override fun unreadNotifications(count: Int): String = if (count > 9) "9+" else count.toString()
+    override val searchHint = "Search the news"
     override val searchEmptyTitle: String = "Search recent news"
     override val searchEmptyBody: String =
         "Type a word, a name or a publisher. Headlines and summaries are both searched."
@@ -627,6 +642,12 @@ object ArabicStrings : AppStrings {
     override val deleteAccountConfirmButton: String = "حذف"
     override val cancelLabel: String = "إلغاء"
     override val search: String = "بحث"
+    override val notificationInbox: String = "الإشعارات"
+    override val markAllNotificationsRead: String = "تعليم الكل كمقروء"
+    override val notificationInboxEmptyTitle: String = "لا يوجد شيء بعد"
+    override val notificationInboxEmptyBody: String =
+        "الأخبار العاجلة التي أُرسلت إليك تظهر هنا، حتى تلحق ما فاتك منها."
+    override fun unreadNotifications(count: Int): String = if (count > 9) "‏9+" else count.toString()
     override val searchHint: String = "ابحث في الأخبار"
     override val searchEmptyTitle: String = "ابحث في أخبار الأيام الأخيرة"
     override val searchEmptyBody: String =

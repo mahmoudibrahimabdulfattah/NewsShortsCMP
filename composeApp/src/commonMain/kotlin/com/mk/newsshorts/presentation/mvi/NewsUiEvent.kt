@@ -44,6 +44,18 @@ sealed interface NewsUiEvent {
      */
     data class OpenSharePage(val url: String) : NewsUiEvent
 
+    /** Opens the inbox. Deliberately does not mark anything read. */
+    data object OpenNotificationInbox : NewsUiEvent
+
+    /**
+     * A row in the inbox. Opening it is one of the two things that clears its
+     * unread mark, and it carries the link so the deep link path is reused.
+     */
+    data class OpenInboxNotification(val sentAt: Long, val deepLink: String) : NewsUiEvent
+
+    /** The other one. Clears every mark currently in the list. */
+    data object MarkAllNotificationsRead : NewsUiEvent
+
     /** Pushes a screen above the tabs. See [com.mk.newsshorts.presentation.mvi.Overlay]. */
     data class OpenOverlay(val overlay: Overlay) : NewsUiEvent
 

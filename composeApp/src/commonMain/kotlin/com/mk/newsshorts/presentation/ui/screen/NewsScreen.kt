@@ -22,6 +22,12 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import com.mk.newsshorts.presentation.ui.theme.UnreadMark
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -239,6 +245,14 @@ private fun NewsScreenContent(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+            Overlay.NotificationInbox -> {
+                NotificationInboxScreen(
+                    notifications = uiState.inboxNotifications,
+                    unreadIds = uiState.unreadInboxIds,
+                    onEvent = onEvent,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
             Overlay.Search -> {
                 SearchScreen(
                     uiState = uiState,
@@ -347,8 +361,48 @@ private fun NewsScreenHeader(
                 color = OnImagery.content,
                 modifier = Modifier.weight(1f)
             )
-            // Search lives on the feed rather than in the tab bar: it is a
-            // thing you do to the news, not a fourth place the news lives.
+            // Both live on the feed rather than in the tab bar: they are
+            // things you do to the news, not further places the news lives.
+            // The bell is here and not in Profile because it carries the
+            // unread mark, and a mark nobody passes is not a mark.
+            IconButton(onClick = { onEvent(NewsUiEvent.OpenNotificationInbox) }) {
+                // Wider than the glyph so the badge has a corner of its own to
+                // sit in. It used to be nudged out with an offset, which put it
+                // past the icon button's bounds — and that clips, so the circle
+                // came out with two flat edges.
+                Box(modifier = Modifier.size(30.dp)) {
+                    Icon(
+                        imageVector = Icons.Filled.Notifications,
+                        contentDescription = strings.notificationInbox,
+                        tint = OnImagery.content,
+                        modifier = Modifier.align(Alignment.BottomStart).size(24.dp),
+                    )
+                    val unread = uiState.unreadInboxCount
+                    if (unread > 0) {
+                        // A fixed size with the label centred inside it, rather
+                        // than padding around the text: padding sized the badge
+                        // from the glyph, so a "1" and a "9+" drew different
+                        // shapes and neither was round.
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .size(16.dp)
+                                .clip(CircleShape)
+                                .background(UnreadMark),
+                        ) {
+                            Text(
+                                text = strings.unreadNotifications(unread),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp,
+                                lineHeight = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                            )
+                        }
+                    }
+                }
+            }
             IconButton(onClick = { onEvent(NewsUiEvent.OpenSearch) }) {
                 Icon(
                     imageVector = Icons.Filled.Search,
