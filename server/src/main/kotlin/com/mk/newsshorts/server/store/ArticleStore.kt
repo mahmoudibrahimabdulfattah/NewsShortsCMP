@@ -3,6 +3,7 @@ package com.mk.newsshorts.server.store
 import com.mk.newsshorts.server.feed.FeedLayout
 import com.mk.newsshorts.server.feed.FeedPage
 import com.mk.newsshorts.server.model.FeedArticleDto
+import com.mk.newsshorts.server.push.SentNotification
 import com.mk.newsshorts.server.share.SharedArticle
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.JoinType
@@ -16,6 +17,7 @@ import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertIgnore
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNotNull
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNull
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -152,6 +154,31 @@ object SharedArticles : Table("shared_articles") {
     override val primaryKey = PrimaryKey(slug, language)
 }
 
+/**
+ * Every notification that has been sent, which [PushLog] cannot answer.
+ *
+ * That table holds one row per topic and rewrites it on every send, because all
+ * it is asked is when the quiet window started. The in-app inbox asks something
+ * else — what a reader missed — and that is a list.
+ *
+ * Published rather than kept on the device for the same reason. A local copy
+ * would be empty on a fresh install, would miss anything that arrived while the
+ * app was force-stopped, and would be missing exactly the notifications a reader
+ * had switched a tier off for — which is the one thing an inbox is for.
+ */
+object PushHistory : Table("push_history") {
+    val topic = varchar("topic", 64)
+    val sentAt = long("sent_at").index()
+    val language = varchar("language", 8).index()
+    val tier = varchar("tier", 16)
+    val title = text("title")
+    val body = text("body")
+    /** Null for the reminder tier, which carries no article. */
+    val deepLink = text("deep_link").nullable()
+
+    override val primaryKey = PrimaryKey(topic, sentAt)
+}
+
 class ArticleStore(dbPath: String) {
 
     init {
@@ -161,7 +188,7 @@ class ArticleStore(dbPath: String) {
         transaction {
             SchemaUtils.createMissingTablesAndColumns(
                 Articles, ArticleTexts, PushLog, FeedPages, FeedPlaced, FeedPageState,
-                SharedArticles,
+                SharedArticles, PushHistory,
             )
         }
     }
@@ -256,6 +283,64 @@ class ArticleStore(dbPath: String) {
                 it[PushLog.sentAt] = sentAt
             }
         }
+    }
+
+    /**
+     * Adds one sent notification to the history the inbox is published from.
+     *
+     * Separate from [recordPush] rather than folded into it: that call is the
+     * pacing record and has to stay one row per topic, and a send that fails
+     * must leave neither behind.
+     */
+    fun recordPushHistory(
+        topic: String,
+        language: String,
+        tier: String,
+        title: String,
+        body: String,
+        deepLink: String?,
+        sentAt: Long,
+    ) {
+        transaction {
+            PushHistory.insertIgnore {
+                it[PushHistory.topic] = topic
+                it[PushHistory.sentAt] = sentAt
+                it[PushHistory.language] = language
+                it[PushHistory.tier] = tier
+                it[PushHistory.title] = title
+                it[PushHistory.body] = body
+                it[PushHistory.deepLink] = deepLink
+            }
+        }
+    }
+
+    /**
+     * One language's sent notifications, newest first.
+     *
+     * Rows with no article are left out: the reminder tier exists so a slot is
+     * never wasted, but an inbox entry that opens nothing is a row a reader taps
+     * once and never trusts again.
+     */
+    fun pushHistory(language: String, limit: Int): List<SentNotification> = transaction {
+        PushHistory.selectAll()
+            .andWhere { PushHistory.language eq language }
+            .andWhere { PushHistory.deepLink.isNotNull() }
+            .orderBy(PushHistory.sentAt, SortOrder.DESC)
+            .limit(limit)
+            .map {
+                SentNotification(
+                    sentAt = it[PushHistory.sentAt],
+                    tier = it[PushHistory.tier],
+                    title = it[PushHistory.title],
+                    body = it[PushHistory.body],
+                    deepLink = it[PushHistory.deepLink].orEmpty(),
+                )
+            }
+    }
+
+    /** Drops history sent before [cutoffMillis]. */
+    fun prunePushHistory(cutoffMillis: Long): Int = transaction {
+        PushHistory.deleteWhere { PushHistory.sentAt less cutoffMillis }
     }
 
     /** Inserts if the URL is new. Returns the new row id, or null if it already existed. */

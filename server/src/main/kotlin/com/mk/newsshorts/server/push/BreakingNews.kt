@@ -55,6 +55,18 @@ class BreakingNewsPusher(
 
             if (notifier.send(topic, message)) {
                 store.recordPush(topic, message.deepLink ?: message.title, now)
+                // The pacing record above keeps one row per topic. This keeps
+                // all of them, because the in-app inbox is a list of what a
+                // reader missed rather than a question about the last send.
+                store.recordPushHistory(
+                    topic = topic,
+                    language = language,
+                    tier = message.tier.label,
+                    title = message.title,
+                    body = message.body,
+                    deepLink = message.deepLink,
+                    sentAt = now,
+                )
             } else {
                 // The notifier reports the cause; this records the consequence,
                 // which is that the quiet window did not start and the next run
