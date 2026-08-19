@@ -36,15 +36,46 @@ object ArticleDeepLinks {
         }
     }
 
-    private fun compose(article: FeedArticleDto, summary: String): String = buildString {
+    private fun compose(article: FeedArticleDto, summary: String): String = link(
+        url = article.url,
+        title = article.title,
+        summary = summary,
+        imageUrl = article.imageUrl,
+        sourceName = article.sourceName,
+        category = article.category,
+        publishedAt = article.publishedAt,
+    )
+
+    /**
+     * The same link from loose fields, for callers that do not hold a
+     * [FeedArticleDto] — the share page builds one out of its archive row.
+     *
+     * Public so the format lives in exactly one place: a second builder that
+     * agreed with this one today would drift the first time either changed, and
+     * the client parses both.
+     *
+     * [referrer] becomes `src`, which is how the app tells a share-driven open
+     * apart from a notification tap.
+     */
+    fun link(
+        url: String,
+        title: String,
+        summary: String,
+        imageUrl: String?,
+        sourceName: String,
+        category: String,
+        publishedAt: Long,
+        referrer: String? = null,
+    ): String = buildString {
         append(SCHEME).append("://").append(HOST)
-        append("?url=").append(encode(article.url))
-        append("&title=").append(encode(article.title))
+        append("?url=").append(encode(url))
+        append("&title=").append(encode(title))
         if (summary.isNotEmpty()) append("&summary=").append(encode(summary))
-        article.imageUrl?.takeIf { it.isNotBlank() }?.let { append("&image=").append(encode(it)) }
-        append("&source=").append(encode(article.sourceName))
-        append("&category=").append(encode(article.category))
-        append("&published=").append(article.publishedAt)
+        imageUrl?.takeIf { it.isNotBlank() }?.let { append("&image=").append(encode(it)) }
+        append("&source=").append(encode(sourceName))
+        append("&category=").append(encode(category))
+        append("&published=").append(publishedAt)
+        referrer?.takeIf { it.isNotBlank() }?.let { append("&src=").append(encode(it)) }
     }
 
     /**

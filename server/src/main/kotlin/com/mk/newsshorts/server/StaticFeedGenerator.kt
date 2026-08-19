@@ -7,9 +7,13 @@ import com.mk.newsshorts.server.feed.FeedPageNames
 import com.mk.newsshorts.server.feed.repaginate
 import com.mk.newsshorts.server.ingest.IngestionPipeline
 import com.mk.newsshorts.server.ingest.RssFetcher
+import com.mk.newsshorts.server.model.FeedArticleDto
 import com.mk.newsshorts.server.model.FeedResponse
 import com.mk.newsshorts.server.push.BreakingNewsPusher
 import com.mk.newsshorts.server.push.PushNotifier
+import com.mk.newsshorts.server.share.SharePage
+import com.mk.newsshorts.server.share.ShareSlug
+import com.mk.newsshorts.server.share.SharedArticle
 import com.mk.newsshorts.server.store.ArticleStore
 import com.mk.newsshorts.server.summarize.buildSummarizer
 import org.slf4j.LoggerFactory
@@ -31,6 +35,8 @@ import java.io.File
  *   v1/search/{lang}.json            — everything published in one language, in
  *                                      one file, for the app to search offline
  *   v1/meta.json                     — available languages, categories, countries
+ *   a/{lang}/{slug}/index.html       — one shared article's landing page
+ *   404.html                         — what a link older than the archive gets
  */
 object StaticFeedGenerator {
 
@@ -67,6 +73,39 @@ object StaticFeedGenerator {
      */
     const val SEARCH_INDEX_ARTICLES = 800
 
+    /**
+     * How long a shared link keeps opening the story it was sent for.
+     *
+     * Far longer than the feed's own retention, which is a week: a feed answers
+     * what is worth reading now, and a link in someone's chat is a promise made
+     * to whoever sent it. Ninety days is the same horizon [FeedPlaced] rows
+     * already keep, for the same reason — the thing outlives the article.
+     */
+    private const val DEFAULT_SHARE_RETENTION_DAYS = 90
+
+    /**
+     * The real limit on the archive, and the one worth watching.
+     *
+     * Every archived row becomes a file in the artifact CI uploads, and the
+     * whole site is rebuilt and redeployed every half hour — so this is a
+     * publishing budget, not a storage one, and it is what really decides how
+     * long a shared link lives. [DEFAULT_SHARE_RETENTION_DAYS] never binds
+     * first at the volume the feed runs today.
+     *
+     * The arithmetic behind the default, so it can be re-done rather than
+     * guessed at: the feed publishes about three thousand articles a day across
+     * both languages, and a page measures around 3.9 KB — 4.6 KB in Arabic,
+     * where UTF-8 costs two bytes a character and the hand-off link percent-
+     * encodes them to nine. Forty thousand pages is then roughly a fortnight of
+     * cover and 155 MB of site, against Pages' 1 GB. Below about twenty-five
+     * thousand the archive stops outliving the feed's own week, which is the
+     * only reason it exists. Raise it once a run's timing shows what the deploy
+     * can carry.
+     */
+    private const val DEFAULT_MAX_SHARE_PAGES = 40_000
+
+    private const val MILLIS_PER_DAY = 24L * 60 * 60 * 1000
+
     fun generate(outputDir: File, dbPath: String) = runBlocking {
         val store = ArticleStore(dbPath)
         IngestionPipeline(store, RssFetcher(), buildSummarizer()).runCycle()
@@ -96,9 +135,32 @@ object StaticFeedGenerator {
         }
 
         val searchDir = File(outputDir, "v1/search").apply { mkdirs() }
+        val shareable = mutableListOf<SharedArticle>()
         FeedCatalog.languages.forEach { language ->
-            filesWritten += writeSearchIndex(searchDir, store, language)
+            val (articles, total) = store.feed(
+                language = language, category = null,
+                limit = SEARCH_INDEX_ARTICLES, offset = 0, country = null,
+                diversifyBySource = false,
+            )
+            filesWritten += writeSearchIndex(searchDir, language, articles, total)
+            // The same read serves both: the search corpus is already the
+            // widest published set in a language, and an article nobody can
+            // reach is an article nobody can share.
+            shareable += articles.map { article ->
+                SharedArticle(
+                    slug = ShareSlug.of(article.url),
+                    language = article.language,
+                    title = article.title,
+                    summary = article.summary,
+                    url = article.url,
+                    imageUrl = article.imageUrl,
+                    sourceName = article.sourceName,
+                    category = article.category,
+                    publishedAt = article.publishedAt,
+                )
+            }
         }
+        store.archiveShared(shareable)
 
         File(outputDir, "v1/meta.json").writeText(
             json.encodeToString(
@@ -114,7 +176,8 @@ object StaticFeedGenerator {
         writeAppConfig(outputDir)
         filesWritten++
 
-        if (writeSharePage(outputDir)) filesWritten++
+        if (writeLegacySharePage(outputDir)) filesWritten++
+        filesWritten += writeSharePages(outputDir, store)
 
         // Without this, GitHub Pages runs the output through Jekyll.
         File(outputDir, ".nojekyll").writeText("")
@@ -183,16 +246,21 @@ object StaticFeedGenerator {
     }
 
     /**
-     * The page a shared link lands on. It hands off to the app when installed
-     * and otherwise shows the story with a link to the store and the source, so
-     * a recipient without the app still gets something useful.
+     * The landing page builds released before per-article pages existed still
+     * link to: one page at `a/`, carrying the whole article in its query string
+     * and drawing it on load.
+     *
+     * Those builds are installed and cannot be recalled, and every link they
+     * have already produced points here — so this stays published even though
+     * nothing new points at it. It is also the reason those links never
+     * unfurled: a crawler runs no script and saw an empty document.
      *
      * Returns whether it was written. A missing template is reported and skipped
      * rather than thrown: publishing the feed is this job's purpose, and the
      * share page is an extra that must not be able to stop ingestion, generation
      * and notifications.
      */
-    private fun writeSharePage(outputDir: File): Boolean {
+    private fun writeLegacySharePage(outputDir: File): Boolean {
         val template = javaClass.getResourceAsStream("/share.html")
             ?.bufferedReader()?.readText()
         if (template == null) {
@@ -208,12 +276,74 @@ object StaticFeedGenerator {
     }
 
     /**
+     * Writes a landing page for every archived article, and returns the file
+     * count.
+     *
+     * One file per article per language, because the preview card a messaging
+     * app draws is built from tags in the document it fetches, and none of those
+     * crawlers run scripts. There is no way to serve a per-article `<head>` from
+     * one page on a static host.
+     *
+     * Pruning happens here rather than during ingestion so that the archive's
+     * lifetime is decided in the same place as the publishing budget that
+     * actually governs it.
+     */
+    private fun writeSharePages(outputDir: File, store: ArticleStore): Int {
+        val retentionDays = envInt("SHARE_PAGE_RETENTION_DAYS", DEFAULT_SHARE_RETENTION_DAYS)
+        val dropped = store.pruneShared(System.currentTimeMillis() - retentionDays * MILLIS_PER_DAY)
+        if (dropped > 0) log.info("Dropped $dropped share pages older than $retentionDays days")
+
+        val siteBaseUrl = siteBaseUrl()
+        val storeUrl = System.getenv("PLAY_STORE_URL").orEmpty()
+        val pages = store.sharedArticles(envInt("MAX_SHARE_PAGES", DEFAULT_MAX_SHARE_PAGES))
+
+        var bytes = 0L
+        pages.forEach { article ->
+            val html = SharePage.render(article, siteBaseUrl, storeUrl)
+            bytes += html.length
+            File(outputDir, SharePage.pathFor(article))
+                .apply { parentFile.mkdirs() }
+                .writeText(html)
+        }
+
+        // One stylesheet and one script for all of them. Inlined, they would be
+        // repeated as many times as the archive is deep.
+        File(outputDir, SharePage.STYLESHEET_PATH)
+            .apply { parentFile.mkdirs() }
+            .writeText(SharePage.stylesheet())
+        File(outputDir, SharePage.SCRIPT_PATH)
+            .apply { parentFile.mkdirs() }
+            .writeText(SharePage.script())
+        File(outputDir, "404.html").writeText(SharePage.notFound(siteBaseUrl, storeUrl))
+
+        // Logged every run because this is the number that decides how long a
+        // deploy takes, and it is invisible until it hurts.
+        log.info("Wrote ${pages.size} share pages, ${bytes / 1024} KiB of HTML")
+        return pages.size + 3
+    }
+
+    /**
+     * The site's own address, which the pages need in absolute form — a preview
+     * card's `og:url` and `og:image` are fetched by a crawler that has no page
+     * to resolve a relative path against.
+     *
+     * The default matches the app's `SHARE_BASE_URL` default, so a local run
+     * produces the same links CI does.
+     */
+    private fun siteBaseUrl(): String =
+        System.getenv("SITE_BASE_URL")?.takeUnless { it.isBlank() }?.trim()?.trimEnd('/')
+            ?: "https://mahmoudibrahimabdulfattah.github.io/NewsShortsCMP"
+
+    /**
      * Writes one language's search corpus and returns how many files it wrote.
      *
      * Everything published in that language in one file, newest first, with no
      * category or country filter — a reader searching does not care which tab a
      * story would have appeared under. Country articles are included because
      * [ArticleStore.feed] only filters on country when asked to.
+     *
+     * Handed the rows rather than reading them, because the same read is what
+     * the share archive is built from and it is the widest query in the run.
      *
      * Not interleaved by source, unlike a feed: the mix exists so no publisher
      * owns the top of a feed nobody asked for, and a search result list is
@@ -223,12 +353,12 @@ object StaticFeedGenerator {
      * the same code that reads a feed page — one file, and the feed's own
      * mapper and article model all the way through.
      */
-    private fun writeSearchIndex(searchDir: File, store: ArticleStore, language: String): Int {
-        val (articles, total) = store.feed(
-            language = language, category = null,
-            limit = SEARCH_INDEX_ARTICLES, offset = 0, country = null,
-            diversifyBySource = false,
-        )
+    private fun writeSearchIndex(
+        searchDir: File,
+        language: String,
+        articles: List<FeedArticleDto>,
+        total: Long,
+    ): Int {
         File(searchDir, "$language.json").writeText(
             json.encodeToString(FeedResponse(articles = articles, total = total, nextPage = null))
         )

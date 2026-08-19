@@ -3,6 +3,7 @@ package com.mk.newsshorts.server.store
 import com.mk.newsshorts.server.feed.FeedLayout
 import com.mk.newsshorts.server.feed.FeedPage
 import com.mk.newsshorts.server.model.FeedArticleDto
+import com.mk.newsshorts.server.share.SharedArticle
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.JoinType
 import org.jetbrains.exposed.sql.SchemaUtils
@@ -18,6 +19,7 @@ import org.jetbrains.exposed.sql.insertIgnore
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNull
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.upsert
 
 object Articles : Table("articles") {
     val id = long("id").autoIncrement()
@@ -122,6 +124,34 @@ object PushLog : Table("push_log") {
     override val primaryKey = PrimaryKey(topic)
 }
 
+/**
+ * The articles a shared link can still land on.
+ *
+ * A copy rather than a view, because [Articles] is pruned to a week — deep
+ * enough for a feed, and nowhere near long enough for a link somebody sent a
+ * friend. These rows carry everything a landing page renders, so a page can be
+ * rebuilt long after the article itself has gone, and they are cheap: no
+ * description, no country, no join.
+ *
+ * Keyed by the slug the page is published under rather than by article id, for
+ * the reason [com.mk.newsshorts.server.share.ShareSlug] exists — an id from a
+ * restored database can name a different story, and this table outlives far
+ * more restores than the feed does.
+ */
+object SharedArticles : Table("shared_articles") {
+    val slug = varchar("slug", 16)
+    val language = varchar("language", 8)
+    val title = text("title")
+    val summary = text("summary")
+    val url = text("url")
+    val imageUrl = text("image_url").nullable()
+    val sourceName = text("source_name")
+    val category = varchar("category", 32)
+    val publishedAt = long("published_at").index()
+
+    override val primaryKey = PrimaryKey(slug, language)
+}
+
 class ArticleStore(dbPath: String) {
 
     init {
@@ -131,6 +161,7 @@ class ArticleStore(dbPath: String) {
         transaction {
             SchemaUtils.createMissingTablesAndColumns(
                 Articles, ArticleTexts, PushLog, FeedPages, FeedPlaced, FeedPageState,
+                SharedArticles,
             )
         }
     }
@@ -252,6 +283,73 @@ class ArticleStore(dbPath: String) {
             it[createdAt] = System.currentTimeMillis()
         }
         result.getOrNull(Articles.id)
+    }
+
+    /**
+     * Records what a landing page needs, for every article being published.
+     *
+     * An upsert and not an insert: an article can reach a feed before the
+     * summarizer has got to it, carrying the trimmed description as a stand-in.
+     * The real summary lands a cycle or two later, and an insert-only archive
+     * would keep the stand-in on the page for as long as the link lives.
+     */
+    fun archiveShared(articles: List<SharedArticle>) {
+        if (articles.isEmpty()) return
+        transaction {
+            articles.forEach { article ->
+                SharedArticles.upsert {
+                    it[slug] = article.slug
+                    it[language] = article.language
+                    it[title] = article.title
+                    it[summary] = article.summary
+                    it[url] = article.url
+                    it[imageUrl] = article.imageUrl
+                    it[sourceName] = article.sourceName
+                    it[category] = article.category
+                    it[publishedAt] = article.publishedAt
+                }
+            }
+        }
+    }
+
+    /**
+     * The archive, newest first, capped at [limit].
+     *
+     * The cap is a publishing budget, not a storage one: every row here becomes
+     * a file in the artifact CI uploads on every run, and the site is rebuilt
+     * from scratch each time. Newest first because a link's chance of still
+     * being opened falls off with the story's age.
+     */
+    fun sharedArticles(limit: Int): List<SharedArticle> = transaction {
+        SharedArticles.selectAll()
+            .orderBy(SharedArticles.publishedAt, SortOrder.DESC)
+            .limit(limit)
+            .map {
+                SharedArticle(
+                    slug = it[SharedArticles.slug],
+                    language = it[SharedArticles.language],
+                    title = it[SharedArticles.title],
+                    summary = it[SharedArticles.summary],
+                    url = it[SharedArticles.url],
+                    imageUrl = it[SharedArticles.imageUrl],
+                    sourceName = it[SharedArticles.sourceName],
+                    category = it[SharedArticles.category],
+                    publishedAt = it[SharedArticles.publishedAt],
+                )
+            }
+    }
+
+    /**
+     * Drops archived articles published before [cutoffMillis], which is how a
+     * shared link eventually stops working.
+     *
+     * Deliberately a much older cutoff than [prune] takes: the two answer
+     * different questions. That one asks what is still worth putting in front of
+     * a reader; this one asks how long a link somebody already sent should keep
+     * opening something.
+     */
+    fun pruneShared(cutoffMillis: Long): Int = transaction {
+        SharedArticles.deleteWhere { SharedArticles.publishedAt less cutoffMillis }
     }
 
     /**

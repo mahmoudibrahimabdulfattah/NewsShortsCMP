@@ -65,6 +65,16 @@ jobs:
           # Empty until the app is published; the share page then hides its
           # store button rather than linking somewhere that 404s.
           PLAY_STORE_URL: ${{ vars.PLAY_STORE_URL }}
+          # A shared article's landing page needs absolute URLs — the crawler
+          # that draws the preview card has no page to resolve a relative one
+          # against. Unset falls back to this same address.
+          SITE_BASE_URL: https://mahmoudibrahimabdulfattah.github.io/NewsShortsCMP
+          # How long a shared link keeps opening its story, and how many pages
+          # that is allowed to cost. The page count is the one that binds: every
+          # archived article is a file in the artifact uploaded below, on every
+          # run. Unset means 90 days and 40,000 pages, about 155 MB.
+          SHARE_PAGE_RETENTION_DAYS: ${{ vars.SHARE_PAGE_RETENTION_DAYS }}
+          MAX_SHARE_PAGES: ${{ vars.MAX_SHARE_PAGES }}
           # The kill switch for released builds. Raising this in repository
           # variables blocks every build below it on the next publish — no app
           # release needed, which is the whole point. Unset means "support all".

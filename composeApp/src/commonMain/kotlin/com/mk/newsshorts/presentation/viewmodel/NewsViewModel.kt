@@ -53,7 +53,9 @@ import com.mk.newsshorts.analytics.AnalyticsReporter
 import com.mk.newsshorts.config.BuildConfig
 import com.mk.newsshorts.navigation.ArticleDeepLink
 import com.mk.newsshorts.navigation.ArticleDeepLinks
+import com.mk.newsshorts.data.remote.SharePageResolver
 import com.mk.newsshorts.navigation.DeepLinkBus
+import com.mk.newsshorts.navigation.PendingLink
 import com.mk.newsshorts.navigation.SignInLinkBus
 import com.mk.newsshorts.navigation.toNewsArticle
 import com.mk.newsshorts.notifications.PushSubscriber
@@ -90,6 +92,7 @@ class NewsViewModel(
     private val deviceIntegrityInspector: DeviceIntegrityInspector,
     private val authClient: AuthClient,
     private val remoteSyncClient: RemoteSyncClient,
+    private val sharePageResolver: SharePageResolver,
 ) : BaseViewModel() {
 
     private val mutableState: MutableStateFlow<NewsUiState> = MutableStateFlow(NewsUiState())
@@ -431,9 +434,12 @@ class NewsViewModel(
 
     private fun observeDeepLinks() {
         viewModelScope.launch {
-            deepLinkBus.pending.collect { link ->
-                if (link == null) return@collect
-                processEvent(NewsUiEvent.OpenDeepLink(link))
+            deepLinkBus.pending.collect { pending ->
+                when (pending) {
+                    null -> return@collect
+                    is PendingLink.Article -> processEvent(NewsUiEvent.OpenDeepLink(pending.link))
+                    is PendingLink.SharePage -> processEvent(NewsUiEvent.OpenSharePage(pending.url))
+                }
                 // Both this and the ViewModel outlive the Activity, so an
                 // unconsumed link would reopen the screen on every resume.
                 deepLinkBus.consume()
@@ -544,6 +550,7 @@ class NewsViewModel(
                 mutableEffect.emit(NewsUiEffect.OpenUrl(privacyPolicyUrl()))
             }
             is NewsUiEvent.OpenDeepLink -> handleOpenDeepLink(event.link)
+            is NewsUiEvent.OpenSharePage -> handleOpenSharePage(event.url)
             is NewsUiEvent.ShareArticle -> handleShareArticle(event.article)
             is NewsUiEvent.SaveArticle -> handleSaveArticle(event.article)
             is NewsUiEvent.RemoveSavedArticle -> handleRemoveSavedArticle(event.article)
@@ -1030,6 +1037,23 @@ class NewsViewModel(
      * real image and timestamp — and falls back to rebuilding the article from
      * the link, which is all a cold start has.
      */
+    /**
+     * Turns a shared landing page into the article it names, and opens it.
+     *
+     * Falls back to opening the page itself, which is not a failure state so
+     * much as the experience everyone without the app already gets: it renders
+     * the story, offers the source, and offers the app. That covers a reader
+     * who is offline, a link older than the published archive, and a site
+     * mid-deploy — none of which should end at a blank feed.
+     */
+    private fun handleOpenSharePage(pageUrl: String) {
+        viewModelScope.launch {
+            val link = sharePageResolver.resolve(pageUrl)
+            if (link != null) processEvent(NewsUiEvent.OpenDeepLink(link))
+            else mutableEffect.emit(NewsUiEffect.OpenUrl(pageUrl))
+        }
+    }
+
     private fun handleOpenDeepLink(link: ArticleDeepLink) {
         val state = mutableState.value
         val article = state.articles.firstOrNull { it.articleUrl.value == link.url }

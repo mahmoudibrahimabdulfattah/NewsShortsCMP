@@ -8,6 +8,7 @@ import com.mk.newsshorts.data.local.SeenArticlesStore
 import com.mk.newsshorts.data.local.SettingsManager
 import com.mk.newsshorts.data.remote.RemoteConfigClient
 import com.mk.newsshorts.data.remote.NewsApiClient
+import com.mk.newsshorts.data.remote.SharePageResolver
 import com.mk.newsshorts.data.remote.createHttpClient
 import com.mk.newsshorts.data.repository.NewsRepositoryImpl
 import com.mk.newsshorts.domain.repository.NewsRepository
@@ -22,6 +23,7 @@ val dataModule = module {
     single(createdAtStart = false) { createHttpClient() }
     single(createdAtStart = false) { NewsApiClient(httpClient = get()) }
     single(createdAtStart = false) { RemoteConfigClient(httpClient = get()) }
+    single(createdAtStart = false) { SharePageResolver(httpClient = get()) }
     single(createdAtStart = false) { NewsLocalDataSource(settingsStorage = get()) }
     single(createdAtStart = false) { SettingsManager(settingsStorage = get()) }
     single(createdAtStart = false) { SavedArticlesStore(settingsStorage = get()) }

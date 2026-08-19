@@ -21,6 +21,7 @@ import com.mk.newsshorts.di.initializeKoin
 import com.mk.newsshorts.di.platformModule
 import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
+import com.mk.newsshorts.config.BuildConfig
 import com.mk.newsshorts.navigation.ArticleDeepLinks
 import com.mk.newsshorts.navigation.DeepLinkBus
 import com.mk.newsshorts.navigation.SignInLinkBus
@@ -95,6 +96,15 @@ class MainActivity : ComponentActivity() {
         val articleLink = ArticleDeepLinks.parse(data)
         if (articleLink != null) {
             deepLinkBus.post(articleLink)
+            return
+        }
+        // A per-article page names a story instead of carrying it, so it has to
+        // be fetched before there is anything to open. Posted rather than
+        // resolved here: this runs during launch, and the work is a network
+        // round trip the ViewModel already has a scope for.
+        val sharePage = ArticleDeepLinks.sharePageUrl(data, BuildConfig.SHARE_BASE_URL)
+        if (sharePage != null) {
+            deepLinkBus.postSharePage(sharePage)
             return
         }
         signInLinkBus.post(data)

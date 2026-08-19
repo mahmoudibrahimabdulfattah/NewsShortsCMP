@@ -4,6 +4,20 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** What arrived, and how much work is left before an article can be shown. */
+sealed interface PendingLink {
+
+    /** Ready to open: a notification, or a link that carries its own article. */
+    data class Article(val link: ArticleDeepLink) : PendingLink
+
+    /**
+     * A per-article landing page, which names a story rather than describing
+     * one. Someone has to fetch it before there is anything to open — see
+     * [com.mk.newsshorts.data.remote.SharePageResolver].
+     */
+    data class SharePage(val url: String) : PendingLink
+}
+
 /**
  * Hands a tapped notification or deep link to the ViewModel.
  *
@@ -18,11 +32,15 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class DeepLinkBus {
 
-    private val mutablePending = MutableStateFlow<ArticleDeepLink?>(null)
-    val pending: StateFlow<ArticleDeepLink?> = mutablePending.asStateFlow()
+    private val mutablePending = MutableStateFlow<PendingLink?>(null)
+    val pending: StateFlow<PendingLink?> = mutablePending.asStateFlow()
 
     fun post(link: ArticleDeepLink) {
-        mutablePending.value = link
+        mutablePending.value = PendingLink.Article(link)
+    }
+
+    fun postSharePage(url: String) {
+        mutablePending.value = PendingLink.SharePage(url)
     }
 
     fun consume() {
