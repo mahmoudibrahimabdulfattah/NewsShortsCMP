@@ -217,13 +217,21 @@ private fun EmptyInbox(title: String, body: String, modifier: Modifier = Modifie
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center,
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             // Centred explicitly: the column centres the block, not the lines
             // inside it, so a wrapped sentence fell back to the reading
             // direction and sat under a centred heading looking misaligned.
+            //
+            // And leading tightened from the theme's. Arabic body text carries
+            // 1.4x for long-form reading, which is right for an article and
+            // wrong for two centred lines in a card: one sentence broke into
+            // halves further apart than the sentence was from its own heading,
+            // so it read as two unrelated fragments. Derived from the font size
+            // rather than fixed, so it still follows the reader's text scale.
             Text(
                 text = body,
                 style = MaterialTheme.typography.bodyMedium,
+                lineHeight = MaterialTheme.typography.bodyMedium.fontSize * 1.35f,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                 textAlign = TextAlign.Center,
             )
