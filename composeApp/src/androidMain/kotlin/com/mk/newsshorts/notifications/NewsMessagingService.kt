@@ -118,6 +118,7 @@ class NewsMessagingService : FirebaseMessagingService() {
                     title = title,
                     body = body,
                     deepLink = link,
+                    articleUrl = ArticleDeepLinks.parse(link)?.url.orEmpty(),
                 )
             )
         }

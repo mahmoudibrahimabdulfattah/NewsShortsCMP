@@ -247,8 +247,9 @@ private fun NewsScreenContent(
             }
             Overlay.NotificationInbox -> {
                 NotificationInboxScreen(
-                    notifications = uiState.inboxNotifications,
+                    notifications = uiState.visibleInboxNotifications,
                     unreadIds = uiState.unreadInboxIds,
+                    isRefreshing = uiState.isRefreshingInbox,
                     onEvent = onEvent,
                     modifier = Modifier.fillMaxSize()
                 )

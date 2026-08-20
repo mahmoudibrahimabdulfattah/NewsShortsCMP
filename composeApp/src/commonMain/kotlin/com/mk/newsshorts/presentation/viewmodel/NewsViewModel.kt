@@ -595,9 +595,11 @@ class NewsViewModel(
             is NewsUiEvent.RemoveSavedArticle -> handleRemoveSavedArticle(event.article)
             NewsUiEvent.OpenSearch -> handleOpenSearch()
             NewsUiEvent.OpenNotificationInbox -> handleOpenNotificationInbox()
-            is NewsUiEvent.OpenInboxNotification ->
-                handleOpenInboxNotification(event.sentAt, event.deepLink)
+            is NewsUiEvent.OpenInboxNotification -> handleOpenInboxNotification(event.deepLink)
             NewsUiEvent.MarkAllNotificationsRead -> handleMarkAllNotificationsRead()
+            NewsUiEvent.RefreshNotificationInbox -> refreshNotificationInbox(pulled = true)
+            is NewsUiEvent.DismissInboxNotification -> handleDismissInboxNotification(event.articleUrl)
+            is NewsUiEvent.RestoreInboxNotification -> handleRestoreInboxNotification(event.articleUrl)
             is NewsUiEvent.SearchQueryChanged -> handleSearchQueryChanged(event.query)
             is NewsUiEvent.RunSearch -> handleRunSearch(event.query)
             NewsUiEvent.ClearSearchQuery -> handleSearchQueryChanged("")
@@ -973,11 +975,18 @@ class NewsViewModel(
      * not a mark. One small file, and a failure leaves the previous list in
      * place rather than emptying the screen.
      */
-    private fun refreshNotificationInbox() {
+    private fun refreshNotificationInbox(pulled: Boolean = false) {
+        if (pulled) mutableState.update { it.copy(isRefreshingInbox = true) }
         viewModelScope.launch {
             val language = FeedLanguage.resolve(mutableState.value.selectedLanguage.code)
             val sent = notificationInboxClient.fetch(language)
-            if (sent.isEmpty()) return@launch
+            // An empty answer is a failure as often as it is an empty inbox —
+            // the client cannot tell them apart — so the list stands rather
+            // than being wiped by a bad connection. The spinner still stops.
+            if (sent.isEmpty()) {
+                mutableState.update { it.copy(isRefreshingInbox = false) }
+                return@launch
+            }
             mutableState.update { state ->
                 state.copy(
                     inboxNotifications = sent.map {
@@ -986,9 +995,12 @@ class NewsViewModel(
                             title = it.title,
                             body = it.body,
                             deepLink = it.deepLink,
+                            articleUrl = ArticleDeepLinks.parse(it.deepLink)?.url.orEmpty(),
                         )
                     },
                     inboxRead = notificationInboxStore.read(),
+                    inboxDismissed = notificationInboxStore.dismissed(),
+                    isRefreshingInbox = false,
                 )
             }
         }
@@ -1010,9 +1022,31 @@ class NewsViewModel(
         refreshNotificationInbox()
     }
 
+    /**
+     * Hides one row on this device.
+     *
+     * There is nothing else it could do: the list is a single file published
+     * for every reader, so a dismissal is local by construction. Written
+     * through the store rather than held in state so it survives the next
+     * refresh, which replaces the published list wholesale.
+     */
+    private fun handleDismissInboxNotification(articleUrl: String) {
+        notificationInboxStore.dismiss(articleUrl)
+        mutableState.update { it.copy(inboxDismissed = notificationInboxStore.dismissed()) }
+    }
+
+    /**
+     * Undo. A swipe is one gesture away from a story the reader wanted, and
+     * the row cannot be recovered from anywhere else once it is hidden.
+     */
+    private fun handleRestoreInboxNotification(articleUrl: String) {
+        notificationInboxStore.restore(articleUrl)
+        mutableState.update { it.copy(inboxDismissed = notificationInboxStore.dismissed()) }
+    }
+
     /** One of the two things that clears a mark; see [handleOpenInboxNotification]. */
     private fun handleMarkAllNotificationsRead() {
-        val newest = mutableState.value.inboxNotifications.maxOfOrNull { it.sentAt } ?: return
+        val newest = mutableState.value.visibleInboxNotifications.maxOfOrNull { it.sentAt } ?: return
         notificationInboxStore.markAllRead(newest)
         mutableState.update { it.copy(inboxRead = notificationInboxStore.read()) }
     }
@@ -1022,15 +1056,9 @@ class NewsViewModel(
      * notification tap takes — including the details screen it lands on and the
      * origin it is reported under.
      */
-    private fun handleOpenInboxNotification(sentAt: Long, deepLink: String) {
+    private fun handleOpenInboxNotification(deepLink: String) {
         val link = ArticleDeepLinks.parse(deepLink) ?: return
-        val article = link.toNewsArticle() ?: return
-        // Marked before the screen opens, not after it closes: the reader has
-        // gone into the story, and a mark that waited for them to come back
-        // would still be there if they left from the details screen instead.
-        notificationInboxStore.markRead(sentAt)
-        mutableState.update { it.copy(inboxRead = notificationInboxStore.read()) }
-        handleOpenArticleDetails(article, ArticleOpenOrigin.PUSH)
+        handleOpenDeepLink(link)
     }
 
     private fun handleOpenSearch() {
@@ -1182,6 +1210,18 @@ class NewsViewModel(
                 AnalyticsEvent.NotificationOpened(article.category.apiValue, article.source.name.value)
             )
         }
+        // The reader has gone into the story, so the inbox row for it is read —
+        // whether they came from a row, from the notification still sitting in
+        // the tray, or from a shared link that happened to also be pushed.
+        //
+        // Marked before the screen opens rather than after it closes: a mark
+        // that waited for them to come back would still be there if they left
+        // from the details screen instead. And written to the store first, so a
+        // cold start from a tray tap records it even though the published list
+        // has not arrived yet — when it does, the row is already read.
+        notificationInboxStore.markRead(article.articleUrl.value)
+        mutableState.update { it.copy(inboxRead = notificationInboxStore.read()) }
+
         handleOpenArticleDetails(
             article,
             if (fromShare) ArticleOpenOrigin.SHARE else ArticleOpenOrigin.PUSH,
