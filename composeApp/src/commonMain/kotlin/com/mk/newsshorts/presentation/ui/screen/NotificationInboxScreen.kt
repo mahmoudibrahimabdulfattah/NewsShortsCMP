@@ -24,6 +24,22 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Icon
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -56,14 +72,21 @@ import com.mk.newsshorts.presentation.ui.components.formatPublishedTime
  * not clear a mark, so the set has to be the one the ViewModel holds, changed
  * only by opening a notification or by the action in the bar.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationInboxScreen(
     notifications: List<InboxNotification>,
     unreadIds: Set<Long>,
+    isRefreshing: Boolean,
     onEvent: (NewsUiEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val strings = appStrings()
+    // Local to this screen rather than hoisted: an undo is only offered while
+    // the reader is still looking at the list they swiped in, and it dies with
+    // the screen on purpose.
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -88,35 +111,171 @@ fun NotificationInboxScreen(
                     }
                 },
             )
-            if (notifications.isEmpty()) {
-                EmptyInbox(
-                    title = strings.notificationInboxEmptyTitle,
-                    body = strings.notificationInboxEmptyBody,
-                    modifier = Modifier.padding(16.dp),
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    // The app draws behind the system navigation bar, so the
-                    // last card needs the inset added or it sits under it on
-                    // three-button navigation.
-                    contentPadding = WindowInsets.navigationBars
-                        .add(WindowInsets(left = 16.dp, top = 12.dp, right = 16.dp, bottom = 12.dp))
-                        .asPaddingValues(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(notifications, key = { it.sentAt }) { notification ->
-                        NotificationRow(
-                            notification = notification,
-                            isUnread = notification.sentAt in unreadIds,
-                            onClick = {
-                                onEvent(NewsUiEvent.OpenInboxNotification(notification.deepLink))
-                            },
-                        )
+            // Wraps the empty state too. A reader who opens an inbox that says
+            // nothing is here is exactly the one who will pull to check.
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { onEvent(NewsUiEvent.RefreshNotificationInbox) },
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                if (notifications.isEmpty()) {
+                    // Scrollable even when it holds one card, or there is no
+                    // gesture for the pull to attach to.
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                    ) {
+                        item {
+                            EmptyInbox(
+                                title = strings.notificationInboxEmptyTitle,
+                                body = strings.notificationInboxEmptyBody,
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        // The app draws behind the system navigation bar, so the
+                        // last card needs the inset added or it sits under it on
+                        // three-button navigation.
+                        contentPadding = WindowInsets.navigationBars
+                            .add(WindowInsets(left = 16.dp, top = 12.dp, right = 16.dp, bottom = 12.dp))
+                            .asPaddingValues(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(notifications, key = { it.sentAt }) { notification ->
+                            SwipeableNotificationRow(
+                                notification = notification,
+                                isUnread = notification.sentAt in unreadIds,
+                                onOpen = {
+                                    onEvent(NewsUiEvent.OpenInboxNotification(notification.deepLink))
+                                },
+                                onDismiss = {
+                                    onEvent(NewsUiEvent.DismissInboxNotification(notification.articleUrl))
+                                    scope.launch {
+                                        // Only one at a time: a reader clearing
+                                        // several in a row wants the last one
+                                        // offered back, not a queue of them.
+                                        snackbarHostState.currentSnackbarData?.dismiss()
+                                        val result = snackbarHostState.showSnackbar(
+                                            message = strings.notificationDismissed,
+                                            actionLabel = strings.undo,
+                                            duration = SnackbarDuration.Short,
+                                        )
+                                        if (result == SnackbarResult.ActionPerformed) {
+                                            onEvent(
+                                                NewsUiEvent.RestoreInboxNotification(
+                                                    notification.articleUrl
+                                                )
+                                            )
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.animateItem(),
+                            )
+                        }
                     }
                 }
             }
         }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(12.dp),
+        ) { data ->
+            // Colours named rather than defaulted. The theme defines the roles
+            // it actually uses and leaves the `inverse*` family at Material's
+            // baseline, so the undo action came out lavender — the one purple
+            // in an app built from two hues.
+            Snackbar(
+                snackbarData = data,
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                actionColor = MaterialTheme.colorScheme.primary,
+                shape = MaterialTheme.shapes.medium,
+            )
+        }
+    }
+}
+
+/**
+ * A row that can be swiped away.
+ *
+ * Both directions dismiss. Compose resolves `StartToEnd` and `EndToStart`
+ * against the layout direction, so committing to one of them would give the
+ * Arabic reader the mirror image of the English reader's gesture — and this app
+ * runs in both. Accepting either is also simply more forgiving than a gesture
+ * that silently springs back when swiped the wrong way.
+ *
+ * The confirm lambda reports the swipe and then returns false, so the box
+ * springs back and never rests in a dismissed position. The row still vanishes
+ * — the list drops it the moment the state updates. Letting the box settle
+ * instead left it stuck: the list is keyed by `sentAt`, so a row brought back
+ * by undo restored the saved swipe state along with it and redrew itself
+ * permanently swiped aside, showing the delete background and no content.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeableNotificationRow(
+    notification: InboxNotification,
+    isUnread: Boolean,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value != SwipeToDismissBoxValue.Settled) onDismiss()
+            false
+        },
+        // Half the row. A shorter threshold turns a hesitant scroll into a
+        // deletion; a longer one makes the gesture feel like it is refusing.
+        positionalThreshold = { distance -> distance * 0.5f },
+    )
+    SwipeToDismissBox(
+        state = dismissState,
+        modifier = modifier,
+        backgroundContent = { DismissBackground(dismissState.dismissDirection) },
+    ) {
+        NotificationRow(notification = notification, isUnread = isUnread, onClick = onOpen)
+    }
+}
+
+/**
+ * What sits under a row being swiped.
+ *
+ * The icon follows the drag rather than sitting on both sides at once, so the
+ * reader sees the action arriving from the edge their thumb is pulling towards.
+ * Crimson because this is the one destructive thing on the screen — the same
+ * reason `error` exists in the palette and the same restraint about using it.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DismissBackground(direction: SwipeToDismissBoxValue) {
+    // Nothing at all at rest. The row card is translucent, so a background left
+    // painted underneath it tinted every row pink whether or not anyone was
+    // swiping — the whole list looked like it was in an error state.
+    if (direction == SwipeToDismissBoxValue.Settled) return
+
+    Box(
+        contentAlignment = if (direction == SwipeToDismissBoxValue.StartToEnd) {
+            Alignment.CenterStart
+        } else {
+            Alignment.CenterEnd
+        },
+        modifier = Modifier
+            .fillMaxSize()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.errorContainer)
+            .padding(horizontal = 24.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Delete,
+            contentDescription = appStrings().deleteNotification,
+            tint = MaterialTheme.colorScheme.onErrorContainer,
+        )
     }
 }
 

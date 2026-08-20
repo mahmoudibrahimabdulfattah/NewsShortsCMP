@@ -57,6 +57,18 @@ sealed interface NewsUiEvent {
     /** The other one. Clears every mark currently in the list. */
     data object MarkAllNotificationsRead : NewsUiEvent
 
+    /** Pull-to-refresh on the inbox. */
+    data object RefreshNotificationInbox : NewsUiEvent
+
+    /**
+     * Swiped away. Local only — the list is published for every reader, so this
+     * hides the row on this device and nothing more.
+     */
+    data class DismissInboxNotification(val articleUrl: String) : NewsUiEvent
+
+    /** What the snackbar's undo does. */
+    data class RestoreInboxNotification(val articleUrl: String) : NewsUiEvent
+
     /** Pushes a screen above the tabs. See [com.mk.newsshorts.presentation.mvi.Overlay]. */
     data class OpenOverlay(val overlay: Overlay) : NewsUiEvent
 

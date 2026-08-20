@@ -69,4 +69,21 @@ class NotificationInboxStoreTest {
     fun `the key ignores surrounding whitespace`() {
         assertEquals(articleKey(story), articleKey("  $story\n"))
     }
+
+    @Test
+    fun `nothing is dismissed until something is`() {
+        assertEquals(emptySet(), decodeDismissed("", json))
+    }
+
+    /**
+     * Unreadable shows the row rather than hiding it. A row a reader has
+     * already dealt with reappearing is a small annoyance; one that vanishes
+     * because a value could not be parsed is a story they never learn they
+     * were sent.
+     */
+    @Test
+    fun `an unreadable dismissal list hides nothing`() {
+        assertEquals(emptySet(), decodeDismissed("{not valid json", json))
+        assertEquals(emptySet(), decodeDismissed("[]", json))
+    }
 }

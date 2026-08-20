@@ -13,7 +13,11 @@ class UnreadInboxCountTest {
 
     private fun url(sentAt: Long) = "https://example.com/$sentAt"
 
-    private fun state(read: InboxReadState, vararg sentAt: Long) = NewsUiState(
+    private fun state(
+        read: InboxReadState,
+        vararg sentAt: Long,
+        dismissed: Set<Int> = emptySet(),
+    ) = NewsUiState(
         inboxNotifications = sentAt.map {
             InboxNotification(
                 sentAt = it,
@@ -24,6 +28,7 @@ class UnreadInboxCountTest {
             )
         },
         inboxRead = read,
+        inboxDismissed = dismissed,
     )
 
     /**
@@ -93,6 +98,32 @@ class UnreadInboxCountTest {
 
         assertEquals(1, after.unreadInboxCount)
         assertEquals(setOf(4_000L), after.unreadInboxIds)
+    }
+
+    /**
+     * A swipe hides the row on this device — the list is published for every
+     * reader, so there is nothing else it could do. The bell has to agree, or
+     * it counts something the reader cannot see.
+     */
+    @Test
+    fun `a dismissed row leaves the list and the count`() {
+        val after = state(
+            InboxReadState(),
+            3_000L, 2_000L, 1_000L,
+            dismissed = setOf(articleKey(url(2_000L))),
+        )
+
+        assertEquals(listOf(3_000L, 1_000L), after.visibleInboxNotifications.map { it.sentAt })
+        assertEquals(2, after.unreadInboxCount)
+    }
+
+    /** Undo puts it back, marks and all. */
+    @Test
+    fun `restoring brings the row back unread`() {
+        val restored = state(InboxReadState(), 3_000L, 2_000L, 1_000L, dismissed = emptySet())
+
+        assertEquals(3, restored.visibleInboxNotifications.size)
+        assertEquals(3, restored.unreadInboxCount)
     }
 
     @Test

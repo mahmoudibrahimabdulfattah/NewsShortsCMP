@@ -597,6 +597,9 @@ class NewsViewModel(
             NewsUiEvent.OpenNotificationInbox -> handleOpenNotificationInbox()
             is NewsUiEvent.OpenInboxNotification -> handleOpenInboxNotification(event.deepLink)
             NewsUiEvent.MarkAllNotificationsRead -> handleMarkAllNotificationsRead()
+            NewsUiEvent.RefreshNotificationInbox -> refreshNotificationInbox(pulled = true)
+            is NewsUiEvent.DismissInboxNotification -> handleDismissInboxNotification(event.articleUrl)
+            is NewsUiEvent.RestoreInboxNotification -> handleRestoreInboxNotification(event.articleUrl)
             is NewsUiEvent.SearchQueryChanged -> handleSearchQueryChanged(event.query)
             is NewsUiEvent.RunSearch -> handleRunSearch(event.query)
             NewsUiEvent.ClearSearchQuery -> handleSearchQueryChanged("")
@@ -972,11 +975,18 @@ class NewsViewModel(
      * not a mark. One small file, and a failure leaves the previous list in
      * place rather than emptying the screen.
      */
-    private fun refreshNotificationInbox() {
+    private fun refreshNotificationInbox(pulled: Boolean = false) {
+        if (pulled) mutableState.update { it.copy(isRefreshingInbox = true) }
         viewModelScope.launch {
             val language = FeedLanguage.resolve(mutableState.value.selectedLanguage.code)
             val sent = notificationInboxClient.fetch(language)
-            if (sent.isEmpty()) return@launch
+            // An empty answer is a failure as often as it is an empty inbox —
+            // the client cannot tell them apart — so the list stands rather
+            // than being wiped by a bad connection. The spinner still stops.
+            if (sent.isEmpty()) {
+                mutableState.update { it.copy(isRefreshingInbox = false) }
+                return@launch
+            }
             mutableState.update { state ->
                 state.copy(
                     inboxNotifications = sent.map {
@@ -989,6 +999,8 @@ class NewsViewModel(
                         )
                     },
                     inboxRead = notificationInboxStore.read(),
+                    inboxDismissed = notificationInboxStore.dismissed(),
+                    isRefreshingInbox = false,
                 )
             }
         }
@@ -1010,9 +1022,31 @@ class NewsViewModel(
         refreshNotificationInbox()
     }
 
+    /**
+     * Hides one row on this device.
+     *
+     * There is nothing else it could do: the list is a single file published
+     * for every reader, so a dismissal is local by construction. Written
+     * through the store rather than held in state so it survives the next
+     * refresh, which replaces the published list wholesale.
+     */
+    private fun handleDismissInboxNotification(articleUrl: String) {
+        notificationInboxStore.dismiss(articleUrl)
+        mutableState.update { it.copy(inboxDismissed = notificationInboxStore.dismissed()) }
+    }
+
+    /**
+     * Undo. A swipe is one gesture away from a story the reader wanted, and
+     * the row cannot be recovered from anywhere else once it is hidden.
+     */
+    private fun handleRestoreInboxNotification(articleUrl: String) {
+        notificationInboxStore.restore(articleUrl)
+        mutableState.update { it.copy(inboxDismissed = notificationInboxStore.dismissed()) }
+    }
+
     /** One of the two things that clears a mark; see [handleOpenInboxNotification]. */
     private fun handleMarkAllNotificationsRead() {
-        val newest = mutableState.value.inboxNotifications.maxOfOrNull { it.sentAt } ?: return
+        val newest = mutableState.value.visibleInboxNotifications.maxOfOrNull { it.sentAt } ?: return
         notificationInboxStore.markAllRead(newest)
         mutableState.update { it.copy(inboxRead = notificationInboxStore.read()) }
     }

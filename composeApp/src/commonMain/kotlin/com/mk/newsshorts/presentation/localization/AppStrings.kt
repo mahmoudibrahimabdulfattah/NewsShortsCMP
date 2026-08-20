@@ -134,6 +134,11 @@ interface AppStrings {
     /** The bell on the feed, and the title of the screen it opens. */
     val notificationInbox: String
     val markAllNotificationsRead: String
+    /** Snackbar after a swipe, and the action that puts the row back. */
+    val notificationDismissed: String
+    val undo: String
+    /** Read out on the swipe target, so the gesture is not sight-only. */
+    val deleteNotification: String
     val notificationInboxEmptyTitle: String
     val notificationInboxEmptyBody: String
     /** Reads as a badge label, so it stays a bare number past the cap. */
@@ -400,6 +405,9 @@ object EnglishStrings : AppStrings {
     override val search: String = "Search"
     override val notificationInbox: String = "Notifications"
     override val markAllNotificationsRead: String = "Mark all read"
+    override val notificationDismissed: String = "Notification removed"
+    override val undo: String = "Undo"
+    override val deleteNotification: String = "Remove"
     override val notificationInboxEmptyTitle: String = "Nothing yet"
     override val notificationInboxEmptyBody: String =
         "Breaking stories you were sent show up here, so you can catch one you missed."
@@ -644,6 +652,9 @@ object ArabicStrings : AppStrings {
     override val search: String = "بحث"
     override val notificationInbox: String = "الإشعارات"
     override val markAllNotificationsRead: String = "تعليم الكل كمقروء"
+    override val notificationDismissed: String = "تم حذف الإشعار"
+    override val undo: String = "تراجع"
+    override val deleteNotification: String = "حذف"
     override val notificationInboxEmptyTitle: String = "لا يوجد شيء بعد"
     override val notificationInboxEmptyBody: String =
         "الأخبار العاجلة التي أُرسلت إليك تظهر هنا، حتى تلحق ما فاتك منها."

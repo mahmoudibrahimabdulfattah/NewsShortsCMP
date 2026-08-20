@@ -36,6 +36,42 @@ class NotificationInboxStore(
     fun read(): InboxReadState = decodeInboxReadState(settingsStorage.getString(KEY_READ, ""), json)
 
     /**
+     * The notifications this reader has swiped away.
+     *
+     * Local, and only local. The list itself is one file published for every
+     * reader, so there is nothing on the server a dismissal could remove — this
+     * hides a row on this device and says nothing about anyone else's.
+     *
+     * Keyed by article for the same reason the read marks are: it is the one
+     * identity every route to a notification carries.
+     */
+    fun dismissed(): Set<Int> =
+        decodeDismissed(settingsStorage.getString(KEY_DISMISSED, ""), json)
+
+    fun dismiss(articleUrl: String) {
+        if (articleUrl.isBlank()) return
+        val key = articleKey(articleUrl)
+        val current = dismissed()
+        if (key in current) return
+        saveDismissed((current + key).toList().takeLast(MAX_TRACKED_KEYS).toSet())
+    }
+
+    /** Undo. Kept as its own call so the snackbar has something exact to do. */
+    fun restore(articleUrl: String) {
+        if (articleUrl.isBlank()) return
+        val key = articleKey(articleUrl)
+        val current = dismissed()
+        if (key !in current) return
+        saveDismissed(current - key)
+    }
+
+    private fun saveDismissed(keys: Set<Int>) {
+        runCatching {
+            settingsStorage.putString(KEY_DISMISSED, json.encodeToString(DismissedArticles(keys)))
+        }
+    }
+
+    /**
      * One article, opened — from a row in the inbox, or from the notification
      * itself out in the tray.
      */
@@ -70,6 +106,7 @@ class NotificationInboxStore(
 
     private companion object {
         const val KEY_READ: String = "notification_inbox_read"
+        const val KEY_DISMISSED: String = "notification_inbox_dismissed"
 
         /**
          * The published inbox holds a month at four notifications a day, so this
@@ -106,3 +143,11 @@ internal fun articleKey(articleUrl: String): Int = articleUrl.trim().hashCode()
 internal fun decodeInboxReadState(raw: String, json: Json): InboxReadState =
     if (raw.isBlank()) InboxReadState()
     else runCatching { json.decodeFromString<InboxReadState>(raw) }.getOrElse { InboxReadState() }
+
+@Serializable
+private data class DismissedArticles(val keys: Set<Int> = emptySet())
+
+/** Unreadable reads as nothing dismissed, which shows a row rather than hiding it. */
+internal fun decodeDismissed(raw: String, json: Json): Set<Int> =
+    if (raw.isBlank()) emptySet()
+    else runCatching { json.decodeFromString<DismissedArticles>(raw).keys }.getOrElse { emptySet() }

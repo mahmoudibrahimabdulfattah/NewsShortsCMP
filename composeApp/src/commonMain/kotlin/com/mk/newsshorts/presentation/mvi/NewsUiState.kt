@@ -1,6 +1,7 @@
 package com.mk.newsshorts.presentation.mvi
 
 import com.mk.newsshorts.data.local.InboxReadState
+import com.mk.newsshorts.data.local.articleKey
 
 import com.mk.newsshorts.auth.AuthFailure
 import com.mk.newsshorts.auth.AuthUser
@@ -83,6 +84,12 @@ data class NewsUiState(
      * screen is up instead of flickering off row by row.
      */
     val inboxRead: InboxReadState = InboxReadState(),
+    /**
+     * Articles swiped away on this device. The list is one file published for
+     * every reader, so a dismissal can only ever hide a row here.
+     */
+    val inboxDismissed: Set<Int> = emptySet(),
+    val isRefreshingInbox: Boolean = false,
     /** Non-null when the backend no longer supports this build; blocks the UI. */
     val requiredUpdate: RequiredUpdate? = null,
     /** Result of the device-integrity check under the backend's policy. */
@@ -160,8 +167,17 @@ data class NewsUiState(
      * the marks are how a reader tells which stories they have already been
      * into, and clearing them on sight would answer the question by erasing it.
      */
+    /**
+     * The list as the reader sees it: published order, minus what they have
+     * swiped away. Kept separate from [inboxNotifications] so a refresh can
+     * replace the published list without having to remember what was hidden.
+     */
+    val visibleInboxNotifications: List<InboxNotification>
+        get() = inboxNotifications.filterNot { articleKey(it.articleUrl) in inboxDismissed }
+
     val unreadInboxIds: Set<Long>
-        get() = inboxNotifications.filterNot { inboxRead.isRead(it.sentAt, it.articleUrl) }
+        get() = visibleInboxNotifications
+            .filterNot { inboxRead.isRead(it.sentAt, it.articleUrl) }
             .map { it.sentAt }
             .toSet()
 
