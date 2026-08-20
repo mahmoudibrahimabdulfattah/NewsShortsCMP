@@ -7,13 +7,15 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Two things clear an unread mark and nothing else does: opening that
- * notification, or marking them all. What this decodes to is what a reader sees
- * marked, so a wrong answer here quietly loses a story they were told about.
+ * Two things clear an unread mark and nothing else does: opening that story —
+ * from the inbox or from the notification in the tray — or marking them all.
+ * What this decodes to is what a reader sees marked, so a wrong answer here
+ * quietly loses a story they were told about.
  */
 class NotificationInboxStoreTest {
 
     private val json = Json { ignoreUnknownKeys = true }
+    private val story = "https://example.com/story"
 
     @Test
     fun `an unset value reads as nothing read`() {
@@ -22,11 +24,9 @@ class NotificationInboxStoreTest {
 
     @Test
     fun `a stored state round-trips`() {
-        val state = InboxReadState(readAllBefore = 1_000L, readIds = setOf(2_000L, 3_000L))
+        val state = InboxReadState(readAllBefore = 1_000L, readArticles = setOf(7, 9))
 
-        val decoded = decodeInboxReadState(json.encodeToString(state), json)
-
-        assertEquals(state, decoded)
+        assertEquals(state, decodeInboxReadState(json.encodeToString(state), json))
     }
 
     /**
@@ -41,20 +41,32 @@ class NotificationInboxStoreTest {
     }
 
     @Test
-    fun `the sweep covers everything at or below it`() {
+    fun `the sweep covers everything sent at or below it`() {
         val state = InboxReadState(readAllBefore = 2_000L)
 
-        assertTrue(state.isRead(1_000L))
-        assertTrue(state.isRead(2_000L))
-        assertFalse(state.isRead(2_001L))
+        assertTrue(state.isRead(1_000L, story))
+        assertTrue(state.isRead(2_000L, story))
+        assertFalse(state.isRead(2_001L, story))
     }
 
-    /** One notification opened, above the sweep, is read on its own. */
+    /**
+     * The tray case. A push tapped from outside the app arrives carrying the
+     * article's URL and nothing about the send, so the mark has to hang on the
+     * article — and it has to hold whatever `sentAt` the published list turns
+     * out to carry for it.
+     */
     @Test
-    fun `an individually opened notification is read`() {
-        val state = InboxReadState(readAllBefore = 1_000L, readIds = setOf(3_000L))
+    fun `an opened article is read whenever it was sent`() {
+        val state = InboxReadState(readArticles = setOf(articleKey(story)))
 
-        assertTrue(state.isRead(3_000L))
-        assertFalse(state.isRead(2_000L))
+        assertTrue(state.isRead(9_000L, story))
+        assertTrue(state.isRead(1L, story))
+        assertFalse(state.isRead(9_000L, "https://example.com/other"))
+    }
+
+    /** A URL out of a JSON field can arrive padded; the same story is one key. */
+    @Test
+    fun `the key ignores surrounding whitespace`() {
+        assertEquals(articleKey(story), articleKey("  $story\n"))
     }
 }

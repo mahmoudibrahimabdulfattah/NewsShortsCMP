@@ -48,10 +48,11 @@ sealed interface NewsUiEvent {
     data object OpenNotificationInbox : NewsUiEvent
 
     /**
-     * A row in the inbox. Opening it is one of the two things that clears its
-     * unread mark, and it carries the link so the deep link path is reused.
+     * A row in the inbox. It carries the link and nothing else: the same
+     * handler serves a tap here and a tap on the notification in the tray, so
+     * both clear the mark by the same route.
      */
-    data class OpenInboxNotification(val sentAt: Long, val deepLink: String) : NewsUiEvent
+    data class OpenInboxNotification(val deepLink: String) : NewsUiEvent
 
     /** The other one. Clears every mark currently in the list. */
     data object MarkAllNotificationsRead : NewsUiEvent

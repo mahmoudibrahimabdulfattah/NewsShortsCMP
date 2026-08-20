@@ -110,12 +110,7 @@ fun NotificationInboxScreen(
                             notification = notification,
                             isUnread = notification.sentAt in unreadIds,
                             onClick = {
-                                onEvent(
-                                    NewsUiEvent.OpenInboxNotification(
-                                        sentAt = notification.sentAt,
-                                        deepLink = notification.deepLink,
-                                    )
-                                )
+                                onEvent(NewsUiEvent.OpenInboxNotification(notification.deepLink))
                             },
                         )
                     }

@@ -595,8 +595,7 @@ class NewsViewModel(
             is NewsUiEvent.RemoveSavedArticle -> handleRemoveSavedArticle(event.article)
             NewsUiEvent.OpenSearch -> handleOpenSearch()
             NewsUiEvent.OpenNotificationInbox -> handleOpenNotificationInbox()
-            is NewsUiEvent.OpenInboxNotification ->
-                handleOpenInboxNotification(event.sentAt, event.deepLink)
+            is NewsUiEvent.OpenInboxNotification -> handleOpenInboxNotification(event.deepLink)
             NewsUiEvent.MarkAllNotificationsRead -> handleMarkAllNotificationsRead()
             is NewsUiEvent.SearchQueryChanged -> handleSearchQueryChanged(event.query)
             is NewsUiEvent.RunSearch -> handleRunSearch(event.query)
@@ -986,6 +985,7 @@ class NewsViewModel(
                             title = it.title,
                             body = it.body,
                             deepLink = it.deepLink,
+                            articleUrl = ArticleDeepLinks.parse(it.deepLink)?.url.orEmpty(),
                         )
                     },
                     inboxRead = notificationInboxStore.read(),
@@ -1022,15 +1022,9 @@ class NewsViewModel(
      * notification tap takes — including the details screen it lands on and the
      * origin it is reported under.
      */
-    private fun handleOpenInboxNotification(sentAt: Long, deepLink: String) {
+    private fun handleOpenInboxNotification(deepLink: String) {
         val link = ArticleDeepLinks.parse(deepLink) ?: return
-        val article = link.toNewsArticle() ?: return
-        // Marked before the screen opens, not after it closes: the reader has
-        // gone into the story, and a mark that waited for them to come back
-        // would still be there if they left from the details screen instead.
-        notificationInboxStore.markRead(sentAt)
-        mutableState.update { it.copy(inboxRead = notificationInboxStore.read()) }
-        handleOpenArticleDetails(article, ArticleOpenOrigin.PUSH)
+        handleOpenDeepLink(link)
     }
 
     private fun handleOpenSearch() {
@@ -1182,6 +1176,18 @@ class NewsViewModel(
                 AnalyticsEvent.NotificationOpened(article.category.apiValue, article.source.name.value)
             )
         }
+        // The reader has gone into the story, so the inbox row for it is read —
+        // whether they came from a row, from the notification still sitting in
+        // the tray, or from a shared link that happened to also be pushed.
+        //
+        // Marked before the screen opens rather than after it closes: a mark
+        // that waited for them to come back would still be there if they left
+        // from the details screen instead. And written to the store first, so a
+        // cold start from a tray tap records it even though the published list
+        // has not arrived yet — when it does, the row is already read.
+        notificationInboxStore.markRead(article.articleUrl.value)
+        mutableState.update { it.copy(inboxRead = notificationInboxStore.read()) }
+
         handleOpenArticleDetails(
             article,
             if (fromShare) ArticleOpenOrigin.SHARE else ArticleOpenOrigin.PUSH,
