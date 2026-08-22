@@ -18,6 +18,7 @@ import com.mk.newsshorts.domain.model.NewsSource
 import com.mk.newsshorts.domain.model.PublishedTimestamp
 import com.mk.newsshorts.domain.model.SourceId
 import com.mk.newsshorts.domain.model.SourceName
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -87,9 +88,20 @@ private class FirestoreSyncClient(private val db: FirebaseFirestore) : RemoteSyn
         }
     }
 
-    override suspend fun deleteUserData(uid: String) {
-        runCatching { db.collection(USERS).document(uid).delete().await() }
-    }
+    // Firestore resolves a delete of a missing document successfully, so a
+    // retry after a partial failure can finish instead of getting stuck.
+    override suspend fun deleteUserData(uid: String): SyncDelete =
+        try {
+            db.collection(USERS).document(uid).delete().await()
+            SyncDelete.Success
+        } catch (cancellation: CancellationException) {
+            // A cancelled scope is not a failed delete. Reporting it as one
+            // would show the reader a deletion error for a screen they just
+            // left, and DeleteAccountUseCase rethrows cancellation on purpose.
+            throw cancellation
+        } catch (failure: Throwable) {
+            SyncDelete.Failed
+        }
 
     private suspend fun fetchDocument(uid: String): DocumentSnapshot? =
         runCatching { db.collection(USERS).document(uid).get().await() }.getOrNull()

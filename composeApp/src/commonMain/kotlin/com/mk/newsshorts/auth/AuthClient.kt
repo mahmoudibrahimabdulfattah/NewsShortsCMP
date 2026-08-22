@@ -47,6 +47,8 @@ enum class AuthFailure {
     NOT_SIGNED_IN,
     /** Firebase requires a fresh sign-in before deleting an account. */
     REAUTHENTICATION_REQUIRED,
+    /** The synced copy could not be removed, so the account was deliberately kept. */
+    ACCOUNT_DATA_DELETE_FAILED,
     /** GOOGLE_WEB_CLIENT_ID is missing from the build. */
     NOT_CONFIGURED,
     UNSUPPORTED_PLATFORM,

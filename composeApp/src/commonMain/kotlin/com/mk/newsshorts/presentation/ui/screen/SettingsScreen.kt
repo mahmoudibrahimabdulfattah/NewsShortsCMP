@@ -28,6 +28,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.DeleteForever
@@ -41,6 +42,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -58,6 +60,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.mk.newsshorts.auth.AuthFailure
 import com.mk.newsshorts.auth.AuthUser
 import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.localization.AppStrings
@@ -143,6 +146,7 @@ fun SettingsScreen(
                     AccountSection(
                         authUser = uiState.authUser,
                         isLoading = uiState.authInProgress,
+                        authError = uiState.authError,
                         onEvent = onEvent,
                     )
                 }
@@ -370,6 +374,7 @@ private fun NotificationsSection(
 private fun AccountSection(
     authUser: AuthUser?,
     isLoading: Boolean,
+    authError: AuthFailure?,
     onEvent: (NewsUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -417,6 +422,22 @@ private fun AccountSection(
         if (isLoading) {
             Box(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            }
+        }
+        authError?.let {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 12.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = strings.authFailure(it),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { onEvent(NewsUiEvent.DismissAuthError) }) {
+                    Icon(imageVector = Icons.Filled.Close, contentDescription = strings.cancelLabel)
+                }
             }
         }
     }

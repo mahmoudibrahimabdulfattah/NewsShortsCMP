@@ -4,6 +4,7 @@ import com.mk.newsshorts.data.local.InboxReadState
 import com.mk.newsshorts.data.local.articleKey
 
 import com.mk.newsshorts.auth.AuthFailure
+import com.mk.newsshorts.auth.AuthResult
 import com.mk.newsshorts.auth.AuthUser
 import com.mk.newsshorts.data.remote.RequiredUpdate
 import com.mk.newsshorts.security.SecurityNotice
@@ -217,6 +218,16 @@ data class InboxNotification(
      */
     val articleUrl: String,
 )
+
+/**
+ * Success closes the overlay elsewhere; this helper is only the state left by
+ * an auth attempt that did not finish successfully.
+ */
+fun NewsUiState.afterUnsuccessfulAuth(result: AuthResult): NewsUiState = when (result) {
+    AuthResult.Success -> this
+    AuthResult.Cancelled -> copy(authInProgress = false)
+    is AuthResult.Error -> copy(authInProgress = false, authError = result.failure)
+}
 
 /** One screen pushed above the tabs. See [NewsUiState.overlays]. */
 sealed interface Overlay {
