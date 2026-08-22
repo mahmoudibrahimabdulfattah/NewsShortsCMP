@@ -1,6 +1,8 @@
 package com.mk.newsshorts.presentation.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -152,6 +154,7 @@ private val DarkColorScheme = darkColorScheme(
  */
 val LocalIsDarkTheme = staticCompositionLocalOf { false }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewsShortsTheme(
     isDarkTheme: Boolean = isSystemInDarkTheme(),
@@ -161,7 +164,26 @@ fun NewsShortsTheme(
     // Typography follows the reading language, not the platform: Arabic and
     // Latin get different families, leading and tracking. Every caller sits
     // inside LocaleProvider, so the locale is always here to read.
-    CompositionLocalProvider(LocalIsDarkTheme provides isDarkTheme) {
+    CompositionLocalProvider(
+        LocalIsDarkTheme provides isDarkTheme,
+        // No ripple, anywhere. Material derives its ripple from the content
+        // colour, so every tap put a grey wash under it — over the feed's
+        // photography and over this palette alike, it read as a stray control
+        // rather than as the app answering.
+        //
+        // Set here rather than at each call site precisely because the point is
+        // that nothing behaves differently: one nav icon keeping a ripple the
+        // bell had lost would be worse than either choice made everywhere.
+        //
+        // The trade is real: a ripple is what confirms a tap landed, and this
+        // gives that up. What is left carrying it is state that moves — the
+        // nav bar's indicator animating across, an overlay opening, a mark
+        // clearing. Where a control has none of that, it needs its own press
+        // state rather than a ripple added back for one case. Restoring
+        // Material's, tinted instead of removed, is one line:
+        // `LocalRippleConfiguration provides RippleConfiguration(color = …)`.
+        LocalRippleConfiguration provides null,
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = newsShortsTypography(appLocale(), LocalTextScale.current),
