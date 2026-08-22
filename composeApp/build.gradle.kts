@@ -175,6 +175,7 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+            implementation(libs.kotlinx.coroutinesTest)
         }
         androidMain.dependencies {
             implementation(compose.preview)
