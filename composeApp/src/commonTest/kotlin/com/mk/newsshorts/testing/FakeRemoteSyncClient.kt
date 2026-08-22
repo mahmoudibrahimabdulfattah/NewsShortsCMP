@@ -2,6 +2,7 @@ package com.mk.newsshorts.testing
 
 import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.sync.RemoteSyncClient
+import com.mk.newsshorts.sync.SyncDelete
 import com.mk.newsshorts.sync.SyncFetch
 import com.mk.newsshorts.sync.SyncedSettings
 import kotlinx.coroutines.delay
@@ -9,6 +10,7 @@ import kotlinx.coroutines.delay
 class FakeRemoteSyncClient : RemoteSyncClient {
     var savedArticles: SyncFetch<List<NewsArticle>> = SyncFetch.NotFound
     var settings: SyncFetch<SyncedSettings> = SyncFetch.NotFound
+    var deleteUserDataResult: SyncDelete = SyncDelete.Success
 
     var fetchSavedArticlesError: Throwable? = null
     var pushSavedArticlesError: Throwable? = null
@@ -66,18 +68,23 @@ class FakeRemoteSyncClient : RemoteSyncClient {
         completedCalls += call
     }
 
-    override suspend fun deleteUserData(uid: String) {
+    override suspend fun deleteUserData(uid: String): SyncDelete {
         val call = RemoteSyncCall.DeleteUserData(uid)
         calls += call
         delay(deleteUserDataDelayMs)
         deleteUserDataError?.let { throw it }
-        deletedUids += uid
+        val result = deleteUserDataResult
+        if (result == SyncDelete.Success) {
+            deletedUids += uid
+        }
         completedCalls += call
+        return result
     }
 
     fun reset() {
         savedArticles = SyncFetch.NotFound
         settings = SyncFetch.NotFound
+        deleteUserDataResult = SyncDelete.Success
         fetchSavedArticlesError = null
         pushSavedArticlesError = null
         fetchSettingsError = null

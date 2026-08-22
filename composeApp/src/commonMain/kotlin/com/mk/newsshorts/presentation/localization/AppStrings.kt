@@ -355,6 +355,8 @@ object EnglishStrings : AppStrings {
             "Too many sign-in emails have been sent today. Continue with Google, or try again tomorrow."
         AuthFailure.NOT_SIGNED_IN -> "You're not signed in."
         AuthFailure.REAUTHENTICATION_REQUIRED -> "Sign in again to confirm, then delete your account."
+        AuthFailure.ACCOUNT_DATA_DELETE_FAILED ->
+            "Your synced data couldn't be deleted, so your account was kept. Try again."
         AuthFailure.NOT_CONFIGURED -> "Google Sign-In isn't available right now."
         AuthFailure.UNSUPPORTED_PLATFORM -> "Sign-in isn't available on this platform."
         AuthFailure.UNKNOWN -> "Something went wrong. Try again."
@@ -602,6 +604,8 @@ object ArabicStrings : AppStrings {
             "تم إرسال عدد كبير من رسائل الدخول اليوم. تابع باستخدام Google، أو حاول غداً."
         AuthFailure.NOT_SIGNED_IN -> "لست مسجّل الدخول."
         AuthFailure.REAUTHENTICATION_REQUIRED -> "سجّل الدخول مرة أخرى للتأكيد، ثم احذف حسابك."
+        AuthFailure.ACCOUNT_DATA_DELETE_FAILED ->
+            "تعذّر حذف بياناتك المتزامنة، لذلك لم يُحذف حسابك. حاول مرة أخرى."
         AuthFailure.NOT_CONFIGURED -> "تسجيل الدخول عبر Google غير متاح حالياً."
         AuthFailure.UNSUPPORTED_PLATFORM -> "تسجيل الدخول غير متاح على هذه المنصة."
         AuthFailure.UNKNOWN -> "حدث خطأ ما. حاول مرة أخرى."

@@ -47,6 +47,7 @@ import com.mk.newsshorts.domain.model.NewsResult
 import com.mk.newsshorts.domain.search.isSearchable
 import com.mk.newsshorts.domain.use_case.GetTopHeadlinesRequest
 import com.mk.newsshorts.domain.use_case.GetTopHeadlinesUseCase
+import com.mk.newsshorts.domain.use_case.DeleteAccountUseCase
 import com.mk.newsshorts.domain.use_case.SearchNewsRequest
 import com.mk.newsshorts.domain.use_case.SearchNewsUseCase
 import com.mk.newsshorts.analytics.AnalyticsEvent
@@ -79,6 +80,7 @@ import com.mk.newsshorts.presentation.mvi.TextScale
 import com.mk.newsshorts.presentation.mvi.InboxNotification
 import com.mk.newsshorts.presentation.mvi.Overlay
 import com.mk.newsshorts.presentation.mvi.ThemeMode
+import com.mk.newsshorts.presentation.mvi.afterUnsuccessfulAuth
 
 class NewsViewModel(
     private val getTopHeadlinesUseCase: GetTopHeadlinesUseCase,
@@ -107,6 +109,8 @@ class NewsViewModel(
 
     private val mutableEffect: MutableSharedFlow<NewsUiEffect> = MutableSharedFlow()
     val uiEffect: SharedFlow<NewsUiEffect> = mutableEffect.asSharedFlow()
+
+    private val deleteAccountUseCase = DeleteAccountUseCase(authClient, remoteSyncClient)
 
     /** Toast text is built here rather than in the UI, so it needs the locale too. */
     private fun strings(): AppStrings = getStrings(mutableState.value.appLocale)
@@ -349,21 +353,16 @@ class NewsViewModel(
 
     /**
      * Deletes the server side first, while the reader is still authenticated —
-     * Firestore's security rules require `request.auth.uid == uid`, which is
-     * no longer true the moment `deleteAccount()` succeeds. Reversing this
-     * order would leave the synced copy behind with no way to reach it again.
+     * see [DeleteAccountUseCase], which enforces that order and refuses to
+     * delete the account when the synced copy may still exist.
      */
     private fun handleDeleteAccount() {
         val uid = mutableState.value.authUser?.uid ?: return
         mutableState.update { it.copy(authInProgress = true, authError = null) }
         viewModelScope.launch {
-            remoteSyncClient.deleteUserData(uid)
-            when (val result = authClient.deleteAccount()) {
+            when (val result = deleteAccountUseCase(uid)) {
                 AuthResult.Success -> handleCloseOverlay()
-                AuthResult.Cancelled -> mutableState.update { it.copy(authInProgress = false) }
-                is AuthResult.Error -> mutableState.update {
-                    it.copy(authInProgress = false, authError = result.failure)
-                }
+                else -> mutableState.update { it.afterUnsuccessfulAuth(result) }
             }
         }
     }
