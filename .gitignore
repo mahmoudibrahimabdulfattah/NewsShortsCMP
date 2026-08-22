@@ -33,3 +33,6 @@ GoogleService-Info.plist
 # Firebase CLI deploy cache — local only, regenerated on every deploy.
 .firebase/
 firebase-debug.log
+
+# dual-code workflow artifacts
+.ai-dual-code/
