@@ -201,13 +201,18 @@ fun NotificationInboxScreen(
 }
 
 /**
- * A row that can be swiped away.
+ * A row that can be swiped away, in one direction.
  *
- * Both directions dismiss. Compose resolves `StartToEnd` and `EndToStart`
- * against the layout direction, so committing to one of them would give the
- * Arabic reader the mirror image of the English reader's gesture — and this app
- * runs in both. Accepting either is also simply more forgiving than a gesture
- * that silently springs back when swiped the wrong way.
+ * `EndToStart` and nothing else. Compose resolves the two directions against the
+ * layout direction, which is what makes one constant right here: in Arabic the
+ * end edge is on the left, so this is a swipe left-to-right, and in English it
+ * is the right-to-left swipe every list on the platform uses. One rule, mirrored
+ * for free.
+ *
+ * The other direction is left inert on purpose. A row that can be flung away
+ * whichever way the thumb happens to move is a row that gets deleted by a
+ * mis-aimed scroll, and there is nothing on the other side worth a second
+ * action.
  *
  * The confirm lambda reports the swipe and then returns false, so the box
  * springs back and never rests in a dismissed position. The row still vanishes
@@ -227,7 +232,7 @@ private fun SwipeableNotificationRow(
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
-            if (value != SwipeToDismissBoxValue.Settled) onDismiss()
+            if (value == SwipeToDismissBoxValue.EndToStart) onDismiss()
             false
         },
         // Half the row. A shorter threshold turns a hesitant scroll into a
@@ -237,6 +242,10 @@ private fun SwipeableNotificationRow(
     SwipeToDismissBox(
         state = dismissState,
         modifier = modifier,
+        // The other way does not drag at all, rather than dragging and springing
+        // back: a row that moves under the thumb is promising something, and
+        // this one has nothing to give.
+        enableDismissFromStartToEnd = false,
         backgroundContent = { DismissBackground(dismissState.dismissDirection) },
     ) {
         NotificationRow(notification = notification, isUnread = isUnread, onClick = onOpen)
@@ -257,14 +266,14 @@ private fun DismissBackground(direction: SwipeToDismissBoxValue) {
     // Nothing at all at rest. The row card is translucent, so a background left
     // painted underneath it tinted every row pink whether or not anyone was
     // swiping — the whole list looked like it was in an error state.
-    if (direction == SwipeToDismissBoxValue.Settled) return
+    //
+    // Only the one direction that dismisses, for the same reason: the other way
+    // does nothing, so it must not look like it is about to.
+    if (direction != SwipeToDismissBoxValue.EndToStart) return
 
     Box(
-        contentAlignment = if (direction == SwipeToDismissBoxValue.StartToEnd) {
-            Alignment.CenterStart
-        } else {
-            Alignment.CenterEnd
-        },
+        // The edge the row is being pulled towards, in either reading direction.
+        contentAlignment = Alignment.CenterEnd,
         modifier = Modifier
             .fillMaxSize()
             .clip(MaterialTheme.shapes.medium)
