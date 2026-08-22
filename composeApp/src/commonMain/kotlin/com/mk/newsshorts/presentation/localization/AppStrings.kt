@@ -658,7 +658,7 @@ object ArabicStrings : AppStrings {
     override val notificationInboxEmptyTitle: String = "لا يوجد شيء بعد"
     override val notificationInboxEmptyBody: String =
         "الأخبار العاجلة التي أُرسلت إليك تظهر هنا، حتى تلحق ما فاتك منها."
-    override fun unreadNotifications(count: Int): String = if (count > 9) "‏9+" else count.toString()
+    override fun unreadNotifications(count: Int): String = if (count > 9) "9+" else count.toString()
     override val searchHint: String = "ابحث في الأخبار"
     override val searchEmptyTitle: String = "ابحث في أخبار الأيام الأخيرة"
     override val searchEmptyBody: String =

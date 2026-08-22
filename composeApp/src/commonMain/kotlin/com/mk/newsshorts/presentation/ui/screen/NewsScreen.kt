@@ -27,6 +27,9 @@ import androidx.compose.ui.draw.clip
 import com.mk.newsshorts.presentation.ui.theme.UnreadMark
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -371,7 +374,7 @@ private fun NewsScreenHeader(
                 // sit in. It used to be nudged out with an offset, which put it
                 // past the icon button's bounds — and that clips, so the circle
                 // came out with two flat edges.
-                Box(modifier = Modifier.size(30.dp)) {
+                Box(modifier = Modifier.size(34.dp)) {
                     Icon(
                         imageVector = Icons.Filled.Notifications,
                         contentDescription = strings.notificationInbox,
@@ -380,25 +383,44 @@ private fun NewsScreenHeader(
                     )
                     val unread = uiState.unreadInboxCount
                     if (unread > 0) {
-                        // A fixed size with the label centred inside it, rather
-                        // than padding around the text: padding sized the badge
-                        // from the glyph, so a "1" and a "9+" drew different
-                        // shapes and neither was round.
+                        // A minimum size rather than a fixed one: at one digit
+                        // this is a circle, and "9+" widens it into a capsule
+                        // instead of squeezing two glyphs into a round hole.
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .size(16.dp)
+                                .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
                                 .clip(CircleShape)
-                                .background(UnreadMark),
+                                .background(UnreadMark)
+                                .padding(horizontal = 4.dp),
                         ) {
                             Text(
                                 text = strings.unreadNotifications(unread),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 10.sp,
-                                lineHeight = 10.sp,
+                                // Trimmed and centred, which is what actually
+                                // puts the digit in the middle. Centring the Box
+                                // only centres the *line box*, and a line box
+                                // shorter than the font's own metrics leaves the
+                                // glyph sitting high inside it — the number rode
+                                // above the centre of the circle.
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    lineHeight = 11.sp,
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both,
+                                    ),
+                                    // A count is a number, and numbers read
+                                    // left to right in both languages. Left to
+                                    // the paragraph direction, the plus in "9+"
+                                    // is a neutral character and Arabic bidi
+                                    // moved it to the far side — the badge said
+                                    // "+9".
+                                    textDirection = TextDirection.Ltr,
+                                ),
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
+                                maxLines = 1,
                             )
                         }
                     }
