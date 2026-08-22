@@ -52,6 +52,28 @@ val shareLinkPathPrefix: String = shareBaseUrl
 // a release keystore, which disables the tamper check rather than failing it.
 val expectedSigningSha256: String = localProperties.getProperty("SIGNING_CERT_SHA256").orEmpty()
 
+// Checked while the script is evaluated, not in a task action: local.properties
+// is already read here, and a task that re-read it would defeat the
+// configuration cache. The list is a plain value, so it serializes into it.
+val releaseSigningProblems: List<String> = run {
+    val problems = ArrayList<String>()
+    listOf(
+        "RELEASE_STORE_FILE",
+        "RELEASE_STORE_PASSWORD",
+        "RELEASE_KEY_ALIAS",
+        "RELEASE_KEY_PASSWORD",
+    ).forEach { name ->
+        if (localProperties.getProperty(name).isNullOrBlank()) {
+            problems.add("$name is missing or blank")
+        }
+    }
+    val storePath = localProperties.getProperty("RELEASE_STORE_FILE")
+    if (!storePath.isNullOrBlank() && !file(storePath).exists()) {
+        problems.add("RELEASE_STORE_FILE points at $storePath, which does not exist")
+    }
+    problems
+}
+
 // Required by Google Play once an app has accounts, and already advertised to
 // readers by Google's own sign-in consent sheet. Overridable so a fork does not
 // ship a link to someone else's policy.
@@ -250,30 +272,32 @@ android {
         // release without asking the OS, which an attacker controls.
         buildConfig = true
     }
-    // A release build has to be signed before it can be installed, and running
-    // the release variant is how the hardening below gets tested at all. The
-    // keystore comes from local.properties, which is not in version control.
+    // A release build has to be signed before it can be uploaded. The keystore
+    // comes from local.properties, which is not in version control, and the
+    // release variant must fail closed when any part of that secret is absent.
     val releaseStorePath: String? = localProperties.getProperty("RELEASE_STORE_FILE")
-    val releaseKeystore: File? = releaseStorePath?.let(::file)?.takeIf { it.exists() }
-    if (releaseKeystore != null) {
+    val releaseKeystore: File? = releaseStorePath
+        ?.takeUnless { it.isBlank() }
+        ?.let(::file)
+        ?.takeIf { it.exists() }
+    if (releaseSigningProblems.isEmpty() && releaseKeystore != null) {
         signingConfigs.create("release") {
             storeFile = releaseKeystore
             storePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD")
             keyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS")
             keyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD")
         }
-    } else if (releaseStorePath != null) {
-        logger.warn("RELEASE_STORE_FILE points at $releaseStorePath, which does not exist")
     }
 
     buildTypes {
         getByName("release") {
-            // Falls back to the debug key so the release variant can be run and
-            // tested locally. A build signed this way must never be uploaded —
-            // Play would bind the app's identity to a keystore that ships with
-            // the SDK and is therefore public.
+            // No debug-key fallback: the debug keystore ships with the Android
+            // SDK and is public, so a release artifact signed with it binds the
+            // app's Play identity to a key anyone possesses. Unconfigured now
+            // means unsigned, and the verifyReleaseSigning guard below stops
+            // the build before it gets that far. Local R8 testing has its own
+            // home: the staging build type.
             signingConfig = signingConfigs.findByName("release")
-                ?: signingConfigs.getByName("debug")
             // R8 both shrinks and renames. The renaming is not the security
             // control — anyone determined will still read the app — but it
             // raises the cost of a casual repackage, and the shrinking is what
@@ -285,11 +309,47 @@ android {
                 "proguard-rules.pro",
             )
         }
+        create("staging") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            versionNameSuffix = "-staging"
+            // Staging is deliberately debug-signed, so the certificate check
+            // has no true answer to give: comparing a debug key against the
+            // Play signer would fail every staging build for the one property
+            // that makes it installable. Empty is what the inspector already
+            // reads as "check disabled". Release keeps the real SHA-256; this
+            // narrows staging, not the check.
+            buildConfigField("String", "EXPECTED_SIGNING_SHA256", "\"\"")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+}
+
+val verifyReleaseSigning = tasks.register("verifyReleaseSigning") {
+    group = "verification"
+    description = "Fails the release variant when local.properties has no usable keystore."
+    val problems = releaseSigningProblems.toTypedArray()
+    doFirst {
+        if (problems.isNotEmpty()) {
+            throw GradleException(
+                buildString {
+                    appendLine("Release signing is not configured. Fix these in local.properties before building the release variant:")
+                    problems.forEach { appendLine("  - $it") }
+                    appendLine("Refusing to sign with the debug key: it ships with the Android SDK and is public.")
+                    append("For local R8 testing without production credentials, run :composeApp:assembleStaging instead.")
+                },
+            )
+        }
+    }
+}
+tasks.matching {
+    it.name in setOf("assembleRelease", "bundleRelease", "packageRelease", "packageReleaseBundle")
+}.configureEach {
+    dependsOn(verifyReleaseSigning)
 }
 
 dependencies {
