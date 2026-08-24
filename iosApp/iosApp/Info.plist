@@ -9,5 +9,12 @@
 	     Kotlin side sets the style on UIApplication instead. -->
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+	<!-- The build settings declare portrait as the only supported orientation.
+	     On iPad that is only allowed for an app that opts out of multitasking,
+	     otherwise the App Store upload warns that a multitasking app must
+	     support all four. Newer iPadOS ignores the key and resizes anyway; it
+	     costs nothing there and keeps the validation clean everywhere else. -->
+	<key>UIRequiresFullScreen</key>
+	<true/>
 </dict>
 </plist>
