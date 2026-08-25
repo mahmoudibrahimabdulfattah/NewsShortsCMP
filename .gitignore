@@ -36,3 +36,7 @@ firebase-debug.log
 
 # dual-code workflow artifacts
 .ai-dual-code/
+
+# Codex working files — local agent config and its copy of the conventions
+AGENTS.md
+.codex/

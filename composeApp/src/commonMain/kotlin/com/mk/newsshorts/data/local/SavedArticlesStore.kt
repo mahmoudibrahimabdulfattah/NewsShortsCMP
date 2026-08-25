@@ -35,6 +35,18 @@ private data class SavedArticleDto(
 )
 
 /**
+ * The disk half of bookmarking, behind an interface.
+ *
+ * The real implementation needs a [SettingsStorage], which is an `expect class`
+ * with no actual in commonTest — so without this seam nothing that persists
+ * bookmarks could be tested on any target.
+ */
+interface SavedArticlesLocalStore {
+    fun load(): List<NewsArticle>
+    fun save(articles: List<NewsArticle>)
+}
+
+/**
  * Bookmarks, persisted across launches.
  *
  * They previously lived only in memory, so the Saved Articles list emptied
@@ -43,10 +55,10 @@ private data class SavedArticleDto(
  */
 class SavedArticlesStore(
     private val settingsStorage: SettingsStorage
-) {
+) : SavedArticlesLocalStore {
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun load(): List<NewsArticle> {
+    override fun load(): List<NewsArticle> {
         val raw = settingsStorage.getString(KEY_SAVED_ARTICLES, "")
         if (raw.isBlank()) return emptyList()
         return runCatching {
@@ -58,8 +70,8 @@ class SavedArticlesStore(
         }
     }
 
-    fun save(articles: List<NewsArticle>) {
-        val payload = articles.take(MAX_SAVED).map { it.toDto() }
+    override fun save(articles: List<NewsArticle>) {
+        val payload = cappedForStorage(articles).map { it.toDto() }
         runCatching {
             settingsStorage.putString(KEY_SAVED_ARTICLES, json.encodeToString(payload))
         }
@@ -96,8 +108,16 @@ class SavedArticlesStore(
 
     private companion object {
         const val KEY_SAVED_ARTICLES: String = "saved_articles"
-
-        /** Bounded so the bookmark list can't grow past what the store can hold. */
-        const val MAX_SAVED: Int = 200
     }
 }
+
+/**
+ * Applied on the way to disk rather than in the repository, so the cap is one
+ * number in one place — and a top-level function so a test can check it without
+ * a [SettingsStorage]. Same shape as `orderedWithCap` in SeenArticlesStore.
+ */
+internal fun cappedForStorage(articles: List<NewsArticle>): List<NewsArticle> =
+    articles.take(MAX_SAVED)
+
+/** Bounded so the bookmark list can't grow past what the store can hold. */
+internal const val MAX_SAVED: Int = 200

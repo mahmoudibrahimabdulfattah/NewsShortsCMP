@@ -17,7 +17,8 @@ import com.mk.newsshorts.auth.AuthResult
 import com.mk.newsshorts.data.local.NotificationInboxStore
 import com.mk.newsshorts.data.local.PendingSignInEmailStore
 import com.mk.newsshorts.data.local.RecentSearchesStore
-import com.mk.newsshorts.data.local.SavedArticlesStore
+import com.mk.newsshorts.data.repository.SavedArticlesRepository
+import com.mk.newsshorts.data.repository.ToggleResult
 import com.mk.newsshorts.data.local.SeenArticlesStore
 import com.mk.newsshorts.data.local.SettingsManager
 import com.mk.newsshorts.data.local.currentTimeMillis
@@ -25,7 +26,6 @@ import com.mk.newsshorts.data.local.isPlausibleEmail
 import com.mk.newsshorts.domain.feed.appendPage
 import com.mk.newsshorts.domain.feed.shouldLoadNextPage
 import com.mk.newsshorts.domain.ranking.deprioritiseSeen
-import com.mk.newsshorts.domain.sync.mergeSavedArticles
 import com.mk.newsshorts.sync.RemoteSyncClient
 import com.mk.newsshorts.sync.SyncFetch
 import com.mk.newsshorts.sync.SyncedSettings
@@ -91,7 +91,7 @@ class NewsViewModel(
     private val pushSubscriber: PushSubscriber,
     private val deepLinkBus: DeepLinkBus,
     private val signInLinkBus: SignInLinkBus,
-    private val savedArticlesStore: SavedArticlesStore,
+    private val savedArticlesRepository: SavedArticlesRepository,
     private val seenArticlesStore: SeenArticlesStore,
     private val pendingSignInEmailStore: PendingSignInEmailStore,
     private val remoteConfigClient: RemoteConfigClient,
@@ -116,6 +116,7 @@ class NewsViewModel(
     private fun strings(): AppStrings = getStrings(mutableState.value.appLocale)
 
     init {
+        observeSavedArticles()
         loadSavedSettings()
         observeDeepLinks()
         observeArrivingNotifications()
@@ -131,6 +132,20 @@ class NewsViewModel(
      * start — triggers a sync; the point is the transition into "signed in",
      * not the particular action that caused it.
      */
+    /**
+     * The repository owns the list; the state object mirrors it so the UI keeps
+     * reading one place. Anything inside the ViewModel that needs the current
+     * bookmarks reads the repository directly instead of this mirror, which
+     * lags it by a dispatch.
+     */
+    private fun observeSavedArticles() {
+        viewModelScope.launch {
+            savedArticlesRepository.saved.collect { articles ->
+                mutableState.update { it.copy(savedArticles = articles) }
+            }
+        }
+    }
+
     private fun observeAuthState() {
         viewModelScope.launch {
             var previousUid: String? = null
@@ -152,12 +167,10 @@ class NewsViewModel(
     private suspend fun syncOnSignIn(uid: String) {
         when (val remoteSaved = remoteSyncClient.fetchSavedArticles(uid)) {
             is SyncFetch.Found -> {
-                val merged = mergeSavedArticles(local = mutableState.value.savedArticles, remote = remoteSaved.value)
-                mutableState.update { it.copy(savedArticles = merged) }
-                persistSavedArticles(merged)
+                val merged = savedArticlesRepository.mergeWithRemote(remoteSaved.value)
                 remoteSyncClient.pushSavedArticles(uid, merged)
             }
-            SyncFetch.NotFound -> remoteSyncClient.pushSavedArticles(uid, mutableState.value.savedArticles)
+            SyncFetch.NotFound -> remoteSyncClient.pushSavedArticles(uid, savedArticlesRepository.saved.value)
             // Offline or a transient failure: neither side is touched, and the
             // next launch (or the next save) tries again.
             SyncFetch.Unavailable -> Unit
@@ -529,10 +542,9 @@ class NewsViewModel(
                     notifyBreaking = notifyBreaking,
                     notifyTopStory = notifyTopStory,
                     notifyReminder = notifyReminder,
-                    isFirstLaunch = false
                 )
             }
-            mutableState.update { state -> state.copy(savedArticles = savedArticlesStore.load()) }
+            savedArticlesRepository.load()
             if (notificationsEnabled) {
                 pushSubscriber.subscribeToLanguage(FeedLanguage.resolve(newsLanguage.code))
             }
@@ -1198,7 +1210,7 @@ class NewsViewModel(
     private fun handleOpenDeepLink(link: ArticleDeepLink) {
         val state = mutableState.value
         val article = state.articles.firstOrNull { it.articleUrl.value == link.url }
-            ?: state.savedArticles.firstOrNull { it.articleUrl.value == link.url }
+            ?: savedArticlesRepository.saved.value.firstOrNull { it.articleUrl.value == link.url }
             ?: link.toNewsArticle()
             ?: return
         // A shared link marks itself, so notification_opened stays a count of
@@ -1250,50 +1262,25 @@ class NewsViewModel(
         }
     }
 
-    /** Bookmarks are only useful if they outlive the session. */
-    private fun persistSavedArticles(articles: List<NewsArticle>) {
-        savedArticlesStore.save(articles)
-    }
-
     private fun handleSaveArticle(article: NewsArticle) {
-        val currentSaved = mutableState.value.savedArticles.toMutableList()
-        val savedIndex: Int = currentSaved.indexOfFirst { it.articleUrl == article.articleUrl }
-        val isAlreadySaved: Boolean = savedIndex != -1
-        if (isAlreadySaved) {
-            currentSaved.removeAt(savedIndex)
-            mutableState.update { state ->
-                state.copy(savedArticles = currentSaved)
-            }
-            persistSavedArticles(currentSaved)
-            pushSavedArticlesIfSignedIn(currentSaved)
-            viewModelScope.launch {
-                mutableEffect.emit(NewsUiEffect.ShowToast(strings().articleRemoved))
-            }
-        } else {
-            currentSaved.add(0, article)
-            mutableState.update { state ->
-                state.copy(savedArticles = currentSaved)
-            }
-            persistSavedArticles(currentSaved)
-            pushSavedArticlesIfSignedIn(currentSaved)
+        val result = savedArticlesRepository.toggle(article)
+        val saved = savedArticlesRepository.saved.value
+        pushSavedArticlesIfSignedIn(saved)
+        if (result == ToggleResult.SAVED) {
             analytics.logEvent(AnalyticsEvent.ArticleSaved(article.category.apiValue))
-            viewModelScope.launch {
-                mutableEffect.emit(NewsUiEffect.ShowToast(strings().articleSaved))
-            }
+        }
+        val message = when (result) {
+            ToggleResult.SAVED -> strings().articleSaved
+            ToggleResult.REMOVED -> strings().articleRemoved
+        }
+        viewModelScope.launch {
+            mutableEffect.emit(NewsUiEffect.ShowToast(message))
         }
     }
 
     private fun handleRemoveSavedArticle(article: NewsArticle) {
-        val currentSaved = mutableState.value.savedArticles.toMutableList()
-        // Matched by URL, the only stable identity an article has.
-        val savedIndex = currentSaved.indexOfFirst { it.articleUrl == article.articleUrl }
-        if (savedIndex == -1) return
-        currentSaved.removeAt(savedIndex)
-        mutableState.update { state ->
-            state.copy(savedArticles = currentSaved)
-        }
-        persistSavedArticles(currentSaved)
-        pushSavedArticlesIfSignedIn(currentSaved)
+        if (!savedArticlesRepository.remove(article)) return
+        pushSavedArticlesIfSignedIn(savedArticlesRepository.saved.value)
         viewModelScope.launch {
             mutableEffect.emit(NewsUiEffect.ShowToast(strings().articleRemoved))
         }

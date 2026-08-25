@@ -27,7 +27,6 @@ data class NewsUiState(
     val currentTab: NavigationTab = NavigationTab.FOR_YOU,
     val savedArticles: List<NewsArticle> = emptyList(),
     val isOfflineMode: Boolean = false,
-    val isFirstLaunch: Boolean = true,
     /**
      * Which onboarding step is showing, or null once it is done or was never
      * needed. Null rather than a boolean plus an index, so "not onboarding" is
