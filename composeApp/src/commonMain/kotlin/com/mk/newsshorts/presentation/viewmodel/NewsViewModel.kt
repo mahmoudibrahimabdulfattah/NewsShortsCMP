@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.mk.newsshorts.auth.AuthClient
@@ -29,6 +28,7 @@ import com.mk.newsshorts.domain.ranking.deprioritiseSeen
 import com.mk.newsshorts.sync.RemoteSyncClient
 import com.mk.newsshorts.sync.SyncFetch
 import com.mk.newsshorts.sync.SyncedSettings
+import com.mk.newsshorts.sync.toSyncedSettings
 import com.mk.newsshorts.data.remote.RemoteConfigClient
 import com.mk.newsshorts.security.DeviceIntegrityInspector
 import com.mk.newsshorts.security.IntegrityPolicy
@@ -183,19 +183,14 @@ class NewsViewModel(
         }
     }
 
-    private fun currentSyncedSettings(): SyncedSettings {
-        val state = mutableState.value
-        return SyncedSettings(
-            newsLanguage = state.selectedLanguage.code,
-            appLocale = state.appLocale.code,
-            selectedCountry = state.selectedCountry.code,
-            themeMode = state.themeMode.name.lowercase(),
-            notificationsEnabled = state.notificationsEnabled,
-            notifyBreaking = state.notifyBreaking,
-            notifyTopStory = state.notifyTopStory,
-            notifyReminder = state.notifyReminder,
-        )
-    }
+    /**
+     * Read from the store, never from [mutableState]. The UI state starts on
+     * hardcoded defaults and is filled in by `loadSavedSettings` in its own
+     * coroutine, so a sign-in that lands first would have pushed English, US
+     * and "system" over whatever the reader had actually chosen. The store has
+     * the real values from the moment it is constructed.
+     */
+    private fun currentSyncedSettings(): SyncedSettings = settingsManager.preferences.value.toSyncedSettings()
 
     /** The remote copy becomes the local one — this is the "remote wins" side of sync. */
     private suspend fun applySyncedSettings(settings: SyncedSettings) {
@@ -508,22 +503,18 @@ class NewsViewModel(
 
     private fun loadSavedSettings() {
         viewModelScope.launch {
-            val savedNewsLanguage: String = settingsManager.newsLanguageFlow.first()
-            val savedAppLocale: String = settingsManager.appLocaleFlow.first()
-            val savedCountry: String = settingsManager.selectedCountryFlow.first()
-            val savedThemeMode: String = settingsManager.themeModeFlow.first()
-            val notificationsEnabled: Boolean = settingsManager.notificationsEnabledFlow.first()
-            val notifyBreaking: Boolean = settingsManager.notifyBreakingFlow.first()
-            val notifyTopStory: Boolean = settingsManager.notifyTopStoryFlow.first()
-            val notifyReminder: Boolean = settingsManager.notifyReminderFlow.first()
-            val newsLanguage: LanguageOption = LanguageOption.entries.find { it.code == savedNewsLanguage }
+            // One snapshot: reading nine separate flows left a window where
+            // half of them had been answered and half had not.
+            val stored = settingsManager.preferences.value
+            val notificationsEnabled: Boolean = stored.notificationsEnabled
+            val newsLanguage: LanguageOption = LanguageOption.entries.find { it.code == stored.newsLanguage }
                 ?: LanguageOption.ENGLISH
-            val appLocale: AppLocale = AppLocale.fromCode(savedAppLocale)
-            val country: CountryOption = CountryOption.entries.find { it.code == savedCountry }
+            val appLocale: AppLocale = AppLocale.fromCode(stored.appLocale)
+            val country: CountryOption = CountryOption.entries.find { it.code == stored.selectedCountry }
                 ?: CountryOption.UNITED_STATES
-            val themeMode: ThemeMode = ThemeMode.entries.find { it.name.equals(savedThemeMode, ignoreCase = true) }
+            val themeMode: ThemeMode = ThemeMode.entries.find { it.name.equals(stored.themeMode, ignoreCase = true) }
                 ?: ThemeMode.SYSTEM
-            val textScale: TextScale = TextScale.fromStored(settingsManager.textScaleFlow.first())
+            val textScale: TextScale = TextScale.fromStored(stored.textScale)
             val preferred: List<String> = settingsManager.preferredCategories()
             // Read once, at the only moment it can be true. Asked again later
             // it would re-open the flow the reader has just finished.
@@ -539,9 +530,9 @@ class NewsViewModel(
                     selectedCountry = country,
                     themeMode = themeMode,
                     notificationsEnabled = notificationsEnabled,
-                    notifyBreaking = notifyBreaking,
-                    notifyTopStory = notifyTopStory,
-                    notifyReminder = notifyReminder,
+                    notifyBreaking = stored.notifyBreaking,
+                    notifyTopStory = stored.notifyTopStory,
+                    notifyReminder = stored.notifyReminder,
                 )
             }
             savedArticlesRepository.load()

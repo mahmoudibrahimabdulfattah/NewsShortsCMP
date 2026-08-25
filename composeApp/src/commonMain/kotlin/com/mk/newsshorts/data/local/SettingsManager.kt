@@ -1,65 +1,66 @@
 package com.mk.newsshorts.data.local
 
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 
 class SettingsManager(
     private val settingsStorage: SettingsStorage
 ) {
-    private val newsLanguageState: MutableStateFlow<String> = MutableStateFlow(DEFAULT_NEWS_LANGUAGE)
-    private val appLocaleState: MutableStateFlow<String> = MutableStateFlow(DEFAULT_APP_LOCALE)
-    private val selectedCountryState: MutableStateFlow<String> = MutableStateFlow(DEFAULT_COUNTRY)
-    private val themeModeState: MutableStateFlow<String> = MutableStateFlow(DEFAULT_THEME_MODE)
-    private val notificationsEnabledState: MutableStateFlow<Boolean> = MutableStateFlow(true)
-    private val notifyBreakingState: MutableStateFlow<Boolean> = MutableStateFlow(true)
-    private val notifyTopStoryState: MutableStateFlow<Boolean> = MutableStateFlow(true)
-    private val notifyReminderState: MutableStateFlow<Boolean> = MutableStateFlow(true)
-    private val textScaleState: MutableStateFlow<String> = MutableStateFlow(DEFAULT_TEXT_SCALE)
+    private val preferencesState: MutableStateFlow<AppPreferences> =
+        MutableStateFlow(readAppPreferences(settingsStorage::getString))
 
-    val newsLanguageFlow: Flow<String> = newsLanguageState.asStateFlow()
-    val appLocaleFlow: Flow<String> = appLocaleState.asStateFlow()
-    val selectedCountryFlow: Flow<String> = selectedCountryState.asStateFlow()
-    val themeModeFlow: Flow<String> = themeModeState.asStateFlow()
-    val notificationsEnabledFlow: Flow<Boolean> = notificationsEnabledState.asStateFlow()
-    val notifyBreakingFlow: Flow<Boolean> = notifyBreakingState.asStateFlow()
-    val notifyTopStoryFlow: Flow<Boolean> = notifyTopStoryState.asStateFlow()
-    val notifyReminderFlow: Flow<Boolean> = notifyReminderState.asStateFlow()
-    val textScaleFlow: Flow<String> = textScaleState.asStateFlow()
-
-    init {
-        loadSettings()
-    }
-
-    private fun loadSettings() {
-        newsLanguageState.value = settingsStorage.getString(KEY_NEWS_LANGUAGE, DEFAULT_NEWS_LANGUAGE)
-        appLocaleState.value = settingsStorage.getString(KEY_APP_LOCALE, DEFAULT_APP_LOCALE)
-        selectedCountryState.value = settingsStorage.getString(KEY_SELECTED_COUNTRY, DEFAULT_COUNTRY)
-        themeModeState.value = settingsStorage.getString(KEY_THEME_MODE, DEFAULT_THEME_MODE)
-        notificationsEnabledState.value = readBoolean(NotificationPreferenceKeys.ENABLED)
-        notifyBreakingState.value = readBoolean(NotificationPreferenceKeys.NOTIFY_BREAKING)
-        notifyTopStoryState.value = readBoolean(NotificationPreferenceKeys.NOTIFY_TOP_STORY)
-        notifyReminderState.value = readBoolean(NotificationPreferenceKeys.NOTIFY_REMINDER)
-        textScaleState.value = settingsStorage.getString(KEY_TEXT_SCALE, DEFAULT_TEXT_SCALE)
-    }
-
-    private fun readBoolean(key: String): Boolean =
-        settingsStorage.getString(key, NotificationPreferenceKeys.DEFAULT_ENABLED) == "true"
+    /**
+     * One snapshot rather than nine flows. Read synchronously in the
+     * constructor, so by the time anything can ask, these are the reader's real
+     * preferences and not the defaults — which is what sign-in sync depends on.
+     */
+    val preferences: StateFlow<AppPreferences> = preferencesState.asStateFlow()
 
     suspend fun saveNewsLanguage(languageCode: String) {
         settingsStorage.putString(KEY_NEWS_LANGUAGE, languageCode)
-        newsLanguageState.value = languageCode
+        preferencesState.update { it.copy(newsLanguage = languageCode) }
     }
 
     suspend fun saveAppLocale(localeCode: String) {
         settingsStorage.putString(KEY_APP_LOCALE, localeCode)
-        appLocaleState.value = localeCode
+        preferencesState.update { it.copy(appLocale = localeCode) }
     }
 
     suspend fun saveSelectedCountry(countryCode: String) {
         settingsStorage.putString(KEY_SELECTED_COUNTRY, countryCode)
-        selectedCountryState.value = countryCode
+        preferencesState.update { it.copy(selectedCountry = countryCode) }
+    }
+
+    suspend fun saveThemeMode(mode: String) {
+        settingsStorage.putString(KEY_THEME_MODE, mode)
+        preferencesState.update { it.copy(themeMode = mode) }
+    }
+
+    suspend fun saveTextScale(scale: String) {
+        settingsStorage.putString(KEY_TEXT_SCALE, scale)
+        preferencesState.update { it.copy(textScale = scale) }
+    }
+
+    suspend fun setNotificationsEnabled(enabled: Boolean) {
+        settingsStorage.putString(NotificationPreferenceKeys.ENABLED, enabled.toString())
+        preferencesState.update { it.copy(notificationsEnabled = enabled) }
+    }
+
+    suspend fun setNotifyBreaking(enabled: Boolean) {
+        settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_BREAKING, enabled.toString())
+        preferencesState.update { it.copy(notifyBreaking = enabled) }
+    }
+
+    suspend fun setNotifyTopStory(enabled: Boolean) {
+        settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_TOP_STORY, enabled.toString())
+        preferencesState.update { it.copy(notifyTopStory = enabled) }
+    }
+
+    suspend fun setNotifyReminder(enabled: Boolean) {
+        settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_REMINDER, enabled.toString())
+        preferencesState.update { it.copy(notifyReminder = enabled) }
     }
 
     /**
@@ -74,31 +75,6 @@ class SettingsManager(
         settingsStorage.putString(KEY_SECURITY_WARNING_SEEN, "true")
     }
 
-    suspend fun saveThemeMode(mode: String) {
-        settingsStorage.putString(KEY_THEME_MODE, mode)
-        themeModeState.value = mode
-    }
-
-    suspend fun setNotificationsEnabled(enabled: Boolean) {
-        settingsStorage.putString(NotificationPreferenceKeys.ENABLED, enabled.toString())
-        notificationsEnabledState.value = enabled
-    }
-
-    suspend fun setNotifyBreaking(enabled: Boolean) {
-        settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_BREAKING, enabled.toString())
-        notifyBreakingState.value = enabled
-    }
-
-    suspend fun setNotifyTopStory(enabled: Boolean) {
-        settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_TOP_STORY, enabled.toString())
-        notifyTopStoryState.value = enabled
-    }
-
-    suspend fun setNotifyReminder(enabled: Boolean) {
-        settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_REMINDER, enabled.toString())
-        notifyReminderState.value = enabled
-    }
-
     /**
      * Whether the contextual notification-permission prompt has already fired.
      * Once, ever — asked again on a later launch would be the cold-start
@@ -109,11 +85,6 @@ class SettingsManager(
 
     suspend fun markNotificationPromptSeen() {
         settingsStorage.putString(KEY_NOTIFICATION_PROMPT_SEEN, "true")
-    }
-
-    suspend fun saveTextScale(scale: String) {
-        settingsStorage.putString(KEY_TEXT_SCALE, scale)
-        textScaleState.value = scale
     }
 
     /**
@@ -145,19 +116,9 @@ class SettingsManager(
 
     companion object {
         private const val KEY_SECURITY_WARNING_SEEN: String = "security_warning_seen"
-        private const val KEY_NEWS_LANGUAGE: String = "news_language"
-        private const val KEY_APP_LOCALE: String = "app_locale"
-        private const val KEY_SELECTED_COUNTRY: String = "selected_country"
-        private const val KEY_THEME_MODE: String = "theme_mode"
         private const val KEY_NOTIFICATION_PROMPT_SEEN: String = "notification_prompt_seen"
         private const val KEY_ONBOARDING_COMPLETE: String = "onboarding_complete"
         private const val KEY_PREFERRED_CATEGORIES: String = "preferred_categories"
-        private const val KEY_TEXT_SCALE: String = "text_scale"
-        private const val DEFAULT_TEXT_SCALE: String = "default"
-        private const val DEFAULT_NEWS_LANGUAGE: String = "en"
-        private const val DEFAULT_APP_LOCALE: String = "en"
-        private const val DEFAULT_COUNTRY: String = "us"
-        private const val DEFAULT_THEME_MODE: String = "system"
     }
 }
 
