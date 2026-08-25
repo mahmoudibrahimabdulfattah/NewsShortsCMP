@@ -13,6 +13,7 @@ import com.mk.newsshorts.data.remote.NotificationInboxClient
 import com.mk.newsshorts.data.remote.SharePageResolver
 import com.mk.newsshorts.data.remote.createHttpClient
 import com.mk.newsshorts.data.repository.NewsRepositoryImpl
+import com.mk.newsshorts.data.repository.SavedArticlesRepository
 import com.mk.newsshorts.domain.repository.NewsRepository
 import com.mk.newsshorts.navigation.DeepLinkBus
 import com.mk.newsshorts.navigation.NotificationBus
@@ -32,6 +33,7 @@ val dataModule = module {
     single(createdAtStart = false) { NewsLocalDataSource(settingsStorage = get()) }
     single(createdAtStart = false) { SettingsManager(settingsStorage = get()) }
     single(createdAtStart = false) { SavedArticlesStore(settingsStorage = get()) }
+    single(createdAtStart = false) { SavedArticlesRepository(store = get<SavedArticlesStore>()) }
     single(createdAtStart = false) { SeenArticlesStore(settingsStorage = get()) }
     single(createdAtStart = false) { NotificationInboxStore(settingsStorage = get()) }
     single(createdAtStart = false) { RecentSearchesStore(settingsStorage = get()) }
