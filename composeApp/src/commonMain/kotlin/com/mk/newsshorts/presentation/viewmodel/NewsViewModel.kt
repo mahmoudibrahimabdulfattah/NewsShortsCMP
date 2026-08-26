@@ -227,10 +227,9 @@ class NewsViewModel(
         accountSync.pushSavedArticles(viewModelScope, articles)
     }
 
+    /** Queued for the same reason bookmark writes are — see the coordinator. */
     private fun pushSettingsIfSignedIn() {
-        val uid = mutableState.value.authUser?.uid ?: return
-        val settings = currentSyncedSettings()
-        viewModelScope.launch { remoteSyncClient.pushSettings(uid, settings) }
+        accountSync.pushSettings(viewModelScope, currentSyncedSettings())
     }
 
     private fun handleSignInWithGoogle() {

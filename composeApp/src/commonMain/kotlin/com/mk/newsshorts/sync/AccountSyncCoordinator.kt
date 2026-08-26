@@ -42,22 +42,8 @@ class AccountSyncCoordinator(
     private var activeUid: String? = null
     private var job: Job? = null
 
-    /**
-     * Every remote bookmark write goes through this, hydration included, so
-     * two of them can never be in flight at once. Each write replaces the whole
-     * document, so overlapping writes do not merge — the one that happens to
-     * finish last simply wins, and a slow older write landing after a fast
-     * newer one puts a deleted bookmark back.
-     */
-    private val savedWriteLock = Mutex()
-
-    /**
-     * The newest list waiting to be written. Only the newest matters: the write
-     * is the entire document, so an older snapshot in the queue has nothing to
-     * contribute that the newer one does not already contain.
-     */
-    private var pendingSaved: List<NewsArticle>? = null
-    private var savedWriter: Job? = null
+    private val savedWrites = ConflatedWriter<List<NewsArticle>>(remoteSyncClient::pushSavedArticles)
+    private val settingsWrites = ConflatedWriter<SyncedSettings>(remoteSyncClient::pushSettings)
 
     /**
      * Call on every auth change, including sign-out ([uid] null) and including
@@ -67,8 +53,8 @@ class AccountSyncCoordinator(
     fun onUserChanged(scope: CoroutineScope, uid: String?) {
         if (uid != null && uid == activeUid) return
         job?.cancel()
-        savedWriter?.cancel()
-        pendingSaved = null
+        savedWrites.discard()
+        settingsWrites.discard()
         activeUid = uid
         job = if (uid == null) null else scope.launch { hydrate(uid) }
     }
@@ -83,13 +69,11 @@ class AccountSyncCoordinator(
             is SyncFetch.Found -> {
                 if (activeUid != uid) return
                 val merged = savedArticlesRepository.mergeWithRemote(remoteSaved.value)
-                savedWriteLock.withLock { remoteSyncClient.pushSavedArticles(uid, merged) }
+                savedWrites.writeInline(uid, merged)
             }
             SyncFetch.NotFound -> {
                 if (activeUid != uid) return
-                savedWriteLock.withLock {
-                    remoteSyncClient.pushSavedArticles(uid, savedArticlesRepository.saved.value)
-                }
+                savedWrites.writeInline(uid, savedArticlesRepository.saved.value)
             }
             // Offline or a transient failure: neither side is touched, and the
             // next launch (or the next save) tries again.
@@ -103,7 +87,7 @@ class AccountSyncCoordinator(
             }
             SyncFetch.NotFound -> {
                 if (activeUid != uid) return
-                remoteSyncClient.pushSettings(uid, currentSettings())
+                settingsWrites.writeInline(uid, currentSettings())
             }
             SyncFetch.Unavailable -> Unit
         }
@@ -116,15 +100,61 @@ class AccountSyncCoordinator(
      */
     fun pushSavedArticles(scope: CoroutineScope, articles: List<NewsArticle>) {
         val uid = activeUid ?: return
-        pendingSaved = articles
-        if (savedWriter?.isActive == true) return
-        savedWriter = scope.launch {
+        savedWrites.submit(scope, uid, stillCurrent = { activeUid == uid }, value = articles)
+    }
+
+    /**
+     * Same discipline as bookmarks, and for the same reason: a settings write is
+     * the whole document, so a slow older one landing last reinstates whatever
+     * the reader had just changed away from.
+     */
+    fun pushSettings(scope: CoroutineScope, settings: SyncedSettings) {
+        val uid = activeUid ?: return
+        settingsWrites.submit(scope, uid, stillCurrent = { activeUid == uid }, value = settings)
+    }
+}
+
+/**
+ * One remote document, written one write at a time, newest value wins.
+ *
+ * Bookmarks and settings both replace their whole document on every write, so
+ * they share this exactly: overlapping writes cannot merge, and an older value
+ * waiting in a queue has nothing to contribute that the newer one behind it does
+ * not already carry. Holding more than the newest would just be writing stale
+ * data on purpose.
+ */
+private class ConflatedWriter<T>(
+    private val write: suspend (uid: String, value: T) -> Unit,
+) {
+    private val lock = Mutex()
+    private var pending: T? = null
+    private var writer: Job? = null
+
+    fun submit(scope: CoroutineScope, uid: String, stillCurrent: () -> Boolean, value: T) {
+        pending = value
+        if (writer?.isActive == true) return
+        writer = scope.launch {
             while (true) {
-                val next = pendingSaved ?: break
-                pendingSaved = null
-                if (activeUid != uid) break
-                savedWriteLock.withLock { remoteSyncClient.pushSavedArticles(uid, next) }
+                val next = pending ?: break
+                pending = null
+                if (!stillCurrent()) break
+                lock.withLock { write(uid, next) }
             }
         }
+    }
+
+    /**
+     * For a write that has to finish before its caller continues — hydration's
+     * own — while still taking its turn behind anything already in flight.
+     */
+    suspend fun writeInline(uid: String, value: T) {
+        lock.withLock { write(uid, value) }
+    }
+
+    /** Drops anything queued. A queued write has no job to cancel yet. */
+    fun discard() {
+        writer?.cancel()
+        writer = null
+        pending = null
     }
 }
