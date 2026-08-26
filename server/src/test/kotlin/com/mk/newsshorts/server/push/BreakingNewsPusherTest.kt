@@ -3,6 +3,7 @@ package com.mk.newsshorts.server.push
 import kotlinx.coroutines.runBlocking
 import com.mk.newsshorts.server.model.FeedArticleDto
 import com.mk.newsshorts.server.store.ArticleStore
+import com.mk.newsshorts.server.store.TextSource
 import java.io.File
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -41,7 +42,7 @@ class BreakingNewsPusherTest {
             sourceName = "Source", language = language, category = "general",
             country = null, publishedAt = publishedAt,
         ) ?: return
-        store.putText(id, language, "Headline", "Summary")
+        store.putText(id, language, "Headline", "Summary", TextSource.AI)
     }
 
     @Test

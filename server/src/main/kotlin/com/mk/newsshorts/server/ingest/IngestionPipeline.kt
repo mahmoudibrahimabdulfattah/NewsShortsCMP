@@ -8,7 +8,10 @@ import com.mk.newsshorts.server.store.ArticleStore
 import com.mk.newsshorts.server.summarize.GeminiSummarizer
 import com.mk.newsshorts.server.summarize.Summarizer
 import com.mk.newsshorts.server.summarize.SummaryInput
+import com.mk.newsshorts.server.store.TextSource
+import com.mk.newsshorts.server.store.TextWriteResult
 import org.slf4j.LoggerFactory
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -22,6 +25,7 @@ class IngestionPipeline(
     private val refreshMinutes: Int = (System.getenv("REFRESH_MINUTES") ?: "20").toInt(),
     private val maxSummariesPerCycle: Int = (System.getenv("MAX_SUMMARIES_PER_CYCLE") ?: "60").toInt(),
     private val retentionDays: Long = (System.getenv("RETENTION_DAYS") ?: "4").toLong(),
+    private val renderDelay: Duration = 5.seconds,
 ) {
 
     private val log = LoggerFactory.getLogger(IngestionPipeline::class.java)
@@ -73,7 +77,7 @@ class IngestionPipeline(
         summarizePending()
     }
 
-    private suspend fun summarizePending() {
+    internal suspend fun summarizePending() {
         val pending = store.pendingTexts(maxSummariesPerCycle, FeedCatalog.countryLanguages)
         if (pending.isEmpty()) return
         log.info("Rendering ${pending.size} article texts")
@@ -83,7 +87,8 @@ class IngestionPipeline(
         pending
             .groupBy { it.targetLanguage }
             .forEach { (targetLanguage, articles) ->
-                articles.chunked(GeminiSummarizer.BATCH_SIZE).forEach { chunk ->
+                val chunks = articles.chunked(GeminiSummarizer.BATCH_SIZE)
+                chunks.forEach { chunk ->
                     val rendered = summarizer.summarize(
                         chunk.map { SummaryInput(it.id, it.title, it.description, targetLanguage) }
                     )
@@ -91,10 +96,47 @@ class IngestionPipeline(
                     // produced when the article is already in this language.
                     chunk.forEach { article ->
                         val text = rendered[article.id] ?: return@forEach
-                        if (text.title == article.title && article.sourceLanguage != targetLanguage) return@forEach
-                        store.putText(article.id, targetLanguage, text.title, text.summary)
+                        val untranslatedCrossLanguage =
+                            article.sourceLanguage != targetLanguage &&
+                                (text.source == TextSource.FALLBACK || text.title == article.title)
+                        if (untranslatedCrossLanguage) {
+                            // A dropped cross-language render still has to age
+                            // out of the retry queue. Leaving it rowless makes
+                            // it look fresh on every scheduled run, which lets
+                            // repeat 429s spend the first-render budget forever.
+                            when (
+                                store.recordUnservedTextAttempt(
+                                    article.id,
+                                    targetLanguage,
+                                    article.title,
+                                    article.description.orEmpty(),
+                                )
+                            ) {
+                                TextWriteResult.RECORDED_UNSERVED ->
+                                    log.info("Recorded unserved text attempt for article ${article.id} in $targetLanguage")
+
+                                TextWriteResult.RETAINED_AI -> Unit
+
+                                TextWriteResult.INSERTED_AI,
+                                TextWriteResult.INSERTED_FALLBACK,
+                                TextWriteResult.UPDATED_FALLBACK,
+                                TextWriteResult.UPGRADED_TO_AI -> Unit
+                            }
+                            return@forEach
+                        }
+                        when (store.putText(article.id, targetLanguage, text.title, text.summary, text.source)) {
+                            TextWriteResult.INSERTED_FALLBACK, TextWriteResult.UPDATED_FALLBACK ->
+                                log.info("Stored fallback text for article ${article.id} in $targetLanguage after a retryable attempt")
+
+                            TextWriteResult.UPGRADED_TO_AI ->
+                                log.info("Upgraded fallback text for article ${article.id} in $targetLanguage")
+
+                            TextWriteResult.INSERTED_AI,
+                            TextWriteResult.RETAINED_AI,
+                            TextWriteResult.RECORDED_UNSERVED -> Unit
+                        }
                     }
-                    delay(5.seconds)
+                    delay(renderDelay)
                 }
             }
     }
