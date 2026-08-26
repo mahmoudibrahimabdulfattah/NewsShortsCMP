@@ -21,6 +21,7 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNotNull
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNull
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
+import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
@@ -41,6 +42,21 @@ object Articles : Table("articles") {
     val createdAt = long("created_at")
 
     override val primaryKey = PrimaryKey(id)
+}
+
+/**
+ * Categories where an article URL has appeared.
+ *
+ * [Articles.category] is still the first-seen category, because legacy rows
+ * need a backfill source and unfiltered outputs need a stable badge. Feed
+ * membership lives here so a publisher's general feed cannot permanently steal
+ * a sports, tech, or business story from its own tab.
+ */
+object ArticleCategories : Table("article_categories") {
+    val articleId = long("article_id")
+    val category = varchar("category", 32).index()
+
+    override val primaryKey = PrimaryKey(articleId, category)
 }
 
 /**
@@ -210,7 +226,13 @@ class ArticleStore(dbPath: String) {
         transaction {
             SchemaUtils.createMissingTablesAndColumns(
                 Articles, ArticleTexts, PushLog, FeedPages, FeedPlaced, FeedPageState,
-                SharedArticles, PushHistory,
+                SharedArticles, PushHistory, ArticleCategories,
+            )
+            exec(
+                """
+                INSERT OR IGNORE INTO article_categories (article_id, category)
+                SELECT id, category FROM articles
+                """.trimIndent()
             )
         }
     }
@@ -389,7 +411,25 @@ class ArticleStore(dbPath: String) {
             it[Articles.publishedAt] = publishedAt
             it[createdAt] = System.currentTimeMillis()
         }
-        result.getOrNull(Articles.id)
+        val id = result.getOrNull(Articles.id)
+        if (id != null) {
+            ArticleCategories.insertIgnore {
+                it[articleId] = id
+                it[ArticleCategories.category] = category
+            }
+            return@transaction id
+        }
+
+        Articles.select(Articles.id)
+            .where { Articles.url eq url }
+            .singleOrNull()
+            ?.let { existing ->
+                ArticleCategories.insertIgnore {
+                    it[articleId] = existing[Articles.id]
+                    it[ArticleCategories.category] = category
+                }
+            }
+        null
     }
 
     /**
@@ -475,6 +515,7 @@ class ArticleStore(dbPath: String) {
             .map { it[Articles.id] }
         if (stale.isEmpty()) return@transaction 0
         ArticleTexts.deleteWhere { ArticleTexts.articleId inList stale }
+        ArticleCategories.deleteWhere { ArticleCategories.articleId inList stale }
         Articles.deleteWhere { Articles.id inList stale }
         stale.size
     }
@@ -559,8 +600,8 @@ class ArticleStore(dbPath: String) {
 
     /**
      * Article/language pairs still missing text, interleaved round-robin across
-     * (target language, category, country) groups so a burst from one source
-     * can't starve the other feeds of the per-cycle budget.
+     * (target language, chosen membership, country) groups so a burst from one
+     * source can't starve the other feeds of the per-cycle budget.
      *
      * [countryLanguages] are the languages every country feed is offered in.
      */
@@ -570,6 +611,11 @@ class ArticleStore(dbPath: String) {
                 (it[ArticleTexts.articleId] to it[ArticleTexts.language]) to
                     (it[ArticleTexts.textSource] to it[ArticleTexts.attempts])
             }
+        val memberships: Map<Long, List<String>> = ArticleCategories.selectAll()
+            .map { it[ArticleCategories.articleId] to it[ArticleCategories.category] }
+            .groupBy({ it.first }) { it.second }
+
+        data class PendingBucket(val targetLanguage: String, val country: String?, val category: String)
 
         // Every article missing text is grouped first and truncated only by the
         // round-robin below. Taking the newest N up front instead would let a
@@ -604,6 +650,32 @@ class ArticleStore(dbPath: String) {
                 }
             }
 
+        fun List<PendingText>.assignRarestMembership(): List<PendingText> {
+            if (isEmpty()) return this
+            val bucketSizes = HashMap<PendingBucket, Int>()
+            forEach { pending ->
+                val categories = memberships[pending.id]?.takeIf { it.isNotEmpty() } ?: listOf(pending.category)
+                categories.forEach { category ->
+                    val key = PendingBucket(pending.targetLanguage, pending.country, category)
+                    bucketSizes[key] = (bucketSizes[key] ?: 0) + 1
+                }
+            }
+            // Rendering is article-wide, but the queue still needs one category
+            // bucket for fairness. A general+sports story queued under general
+            // can sit behind hundreds of general-only articles, so it takes the
+            // membership with the fewest current competitors.
+            return map { pending ->
+                val categories = memberships[pending.id]?.takeIf { it.isNotEmpty() } ?: listOf(pending.category)
+                val category = categories.minWithOrNull(
+                    compareBy<String>(
+                        { bucketSizes[PendingBucket(pending.targetLanguage, pending.country, it)] ?: Int.MAX_VALUE },
+                        { it },
+                    )
+                ) ?: pending.category
+                pending.copy(category = category)
+            }
+        }
+
         fun List<PendingText>.roundRobin(): List<PendingText> {
             val queues = groupBy { Triple(it.targetLanguage, it.category, it.country) }
                 .values.map { it.iterator() }
@@ -622,10 +694,10 @@ class ArticleStore(dbPath: String) {
         // failures are recorded as UNSERVED rather than left rowless, otherwise
         // they would sit in the fresh bucket on all 48 daily publish runs until
         // retention pruned them.
-        val fresh = candidates.filter { it.second }.map { it.first }.roundRobin()
+        val fresh = candidates.filter { it.second }.map { it.first }.assignRarestMembership().roundRobin()
         if (fresh.size >= limit) return@transaction fresh.take(limit)
 
-        val retries = candidates.filterNot { it.second }.map { it.first }.roundRobin()
+        val retries = candidates.filterNot { it.second }.map { it.first }.assignRarestMembership().roundRobin()
         fresh + retries.take(limit - fresh.size)
     }
 
@@ -656,12 +728,16 @@ class ArticleStore(dbPath: String) {
         excludeCountryTagged: Boolean = false,
     ): Pair<List<FeedArticleDto>, Long> =
         transaction {
-            fun base() = Articles
+            fun base() = (if (category == null) {
+                Articles
+            } else {
+                Articles.join(ArticleCategories, JoinType.INNER, Articles.id, ArticleCategories.articleId)
+            })
                 .join(ArticleTexts, JoinType.INNER, onColumn = Articles.id, otherColumn = ArticleTexts.articleId)
                 .selectAll()
                 .also { query ->
                     language?.let { query.andWhere { ArticleTexts.language eq it } }
-                    category?.let { query.andWhere { Articles.category eq it } }
+                    category?.let { query.andWhere { ArticleCategories.category eq it } }
                     country?.let { query.andWhere { Articles.country eq it } }
                     if (excludeCountryTagged) query.andWhere { Articles.country.isNull() }
                     query.andWhere { ArticleTexts.textSource neq TextSource.UNSERVED }
@@ -687,7 +763,7 @@ class ArticleStore(dbPath: String) {
                         imageUrl = it[Articles.imageUrl],
                         sourceName = it[Articles.sourceName],
                         language = it[ArticleTexts.language],
-                        category = it[Articles.category],
+                        category = category ?: it[Articles.category],
                         publishedAt = it[Articles.publishedAt],
                     )
                 }
