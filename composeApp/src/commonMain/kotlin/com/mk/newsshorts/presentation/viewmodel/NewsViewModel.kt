@@ -26,6 +26,7 @@ import com.mk.newsshorts.domain.feed.appendPage
 import com.mk.newsshorts.domain.feed.shouldLoadNextPage
 import com.mk.newsshorts.domain.ranking.deprioritiseSeen
 import com.mk.newsshorts.sync.RemoteSyncClient
+import com.mk.newsshorts.sync.AccountSyncCoordinator
 import com.mk.newsshorts.sync.SyncFetch
 import com.mk.newsshorts.sync.SyncedSettings
 import com.mk.newsshorts.sync.toSyncedSettings
@@ -146,40 +147,24 @@ class NewsViewModel(
         }
     }
 
+    /**
+     * Everything that has to happen when the account changes lives in the
+     * coordinator, which is built here rather than injected because it needs
+     * [viewModelScope] and two callbacks that are the ViewModel's own.
+     */
+    private val accountSync = AccountSyncCoordinator(
+        remoteSyncClient = remoteSyncClient,
+        savedArticlesRepository = savedArticlesRepository,
+        currentSettings = { currentSyncedSettings() },
+        applyRemoteSettings = { applySyncedSettings(it) },
+    )
+
     private fun observeAuthState() {
         viewModelScope.launch {
-            var previousUid: String? = null
             authClient.currentUser.collect { user ->
                 mutableState.update { it.copy(authUser = user, authInProgress = false) }
-                if (user != null && user.uid != previousUid) {
-                    syncOnSignIn(user.uid)
-                }
-                previousUid = user?.uid
+                accountSync.onUserChanged(viewModelScope, user?.uid)
             }
-        }
-    }
-
-    /**
-     * Union the saved articles, let settings follow the account. Never the
-     * other way — see `mergeSavedArticles` for why a union is the only
-     * direction that cannot lose a bookmark.
-     */
-    private suspend fun syncOnSignIn(uid: String) {
-        when (val remoteSaved = remoteSyncClient.fetchSavedArticles(uid)) {
-            is SyncFetch.Found -> {
-                val merged = savedArticlesRepository.mergeWithRemote(remoteSaved.value)
-                remoteSyncClient.pushSavedArticles(uid, merged)
-            }
-            SyncFetch.NotFound -> remoteSyncClient.pushSavedArticles(uid, savedArticlesRepository.saved.value)
-            // Offline or a transient failure: neither side is touched, and the
-            // next launch (or the next save) tries again.
-            SyncFetch.Unavailable -> Unit
-        }
-
-        when (val remoteSettings = remoteSyncClient.fetchSettings(uid)) {
-            is SyncFetch.Found -> applySyncedSettings(remoteSettings.value)
-            SyncFetch.NotFound -> remoteSyncClient.pushSettings(uid, currentSyncedSettings())
-            SyncFetch.Unavailable -> Unit
         }
     }
 
