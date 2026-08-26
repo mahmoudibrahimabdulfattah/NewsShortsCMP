@@ -1,9 +1,12 @@
 package com.mk.newsshorts.sync
 
 import com.mk.newsshorts.data.repository.SavedArticlesRepository
+import com.mk.newsshorts.domain.model.NewsArticle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Owns everything that happens when the signed-in reader changes.
@@ -40,6 +43,23 @@ class AccountSyncCoordinator(
     private var job: Job? = null
 
     /**
+     * Every remote bookmark write goes through this, hydration included, so
+     * two of them can never be in flight at once. Each write replaces the whole
+     * document, so overlapping writes do not merge — the one that happens to
+     * finish last simply wins, and a slow older write landing after a fast
+     * newer one puts a deleted bookmark back.
+     */
+    private val savedWriteLock = Mutex()
+
+    /**
+     * The newest list waiting to be written. Only the newest matters: the write
+     * is the entire document, so an older snapshot in the queue has nothing to
+     * contribute that the newer one does not already contain.
+     */
+    private var pendingSaved: List<NewsArticle>? = null
+    private var savedWriter: Job? = null
+
+    /**
      * Call on every auth change, including sign-out ([uid] null) and including
      * a session Firebase restored on its own. Signing in as the same account
      * twice does not re-hydrate.
@@ -47,6 +67,8 @@ class AccountSyncCoordinator(
     fun onUserChanged(scope: CoroutineScope, uid: String?) {
         if (uid != null && uid == activeUid) return
         job?.cancel()
+        savedWriter?.cancel()
+        pendingSaved = null
         activeUid = uid
         job = if (uid == null) null else scope.launch { hydrate(uid) }
     }
@@ -61,11 +83,13 @@ class AccountSyncCoordinator(
             is SyncFetch.Found -> {
                 if (activeUid != uid) return
                 val merged = savedArticlesRepository.mergeWithRemote(remoteSaved.value)
-                remoteSyncClient.pushSavedArticles(uid, merged)
+                savedWriteLock.withLock { remoteSyncClient.pushSavedArticles(uid, merged) }
             }
             SyncFetch.NotFound -> {
                 if (activeUid != uid) return
-                remoteSyncClient.pushSavedArticles(uid, savedArticlesRepository.saved.value)
+                savedWriteLock.withLock {
+                    remoteSyncClient.pushSavedArticles(uid, savedArticlesRepository.saved.value)
+                }
             }
             // Offline or a transient failure: neither side is touched, and the
             // next launch (or the next save) tries again.
@@ -82,6 +106,25 @@ class AccountSyncCoordinator(
                 remoteSyncClient.pushSettings(uid, currentSettings())
             }
             SyncFetch.Unavailable -> Unit
+        }
+    }
+
+    /**
+     * Queue a bookmark list for the server. A no-op when signed out, which is
+     * why the caller does not have to check: the coordinator is the one thing
+     * that already knows which account is current.
+     */
+    fun pushSavedArticles(scope: CoroutineScope, articles: List<NewsArticle>) {
+        val uid = activeUid ?: return
+        pendingSaved = articles
+        if (savedWriter?.isActive == true) return
+        savedWriter = scope.launch {
+            while (true) {
+                val next = pendingSaved ?: break
+                pendingSaved = null
+                if (activeUid != uid) break
+                savedWriteLock.withLock { remoteSyncClient.pushSavedArticles(uid, next) }
+            }
         }
     }
 }

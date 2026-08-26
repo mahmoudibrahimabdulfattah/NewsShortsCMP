@@ -217,10 +217,14 @@ class NewsViewModel(
         if (languageChanged) loadNewsWithCache()
     }
 
-    /** Fire-and-forget: a signed-out reader is a no-op, a signed-in one pushes in the background. */
+    /**
+     * Queued rather than launched. Every one of these used to be its own
+     * coroutine, so two quick taps could finish in the wrong order and the
+     * slower, older list — still holding the bookmark just removed — was the
+     * one the server kept.
+     */
     private fun pushSavedArticlesIfSignedIn(articles: List<NewsArticle>) {
-        val uid = mutableState.value.authUser?.uid ?: return
-        viewModelScope.launch { remoteSyncClient.pushSavedArticles(uid, articles) }
+        accountSync.pushSavedArticles(viewModelScope, articles)
     }
 
     private fun pushSettingsIfSignedIn() {
