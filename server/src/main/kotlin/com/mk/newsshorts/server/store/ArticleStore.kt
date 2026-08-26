@@ -19,8 +19,11 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertIgnore
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNotNull
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNull
+import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.upsert
 
 object Articles : Table("articles") {
@@ -52,8 +55,27 @@ object ArticleTexts : Table("article_texts") {
     val language = varchar("language", 8).index()
     val title = text("title")
     val summary = text("summary")
+    // Existing CI caches get AI rather than FALLBACK. publish-feed runs 48
+    // times/day with MAX_SUMMARIES_PER_CYCLE=400, which is about 960 Gemini
+    // requests/day at BATCH_SIZE=20 against a roughly 1,000/day free-tier
+    // budget. Marking every cached row retryable would spend the whole quota on
+    // a backlog; the few legacy fallback rows this mislabels age out with the
+    // seven-day article retention instead.
+    val textSource = enumerationByName("source", 16, TextSource::class).default(TextSource.AI)
+    val attempts = integer("attempts").default(0)
 
     override val primaryKey = PrimaryKey(articleId, language)
+}
+
+enum class TextSource { AI, FALLBACK, UNSERVED }
+
+enum class TextWriteResult {
+    INSERTED_AI,
+    INSERTED_FALLBACK,
+    UPDATED_FALLBACK,
+    UPGRADED_TO_AI,
+    RETAINED_AI,
+    RECORDED_UNSERVED,
 }
 
 /**
@@ -457,16 +479,73 @@ class ArticleStore(dbPath: String) {
         stale.size
     }
 
-    fun putText(articleId: Long, language: String, title: String, summary: String) {
-        transaction {
-            ArticleTexts.insertIgnore {
-                it[ArticleTexts.articleId] = articleId
-                it[ArticleTexts.language] = language
-                it[ArticleTexts.title] = title
-                it[ArticleTexts.summary] = summary
+    /**
+     * Writes rendered article text without letting temporary stand-ins become
+     * final. The stored row is the guard: a generic SQLite upsert can make the
+     * AI-never-downgrades rule depend on dialect-specific generated SQL, but
+     * the rule we need is simpler when read in one transaction: real AI text is
+     * final unless the stored row itself says it was only retry bookkeeping.
+     */
+    fun putText(
+        articleId: Long,
+        language: String,
+        title: String,
+        summary: String,
+        source: TextSource,
+    ): TextWriteResult = transaction {
+        val existing = ArticleTexts.selectAll()
+            .andWhere { (ArticleTexts.articleId eq articleId) and (ArticleTexts.language eq language) }
+            .singleOrNull()
+
+        when {
+            existing == null -> {
+                ArticleTexts.insert {
+                    it[ArticleTexts.articleId] = articleId
+                    it[ArticleTexts.language] = language
+                    it[ArticleTexts.title] = title
+                    it[ArticleTexts.summary] = summary
+                    it[ArticleTexts.textSource] = source
+                    it[ArticleTexts.attempts] = if (source == TextSource.AI) 0 else 1
+                }
+                when (source) {
+                    TextSource.AI -> TextWriteResult.INSERTED_AI
+                    TextSource.FALLBACK -> TextWriteResult.INSERTED_FALLBACK
+                    TextSource.UNSERVED -> TextWriteResult.RECORDED_UNSERVED
+                }
+            }
+
+            existing[ArticleTexts.textSource] == TextSource.AI -> {
+                TextWriteResult.RETAINED_AI
+            }
+
+            else -> {
+                ArticleTexts.update(
+                    where = { (ArticleTexts.articleId eq articleId) and (ArticleTexts.language eq language) }
+                ) {
+                    it[ArticleTexts.title] = title
+                    it[ArticleTexts.summary] = summary
+                    it[ArticleTexts.textSource] = source
+                    it[ArticleTexts.attempts] = if (source == TextSource.AI) {
+                        0
+                    } else {
+                        existing[ArticleTexts.attempts] + 1
+                    }
+                }
+                when (source) {
+                    TextSource.AI -> TextWriteResult.UPGRADED_TO_AI
+                    TextSource.FALLBACK -> TextWriteResult.UPDATED_FALLBACK
+                    TextSource.UNSERVED -> TextWriteResult.RECORDED_UNSERVED
+                }
             }
         }
     }
+
+    fun recordUnservedTextAttempt(
+        articleId: Long,
+        language: String,
+        title: String,
+        summary: String,
+    ): TextWriteResult = putText(articleId, language, title, summary, TextSource.UNSERVED)
 
     data class PendingText(
         val id: Long,
@@ -486,15 +565,17 @@ class ArticleStore(dbPath: String) {
      * [countryLanguages] are the languages every country feed is offered in.
      */
     fun pendingTexts(limit: Int, countryLanguages: Set<String>): List<PendingText> = transaction {
-        val existing: Set<Pair<Long, String>> = ArticleTexts.selectAll()
-            .map { it[ArticleTexts.articleId] to it[ArticleTexts.language] }
-            .toSet()
+        val existing: Map<Pair<Long, String>, Pair<TextSource, Int>> = ArticleTexts.selectAll()
+            .associate {
+                (it[ArticleTexts.articleId] to it[ArticleTexts.language]) to
+                    (it[ArticleTexts.textSource] to it[ArticleTexts.attempts])
+            }
 
         // Every article missing text is grouped first and truncated only by the
         // round-robin below. Taking the newest N up front instead would let a
         // high-volume general source fill the whole window, leaving the smaller
         // category feeds permanently unrendered.
-        val queues = Articles.selectAll()
+        val candidates = Articles.selectAll()
             .orderBy(Articles.publishedAt, SortOrder.DESC)
             .flatMap { row ->
                 val id = row[Articles.id]
@@ -504,8 +585,13 @@ class ArticleStore(dbPath: String) {
                     add(sourceLanguage)
                     if (country != null) addAll(countryLanguages)
                 }
-                targets.filter { (id to it) !in existing }.map { target ->
-                    PendingText(
+                targets.mapNotNull { target ->
+                    val stored = existing[id to target]
+                    val retryableIncomplete = stored?.let { (source, attempts) ->
+                        source != TextSource.AI && attempts < MAX_TEXT_ATTEMPTS
+                    } == true
+                    if (stored != null && !retryableIncomplete) return@mapNotNull null
+                    val pending = PendingText(
                         id = id,
                         title = row[Articles.title],
                         description = row[Articles.description],
@@ -514,18 +600,33 @@ class ArticleStore(dbPath: String) {
                         category = row[Articles.category],
                         country = country,
                     )
+                    pending to (stored == null)
                 }
             }
-            .groupBy { Triple(it.targetLanguage, it.category, it.country) }
-            .values.map { it.iterator() }
 
-        val interleaved = ArrayList<PendingText>(limit)
-        while (interleaved.size < limit && queues.any { it.hasNext() }) {
-            queues.forEach { queue ->
-                if (interleaved.size < limit && queue.hasNext()) interleaved.add(queue.next())
+        fun List<PendingText>.roundRobin(): List<PendingText> {
+            val queues = groupBy { Triple(it.targetLanguage, it.category, it.country) }
+                .values.map { it.iterator() }
+
+            val interleaved = ArrayList<PendingText>(limit)
+            while (interleaved.size < limit && queues.any { it.hasNext() }) {
+                queues.forEach { queue ->
+                    if (interleaved.size < limit && queue.hasNext()) interleaved.add(queue.next())
+                }
             }
+            return interleaved
         }
-        interleaved
+
+        // Retries are bounded twice: incomplete rows stop after three attempts,
+        // and first-time pairs are always admitted before retries. Cross-language
+        // failures are recorded as UNSERVED rather than left rowless, otherwise
+        // they would sit in the fresh bucket on all 48 daily publish runs until
+        // retention pruned them.
+        val fresh = candidates.filter { it.second }.map { it.first }.roundRobin()
+        if (fresh.size >= limit) return@transaction fresh.take(limit)
+
+        val retries = candidates.filterNot { it.second }.map { it.first }.roundRobin()
+        fresh + retries.take(limit - fresh.size)
     }
 
     /**
@@ -563,6 +664,7 @@ class ArticleStore(dbPath: String) {
                     category?.let { query.andWhere { Articles.category eq it } }
                     country?.let { query.andWhere { Articles.country eq it } }
                     if (excludeCountryTagged) query.andWhere { Articles.country.isNull() }
+                    query.andWhere { ArticleTexts.textSource neq TextSource.UNSERVED }
                 }
 
             val total = base().count()
@@ -600,6 +702,8 @@ class ArticleStore(dbPath: String) {
 
         /** How long a [FeedPlaced] row outlives the article it names: 90 days. */
         const val PLACED_GRACE_MILLIS = 90L * 24 * 60 * 60 * 1000
+
+        const val MAX_TEXT_ATTEMPTS = 3
     }
 }
 

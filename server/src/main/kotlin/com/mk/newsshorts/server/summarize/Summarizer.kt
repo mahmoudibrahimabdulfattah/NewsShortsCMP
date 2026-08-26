@@ -1,5 +1,6 @@
 package com.mk.newsshorts.server.summarize
 
+import com.mk.newsshorts.server.store.TextSource
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.header
@@ -31,7 +32,7 @@ data class SummaryInput(
 )
 
 /** An article's title and summary in the requested language. */
-data class SummaryOutput(val title: String, val summary: String)
+data class SummaryOutput(val title: String, val summary: String, val source: TextSource)
 
 interface Summarizer {
     /** Returns article id -> rendered text. Missing ids mean rendering failed. */
@@ -122,7 +123,7 @@ class GeminiSummarizer(
                     ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
                 val title = obj["title"]?.jsonPrimitive?.content?.trim()
                     ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                id to SummaryOutput(title = title, summary = summary)
+                id to SummaryOutput(title = title, summary = summary, source = TextSource.AI)
             }.toMap()
         } catch (e: Exception) {
             log.warn("Gemini JSON parse failed: ${e.message}")
@@ -156,7 +157,7 @@ class FallbackSummarizer : Summarizer {
             val text = article.description?.trim().takeUnless { it.isNullOrEmpty() } ?: return@mapNotNull null
             val words = text.split(" ")
             val summary = if (words.size <= 70) text else words.take(70).joinToString(" ") + "…"
-            article.id to SummaryOutput(title = article.title, summary = summary)
+            article.id to SummaryOutput(title = article.title, summary = summary, source = TextSource.FALLBACK)
         }.toMap()
 }
 
