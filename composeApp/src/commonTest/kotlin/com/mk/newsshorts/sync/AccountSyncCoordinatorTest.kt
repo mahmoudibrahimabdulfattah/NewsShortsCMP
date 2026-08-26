@@ -212,4 +212,84 @@ class AccountSyncCoordinatorTest {
 
         assertTrue(f.applied.isEmpty(), "settings from an abandoned account were applied")
     }
+
+    @Test
+    fun `a slow older write cannot put back a bookmark a newer one removed`() = runTest {
+        val f = fixture(localArticles = listOf(local, remote), settings = settings)
+        f.repository.load()
+        f.sync.savedArticles = SyncFetch.NotFound
+        f.coordinator.onUserChanged(this, "reader-1")
+        advanceUntilIdle()
+        f.sync.pushedSavedArticles.clear()
+
+        // Every write is the whole document, so if the first one finishes last
+        // the server keeps the list that still contains the removed bookmark.
+        // The first write is made slow and the second fast, which is the only
+        // arrangement where the bug can actually show itself.
+        f.sync.pushSavedArticlesDelayMs = 1_000
+        f.coordinator.pushSavedArticles(this, listOf(local, remote))
+        runCurrent()
+        f.sync.pushSavedArticlesDelayMs = 0
+        f.coordinator.pushSavedArticles(this, listOf(local))
+        advanceUntilIdle()
+
+        val finalOnServer = f.sync.pushedSavedArticles.last().second
+        assertEquals(urls(listOf(local)), urls(finalOnServer), "the removed bookmark came back")
+    }
+
+    @Test
+    fun `queued writes are conflated rather than all sent`() = runTest {
+        val f = fixture(localArticles = listOf(local), settings = settings)
+        f.repository.load()
+        f.sync.savedArticles = SyncFetch.NotFound
+        f.coordinator.onUserChanged(this, "reader-1")
+        advanceUntilIdle()
+        f.sync.pushedSavedArticles.clear()
+
+        f.sync.pushSavedArticlesDelayMs = 1_000
+        f.coordinator.pushSavedArticles(this, listOf(local))
+        // Let the writer actually pick that one up and block on it, so the next
+        // two arrive with a write genuinely in flight.
+        runCurrent()
+        f.coordinator.pushSavedArticles(this, listOf(local, remote))
+        f.coordinator.pushSavedArticles(this, listOf(remote))
+        advanceUntilIdle()
+
+        // The one in flight, then a single write for the two behind it: an
+        // older snapshot has nothing the newer one does not already carry.
+        assertEquals(2, f.sync.pushedSavedArticles.size)
+        assertEquals(urls(listOf(remote)), urls(f.sync.pushedSavedArticles.last().second))
+    }
+
+    @Test
+    fun `a signed-out reader queues nothing`() = runTest {
+        val f = fixture(localArticles = listOf(local), settings = settings)
+        f.repository.load()
+
+        f.coordinator.pushSavedArticles(this, listOf(local))
+        advanceUntilIdle()
+
+        assertTrue(f.sync.pushedSavedArticles.isEmpty())
+    }
+
+    @Test
+    fun `a write queued for the previous account never reaches the new one`() = runTest {
+        val f = fixture(localArticles = listOf(local), settings = settings)
+        f.repository.load()
+        f.sync.savedArticles = SyncFetch.NotFound
+        f.coordinator.onUserChanged(this, "reader-1")
+        advanceUntilIdle()
+        f.sync.pushedSavedArticles.clear()
+
+        f.sync.pushSavedArticlesDelayMs = 1_000
+        f.coordinator.pushSavedArticles(this, listOf(local, remote))
+        runCurrent()
+        f.coordinator.onUserChanged(this, "reader-2")
+        advanceUntilIdle()
+
+        assertTrue(
+            f.sync.pushedSavedArticles.none { it.first == "reader-1" },
+            "the abandoned account's queued write still went out",
+        )
+    }
 }
