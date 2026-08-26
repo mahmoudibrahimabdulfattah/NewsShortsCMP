@@ -292,4 +292,82 @@ class AccountSyncCoordinatorTest {
             "the abandoned account's queued write still went out",
         )
     }
+
+    @Test
+    fun `a slow older settings write cannot undo a newer change`() = runTest {
+        val f = fixture(localArticles = listOf(local), settings = settings)
+        f.repository.load()
+        f.sync.savedArticles = SyncFetch.NotFound
+        f.sync.settings = SyncFetch.NotFound
+        f.coordinator.onUserChanged(this, "reader-1")
+        advanceUntilIdle()
+        f.sync.pushedSettings.clear()
+
+        // The reader switches to dark, changes their mind, switches to light —
+        // and the first request is the slow one.
+        f.sync.pushSettingsDelayMs = 1_000
+        f.coordinator.pushSettings(this, settings.copy(themeMode = "dark"))
+        runCurrent()
+        f.sync.pushSettingsDelayMs = 0
+        f.coordinator.pushSettings(this, settings.copy(themeMode = "light"))
+        advanceUntilIdle()
+
+        assertEquals("light", f.sync.pushedSettings.last().second.themeMode)
+    }
+
+    @Test
+    fun `a burst of settings changes finishes on the newest snapshot`() = runTest {
+        val f = fixture(localArticles = listOf(local), settings = settings)
+        f.repository.load()
+        f.sync.savedArticles = SyncFetch.NotFound
+        f.sync.settings = SyncFetch.NotFound
+        f.coordinator.onUserChanged(this, "reader-1")
+        advanceUntilIdle()
+        f.sync.pushedSettings.clear()
+
+        f.sync.pushSettingsDelayMs = 1_000
+        f.coordinator.pushSettings(this, settings.copy(themeMode = "dark"))
+        runCurrent()
+        f.coordinator.pushSettings(this, settings.copy(themeMode = "light"))
+        f.coordinator.pushSettings(this, settings.copy(themeMode = "system", newsLanguage = "en"))
+        advanceUntilIdle()
+
+        assertEquals(2, f.sync.pushedSettings.size)
+        val last = f.sync.pushedSettings.last().second
+        assertEquals("system", last.themeMode)
+        assertEquals("en", last.newsLanguage)
+    }
+
+    @Test
+    fun `settings queued for the previous account never reach the new one`() = runTest {
+        val f = fixture(localArticles = listOf(local), settings = settings)
+        f.repository.load()
+        f.sync.savedArticles = SyncFetch.NotFound
+        f.sync.settings = SyncFetch.NotFound
+        f.coordinator.onUserChanged(this, "reader-1")
+        advanceUntilIdle()
+        f.sync.pushedSettings.clear()
+
+        f.sync.pushSettingsDelayMs = 1_000
+        f.coordinator.pushSettings(this, settings.copy(themeMode = "dark"))
+        runCurrent()
+        f.coordinator.onUserChanged(this, "reader-2")
+        advanceUntilIdle()
+
+        assertTrue(
+            f.sync.pushedSettings.none { it.first == "reader-1" },
+            "the abandoned account's queued settings still went out",
+        )
+    }
+
+    @Test
+    fun `a signed-out reader queues no settings`() = runTest {
+        val f = fixture(localArticles = listOf(local), settings = settings)
+        f.repository.load()
+
+        f.coordinator.pushSettings(this, settings)
+        advanceUntilIdle()
+
+        assertTrue(f.sync.pushedSettings.isEmpty())
+    }
 }
