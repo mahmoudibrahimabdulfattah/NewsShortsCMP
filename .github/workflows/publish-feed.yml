@@ -8,6 +8,12 @@ on:
   schedule:
     - cron: "0,30 * * * *"
   workflow_dispatch:
+    inputs:
+      disable_health_guards:
+        description: Publish this manual run even when feed health checks fail
+        required: false
+        default: false
+        type: boolean
   push:
     branches: [master]
     paths:
@@ -28,6 +34,8 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    outputs:
+      health_summary: ${{ steps.health_diagnostic.outputs.summary }}
     steps:
       - uses: actions/checkout@v4
 
@@ -53,6 +61,10 @@ jobs:
           # Optional: without it the run publishes the feed but sends no push.
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           DB_PATH: news.db
+          # A manual bypass applies only to the run that requested it, so an
+          # incident override cannot silently weaken later scheduled publishes.
+          DISABLE_PUBLISH_HEALTH_GUARDS: ${{ github.event_name == 'workflow_dispatch' && inputs.disable_health_guards }}
+          STALE_HOURS: ${{ vars.STALE_HOURS }}
           # 20 Gemini requests per run (batches of 10) x 48 runs/day stays
           # inside the free tier's ~1,500 requests/day.
           # 400 renders is 20 Gemini requests per run at BATCH_SIZE=20; at two
@@ -88,6 +100,30 @@ jobs:
           EMULATOR_POLICY: ${{ vars.EMULATOR_POLICY }}
         run: ./gradlew :server:generateStaticFeed -PoutputDir=build/site --no-daemon
 
+      - name: Read health diagnostic
+        id: health_diagnostic
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          if [[ -f build/site/v1/health.json ]]; then
+            summary="$(jq -c '{generatedAt, guardsDisabled, failedChecks, sourcesTotal, sourcesEmpty, articlesInserted, textsRendered, textsFailed, feedArticles, newestArticleAt}' build/site/v1/health.json)"
+            echo "summary=$summary" >> "$GITHUB_OUTPUT"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "summary=" >> "$GITHUB_OUTPUT"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A failed generator never reaches the Pages artifact step, so its health
+      # file needs a separate path off the runner for diagnosis.
+      - name: Upload health diagnostic
+        if: ${{ always() && steps.health_diagnostic.outputs.exists == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-health-${{ github.run_id }}
+          path: build/site/v1/health.json
+          retention-days: 7
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
@@ -96,3 +132,79 @@ jobs:
 
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  alert:
+    needs: publish
+    if: ${{ always() && (needs.publish.result == 'failure' || needs.publish.result == 'cancelled') }}
+    runs-on: ubuntu-latest
+    permissions: { issues: write }
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HEALTH_SUMMARY: ${{ needs.publish.outputs.health_summary }}
+      PUBLISH_RESULT: ${{ needs.publish.result }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Open or update publish failure
+        shell: bash
+        run: |
+          gh label create publish-failure \
+            --repo "$GITHUB_REPOSITORY" \
+            --color D73A4A \
+            --description "The scheduled news feed publish needs attention" \
+            --force
+
+          body_file="$RUNNER_TEMP/publish-failure.md"
+          {
+            printf 'The news feed publish concluded **%s**.\n\n' "$PUBLISH_RESULT"
+            printf '[Open the workflow run](%s) for logs and artifacts.\n\n' "$RUN_URL"
+            if [[ -n "$HEALTH_SUMMARY" ]]; then
+              printf 'Health summary:\n\n```json\n%s\n```\n' "$HEALTH_SUMMARY"
+            else
+              printf 'No health report was produced. The run failed before health evaluation, during infrastructure setup, or after generation.\n'
+            fi
+          } > "$body_file"
+
+          issue_number="$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --label publish-failure \
+            --limit 1 \
+            --json number \
+            --jq '.[0].number // empty')"
+          if [[ -n "$issue_number" ]]; then
+            gh issue comment "$issue_number" --repo "$GITHUB_REPOSITORY" --body-file "$body_file"
+          else
+            gh issue create \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "News feed publish is failing" \
+              --label publish-failure \
+              --body-file "$body_file"
+          fi
+
+  recover:
+    needs: publish
+    if: ${{ always() && needs.publish.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions: { issues: write }
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Close a recovered publish failure
+        shell: bash
+        run: |
+          issue_number="$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --label publish-failure \
+            --limit 1 \
+            --json number \
+            --jq '.[0].number // empty')"
+          if [[ -z "$issue_number" ]]; then
+            exit 0
+          fi
+
+          body_file="$RUNNER_TEMP/publish-recovery.md"
+          printf 'The feed published successfully again: [open the recovery run](%s).\n' "$RUN_URL" > "$body_file"
+          gh issue comment "$issue_number" --repo "$GITHUB_REPOSITORY" --body-file "$body_file"
+          gh issue close "$issue_number" --repo "$GITHUB_REPOSITORY"

@@ -107,22 +107,29 @@ object StaticFeedGenerator {
     private const val DEFAULT_MAX_SHARE_PAGES = 40_000
 
     private const val MILLIS_PER_DAY = 24L * 60 * 60 * 1000
+    private const val DEFAULT_STALE_HOURS = 24L
 
     fun generate(outputDir: File, dbPath: String) = runBlocking {
         val store = ArticleStore(dbPath)
-        IngestionPipeline(store, RssFetcher(), buildSummarizer()).runCycle()
+        val cycle = IngestionPipeline(store, RssFetcher(), buildSummarizer()).runCycle()
+        val generatedAt = System.currentTimeMillis()
 
         val feedDir = File(outputDir, "v1/feed").apply { mkdirs() }
         var filesWritten = 0
+        val feedArticles = linkedMapOf<String, Int>()
+        val newestArticleAt = linkedMapOf<String, Long?>()
 
         FeedCatalog.languages.forEach { language ->
-            filesWritten += write(feedDir, store, feedKey = language, language = language, category = null)
+            val languageFeed = write(feedDir, store, feedKey = language, language = language, category = null)
+            filesWritten += languageFeed.filesWritten
+            feedArticles[language] = languageFeed.articles.size
+            newestArticleAt[language] = newestPlausibleArticleAt(languageFeed.articles, generatedAt)
 
             FeedCatalog.categories.forEach { category ->
                 filesWritten += write(
                     feedDir, store,
                     feedKey = "$language-$category", language = language, category = category,
-                )
+                ).filesWritten
             }
         }
 
@@ -132,7 +139,7 @@ object StaticFeedGenerator {
                     feedDir, store,
                     feedKey = "country-$country-$language",
                     language = language, category = null, country = country,
-                )
+                ).filesWritten
             }
         }
 
@@ -170,6 +177,7 @@ object StaticFeedGenerator {
                     languages = FeedCatalog.languages.toList(),
                     categories = FeedCatalog.categories.toList(),
                     countries = FeedCatalog.countries.toList(),
+                    generatedAt = generatedAt,
                 )
             )
         )
@@ -184,8 +192,31 @@ object StaticFeedGenerator {
         // Without this, GitHub Pages runs the output through Jekyll.
         File(outputDir, ".nojekyll").writeText("")
 
-        // After publishing, not before: a notification should never point at a
-        // story the feed has not caught up with yet.
+        val guardsDisabled = System.getenv("DISABLE_PUBLISH_HEALTH_GUARDS")
+            ?.trim()?.toBooleanStrictOrNull() == true
+        val health = writePublishHealth(
+            outputDir = outputDir,
+            health = PublishHealth(
+                generatedAt = generatedAt,
+                sourcesTotal = cycle.sourcesTotal,
+                sourcesEmpty = cycle.sourcesEmpty,
+                articlesInserted = cycle.articlesInserted,
+                textsRendered = cycle.textsRendered,
+                textsFailed = cycle.textsFailed,
+                feedArticles = feedArticles,
+                newestArticleAt = newestArticleAt,
+                guardsDisabled = guardsDisabled,
+            ),
+            now = generatedAt,
+            staleHours = envPositiveLong("STALE_HOURS", DEFAULT_STALE_HOURS),
+        )
+        filesWritten++
+        if (health.guardsDisabled && health.failedChecks.isNotEmpty()) {
+            log.warn("Publish health guards were disabled for this run: ${health.failedChecks.joinToString()}")
+        }
+
+        // A notification cannot escape from a run that Pages has rejected, or
+        // readers can receive a story that never reaches their feed or inbox.
         // fromEnvironment reports why it declined, so this only notes the effect.
         val notifier = PushNotifier.fromEnvironment()
         if (notifier == null) log.info("Push is not configured — skipping")
@@ -248,6 +279,15 @@ object StaticFeedGenerator {
         val raw = System.getenv(name)?.takeUnless { it.isBlank() } ?: return default
         return raw.trim().toIntOrNull() ?: run {
             log.warn("$name is set to '$raw', which is not a number — using $default")
+            default
+        }
+    }
+
+    /** A non-positive window would make every healthy article stale immediately. */
+    private fun envPositiveLong(name: String, default: Long): Long {
+        val raw = System.getenv(name)?.takeUnless { it.isBlank() } ?: return default
+        return raw.trim().toLongOrNull()?.takeIf { it > 0 } ?: run {
+            log.warn("$name is set to '$raw', which is not a positive number — using $default")
             default
         }
     }
@@ -421,6 +461,8 @@ object StaticFeedGenerator {
      * pages exactly as they were so a reader half way down the feed is not
      * reading a boundary that moved under them since they started.
      */
+    private data class FeedWriteResult(val filesWritten: Int, val articles: List<FeedArticleDto>)
+
     private fun write(
         feedDir: File,
         store: ArticleStore,
@@ -428,7 +470,7 @@ object StaticFeedGenerator {
         language: String,
         category: String?,
         country: String? = null,
-    ): Int {
+    ): FeedWriteResult {
         val (articles, total) = store.feed(
             language = language, category = category,
             limit = MAX_FEED_ARTICLES, offset = 0, country = country,
@@ -448,6 +490,7 @@ object StaticFeedGenerator {
         store.saveFeedLayout(feedKey, layout)
 
         val byId = articles.associateBy { it.id }
+        val published = mutableListOf<FeedArticleDto>()
         layout.pages.forEachIndexed { index, page ->
             val next = layout.pages.getOrNull(index + 1)
                 ?.let { FeedPageNames.fileFor(feedKey, layout, index + 1) }
@@ -458,8 +501,9 @@ object StaticFeedGenerator {
             )
             File(feedDir, FeedPageNames.fileFor(feedKey, layout, index))
                 .writeText(json.encodeToString(body))
+            published += body.articles
         }
-        return layout.pages.size
+        return FeedWriteResult(filesWritten = layout.pages.size, articles = published)
     }
 }
 
@@ -488,4 +532,5 @@ private data class MetaResponse(
     val languages: List<String>,
     val categories: List<String>,
     val countries: List<String>,
+    val generatedAt: Long,
 )

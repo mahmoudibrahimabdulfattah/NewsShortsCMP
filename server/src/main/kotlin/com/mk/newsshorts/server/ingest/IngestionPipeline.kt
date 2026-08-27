@@ -18,6 +18,16 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * fetch RSS -> insert new articles -> summarize pending -> repeat.
  */
+data class CycleReport(
+    val sourcesTotal: Int,
+    val sourcesEmpty: Int,
+    val articlesInserted: Int,
+    val textsRendered: Int,
+    val textsFailed: Int,
+)
+
+internal data class TextRenderReport(val rendered: Int, val failed: Int)
+
 class IngestionPipeline(
     private val store: ArticleStore,
     private val fetcher: RssFetcher,
@@ -43,7 +53,7 @@ class IngestionPipeline(
         }
     }
 
-    suspend fun runCycle() {
+    suspend fun runCycle(): CycleReport {
         var inserted = 0
         val emptySources = mutableListOf<String>()
         FeedCatalog.sources.forEach { source ->
@@ -74,13 +84,22 @@ class IngestionPipeline(
         val pruned = store.prune(System.currentTimeMillis() - retentionDays * MILLIS_PER_DAY)
         if (pruned > 0) log.info("Pruned $pruned articles older than $retentionDays days")
 
-        summarizePending()
+        val texts = summarizePending()
+        return CycleReport(
+            sourcesTotal = FeedCatalog.sources.size,
+            sourcesEmpty = emptySources.size,
+            articlesInserted = inserted,
+            textsRendered = texts.rendered,
+            textsFailed = texts.failed,
+        )
     }
 
-    internal suspend fun summarizePending() {
+    internal suspend fun summarizePending(): TextRenderReport {
         val pending = store.pendingTexts(maxSummariesPerCycle, FeedCatalog.countryLanguages)
-        if (pending.isEmpty()) return
+        if (pending.isEmpty()) return TextRenderReport(rendered = 0, failed = 0)
         log.info("Rendering ${pending.size} article texts")
+        var renderedCount = 0
+        var failedCount = 0
 
         // Batch per target language, sequential requests with a gap to respect
         // the Gemini free tier's ~15 RPM limit.
@@ -94,8 +113,12 @@ class IngestionPipeline(
                     )
                     // The fallback can't translate, so only keep what it
                     // produced when the article is already in this language.
-                    chunk.forEach { article ->
-                        val text = rendered[article.id] ?: return@forEach
+                    chunk.forEach articleLoop@{ article ->
+                        val text = rendered[article.id]
+                        if (text == null) {
+                            failedCount++
+                            return@articleLoop
+                        }
                         val untranslatedCrossLanguage =
                             article.sourceLanguage != targetLanguage &&
                                 (text.source == TextSource.FALLBACK || text.title == article.title)
@@ -112,17 +135,19 @@ class IngestionPipeline(
                                     article.description.orEmpty(),
                                 )
                             ) {
-                                TextWriteResult.RECORDED_UNSERVED ->
+                                TextWriteResult.RECORDED_UNSERVED -> {
+                                    failedCount++
                                     log.info("Recorded unserved text attempt for article ${article.id} in $targetLanguage")
+                                }
 
-                                TextWriteResult.RETAINED_AI -> Unit
+                                TextWriteResult.RETAINED_AI -> renderedCount++
 
                                 TextWriteResult.INSERTED_AI,
                                 TextWriteResult.INSERTED_FALLBACK,
                                 TextWriteResult.UPDATED_FALLBACK,
-                                TextWriteResult.UPGRADED_TO_AI -> Unit
+                                TextWriteResult.UPGRADED_TO_AI -> failedCount++
                             }
-                            return@forEach
+                            return@articleLoop
                         }
                         when (store.putText(article.id, targetLanguage, text.title, text.summary, text.source)) {
                             TextWriteResult.INSERTED_FALLBACK, TextWriteResult.UPDATED_FALLBACK ->
@@ -131,14 +156,20 @@ class IngestionPipeline(
                             TextWriteResult.UPGRADED_TO_AI ->
                                 log.info("Upgraded fallback text for article ${article.id} in $targetLanguage")
 
+                            TextWriteResult.RECORDED_UNSERVED -> {
+                                failedCount++
+                                return@articleLoop
+                            }
+
                             TextWriteResult.INSERTED_AI,
-                            TextWriteResult.RETAINED_AI,
-                            TextWriteResult.RECORDED_UNSERVED -> Unit
+                            TextWriteResult.RETAINED_AI -> Unit
                         }
+                        renderedCount++
                     }
                     delay(renderDelay)
                 }
             }
+        return TextRenderReport(rendered = renderedCount, failed = failedCount)
     }
 
     private companion object {
