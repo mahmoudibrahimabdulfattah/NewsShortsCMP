@@ -68,6 +68,7 @@ fun Application.module() {
                     "languages" to FeedCatalog.languages.toList(),
                     "categories" to FeedCatalog.categories.toList(),
                     "countries" to FeedCatalog.countries.toList(),
+                    "generatedAt" to System.currentTimeMillis(),
                 )
             )
         }
