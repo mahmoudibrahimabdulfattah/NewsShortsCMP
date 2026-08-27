@@ -4,6 +4,7 @@ import com.mk.newsshorts.server.model.FeedArticleDto
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -67,5 +68,16 @@ class ArticleDeepLinksTest {
     @Test
     fun `omits an absent image`() {
         assertTrue("image=" !in ArticleDeepLinks.build(article(imageUrl = null)))
+    }
+
+    @Test
+    fun `article identity survives every character used inside a source url`() {
+        val url = "https://example.com/بحث?q=a+b&next=س=ص"
+        val link = ArticleDeepLinks.build(article(url = url))
+
+        assertEquals(url, ArticleDeepLinks.articleUrlOf(link))
+        assertNull(ArticleDeepLinks.articleUrlOf("Read today's headlines"))
+        assertNull(ArticleDeepLinks.articleUrlOf("https://example.com/?url=https%3A%2F%2Fexample.com"))
+        assertNull(ArticleDeepLinks.articleUrlOf("newsshorts://article?url=https%3A%2F%2Fexample.com%2"))
     }
 }

@@ -1,7 +1,11 @@
 package com.mk.newsshorts.server.push
 
 import com.mk.newsshorts.server.model.FeedArticleDto
+import java.io.ByteArrayOutputStream
+import java.net.URI
 import java.net.URLEncoder
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 
 /**
  * Builds the `newsshorts://article` link a notification carries, so tapping it
@@ -34,6 +38,38 @@ object ArticleDeepLinks {
             val trimTo = (summary.length - (overflow / 6).coerceAtLeast(1)).coerceAtLeast(0)
             summary = summary.take(trimTo)
         }
+    }
+
+    /**
+     * Returns the article URL carried by one of this app's deep links.
+     *
+     * This deliberately decodes percent escapes only. Treating `+` as form
+     * encoding would change a valid article URL and let the same story miss an
+     * exact-URL de-duplication check.
+     */
+    fun articleUrlOf(link: String): String? {
+        val uri = runCatching { URI(link) }.getOrNull() ?: return null
+        if (!uri.scheme.equals(SCHEME, ignoreCase = true) ||
+            !uri.rawAuthority.equals(HOST, ignoreCase = true) ||
+            !uri.rawPath.isNullOrEmpty() ||
+            uri.rawFragment != null
+        ) {
+            return null
+        }
+
+        val encodedUrl = uri.rawQuery
+            ?.split('&')
+            ?.firstNotNullOfOrNull { entry ->
+                val separator = entry.indexOf('=')
+                if (separator >= 0 && entry.substring(0, separator) == "url") {
+                    entry.substring(separator + 1)
+                } else {
+                    null
+                }
+            }
+            ?: return null
+
+        return percentDecode(encodedUrl)?.takeIf { it.isNotEmpty() }
     }
 
     private fun compose(article: FeedArticleDto, summary: String): String = link(
@@ -85,4 +121,31 @@ object ArticleDeepLinks {
      */
     private fun encode(value: String): String =
         URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+
+    private fun percentDecode(value: String): String? {
+        val bytes = ByteArrayOutputStream(value.length)
+        var index = 0
+        while (index < value.length) {
+            if (value[index] == '%') {
+                if (index + 2 >= value.length) return null
+                val high = value[index + 1].digitToIntOrNull(16) ?: return null
+                val low = value[index + 2].digitToIntOrNull(16) ?: return null
+                bytes.write((high shl 4) or low)
+                index += 3
+            } else {
+                val codePoint = value.codePointAt(index)
+                val raw = String(Character.toChars(codePoint)).toByteArray(Charsets.UTF_8)
+                bytes.write(raw)
+                index += Character.charCount(codePoint)
+            }
+        }
+
+        return runCatching {
+            Charsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(bytes.toByteArray()))
+                .toString()
+        }.getOrNull()
+    }
 }

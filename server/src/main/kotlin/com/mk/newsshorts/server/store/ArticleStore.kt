@@ -10,6 +10,7 @@ import org.jetbrains.exposed.sql.JoinType
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
@@ -318,6 +319,21 @@ class ArticleStore(dbPath: String) {
             .firstOrNull()?.get(PushLog.sentAt)
     }
 
+    /**
+     * The latest pacing value while it can still suppress a repeat.
+     *
+     * Old cached databases can have this row without a matching history row,
+     * but letting it outlive the history window would turn a bounded cooldown
+     * into permanent suppression.
+     */
+    fun recentPushArticleUrl(topic: String, sinceMillis: Long): String? = transaction {
+        PushLog.selectAll()
+            .andWhere { PushLog.topic eq topic }
+            .andWhere { PushLog.sentAt greaterEq sinceMillis }
+            .firstOrNull()
+            ?.get(PushLog.articleUrl)
+    }
+
     fun recordPush(topic: String, articleUrl: String, sentAt: Long) {
         transaction {
             PushLog.deleteWhere { PushLog.topic eq topic }
@@ -330,12 +346,42 @@ class ArticleStore(dbPath: String) {
     }
 
     /**
-     * Adds one sent notification to the history the inbox is published from.
+     * Records both consequences of one confirmed delivery atomically.
      *
-     * Separate from [recordPush] rather than folded into it: that call is the
-     * pacing record and has to stay one row per topic, and a send that fails
-     * must leave neither behind.
+     * If the process stops between separate commits, the quiet window can
+     * survive without the history needed to prevent the same story being sent
+     * after it. One transaction leaves either both records or neither.
      */
+    fun recordSuccessfulPush(
+        topic: String,
+        articleUrl: String,
+        language: String,
+        tier: String,
+        title: String,
+        body: String,
+        deepLink: String?,
+        sentAt: Long,
+    ) {
+        transaction {
+            PushLog.deleteWhere { PushLog.topic eq topic }
+            PushLog.insert {
+                it[PushLog.topic] = topic
+                it[PushLog.articleUrl] = articleUrl
+                it[PushLog.sentAt] = sentAt
+            }
+            PushHistory.insertIgnore {
+                it[PushHistory.topic] = topic
+                it[PushHistory.sentAt] = sentAt
+                it[PushHistory.language] = language
+                it[PushHistory.tier] = tier
+                it[PushHistory.title] = title
+                it[PushHistory.body] = body
+                it[PushHistory.deepLink] = deepLink
+            }
+        }
+    }
+
+    /** Adds one sent notification to the history the inbox is published from. */
     fun recordPushHistory(
         topic: String,
         language: String,
@@ -380,6 +426,17 @@ class ArticleStore(dbPath: String) {
                     deepLink = it[PushHistory.deepLink].orEmpty(),
                 )
             }
+    }
+
+    /** Article-carrying sends inside the de-duplication window, newest first. */
+    fun recentPushedDeepLinks(topic: String, sinceMillis: Long, limit: Int): List<String> = transaction {
+        PushHistory.selectAll()
+            .andWhere { PushHistory.topic eq topic }
+            .andWhere { PushHistory.sentAt greaterEq sinceMillis }
+            .andWhere { PushHistory.deepLink.isNotNull() }
+            .orderBy(PushHistory.sentAt, SortOrder.DESC)
+            .limit(limit)
+            .mapNotNull { it[PushHistory.deepLink] }
     }
 
     /** Drops history sent before [cutoffMillis]. */

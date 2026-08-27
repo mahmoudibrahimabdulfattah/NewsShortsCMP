@@ -50,16 +50,13 @@ class BreakingNewsPusher(
                 return@forEach
             }
 
-            val message = selectMessage(language, now)
+            val message = selectMessage(language, topic, now)
             log.info("Sending ${message.tier.label} to $topic: ${message.title.take(60)}")
 
             if (notifier.send(topic, message)) {
-                store.recordPush(topic, message.deepLink ?: message.title, now)
-                // The pacing record above keeps one row per topic. This keeps
-                // all of them, because the in-app inbox is a list of what a
-                // reader missed rather than a question about the last send.
-                store.recordPushHistory(
+                store.recordSuccessfulPush(
                     topic = topic,
+                    articleUrl = message.deepLink ?: message.title,
                     language = language,
                     tier = message.tier.label,
                     title = message.title,
@@ -76,8 +73,17 @@ class BreakingNewsPusher(
         }
     }
 
-    private fun selectMessage(language: String, now: Long): PushMessage {
-        val article = newestGeneralStory(language)
+    private fun selectMessage(language: String, topic: String, now: Long): PushMessage {
+        val sinceMillis = now - DEDUPE_WINDOW.inWholeMilliseconds
+        val sentLinks = store.recentPushedDeepLinks(topic, sinceMillis, DEDUPE_DEPTH) +
+            listOfNotNull(store.recentPushArticleUrl(topic, sinceMillis))
+
+        // A URL survives fallback-to-AI text upgrades and payload trimming,
+        // while a database restore can reuse an article id for another story.
+        // Reminder titles are not deep links, so they cannot make a real
+        // article look sent or suppress the next reminder.
+        val alreadySent = sentLinks.mapNotNullTo(HashSet(), ArticleDeepLinks::articleUrlOf)
+        val article = newestUnsentGeneralStory(language, alreadySent)
         val age = article?.let { now - it.publishedAt }
 
         return when {
@@ -88,15 +94,24 @@ class BreakingNewsPusher(
                 article.toMessage(PushTier.TOP_STORY)
 
             else -> {
-                val reason = if (article == null) "no summarized story" else "newest is ${age!! / 60_000} min old"
+                val reason = if (article == null) {
+                    "no unsent summarized story among ${alreadySent.size + 1} candidates"
+                } else {
+                    "newest is ${age!! / 60_000} min old"
+                }
                 log.info("Falling back to a reminder for news_$language — $reason")
                 reminder(language, now)
             }
         }
     }
 
-    private fun newestGeneralStory(language: String): FeedArticleDto? =
-        store.feed(language = language, category = "general", limit = 1, offset = 0).first.firstOrNull()
+    private fun newestUnsentGeneralStory(language: String, alreadySent: Set<String>): FeedArticleDto? =
+        store.feed(
+            language = language,
+            category = "general",
+            limit = alreadySent.size + 1,
+            offset = 0,
+        ).first.firstOrNull { it.url !in alreadySent }
 
     private fun FeedArticleDto.toMessage(tier: PushTier) = PushMessage(
         title = title,
@@ -119,6 +134,20 @@ class BreakingNewsPusher(
 
         /** Still worth a headline, just not an urgent one. */
         val TOP_STORY_WINDOW = 1.days
+
+        /**
+         * The production workflow retains articles for seven days, while a
+         * headline is only eligible for one. Covering the retained lifecycle
+         * prevents rotation back to an old story without building a permanent
+         * send ledger, so a URL can become news again after its old row leaves.
+         */
+        val DEDUPE_WINDOW = 7.days
+
+        /**
+         * Seven days at the four-slot budget is 28 rows; four spare keep the
+         * query bounded at scheduling edges.
+         */
+        const val DEDUPE_DEPTH = 32
 
         const val BODY_LIMIT = 160
         const val MILLIS_PER_DAY = 86_400_000L
