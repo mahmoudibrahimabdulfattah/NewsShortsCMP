@@ -49,7 +49,7 @@ jobs:
       # Carries summaries between runs so already-summarized articles don't
       # spend Gemini quota again.
       - name: Restore article database
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: news.db
           key: news-db-${{ github.run_id }}
@@ -65,11 +65,22 @@ jobs:
           # incident override cannot silently weaken later scheduled publishes.
           DISABLE_PUBLISH_HEALTH_GUARDS: ${{ github.event_name == 'workflow_dispatch' && inputs.disable_health_guards }}
           STALE_HOURS: ${{ vars.STALE_HOURS }}
-          # 20 Gemini requests per run (batches of 10) x 48 runs/day stays
-          # inside the free tier's ~1,500 requests/day.
-          # 400 renders is 20 Gemini requests per run at BATCH_SIZE=20; at two
-          # runs an hour that stays well inside the free tier's daily cap.
+          # A specialised feed must hold at least one complete page. Unset uses
+          # the backend default of 40.
+          MIN_CATEGORY_ARTICLES: ${{ vars.MIN_CATEGORY_ARTICLES }}
+          # The whole Gemini budget for a run, and the arithmetic behind it.
+          # The free tier caps requests per day, not tokens, so the two numbers
+          # below are request counts in disguise: 400 renders is 20 requests at
+          # the summarizer's batch of 20, and 600 classifications is 6 more at
+          # the classifier's batch of 100. Twenty-six requests, 48 runs a day,
+          # is about 1,250 against a cap near 1,500 — with room for the retries
+          # a bad afternoon adds.
           MAX_SUMMARIES_PER_CYCLE: "400"
+          # Only articles already summarized reach this queue: a new article is
+          # classified inside the request that writes its summary, for free.
+          # This is what drains the backlog left by every article stored before
+          # classification existed, and 600 a run clears a week of them in a day.
+          MAX_CLASSIFICATIONS_PER_CYCLE: "600"
           # A week of history gives the thinner categories enough depth to
           # scroll through; older articles are pruned before rendering so the
           # budget never goes to stale news.
@@ -106,7 +117,7 @@ jobs:
         shell: bash
         run: |
           if [[ -f build/site/v1/health.json ]]; then
-            summary="$(jq -c '{generatedAt, guardsDisabled, failedChecks, sourcesTotal, sourcesEmpty, articlesInserted, textsRendered, textsFailed, feedArticles, newestArticleAt}' build/site/v1/health.json)"
+            summary="$(jq -c '{generatedAt, guardsDisabled, warningChecks, failedChecks, sourcesTotal, sourcesEmpty, sourcesRejected, articlesInserted, textsRendered, textsFailed, feedArticles, newestArticleAt, categoryFeedArticles, newestCategoryArticleAt, categoryGuardsReady}' build/site/v1/health.json)"
             echo "summary=$summary" >> "$GITHUB_OUTPUT"
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
@@ -123,6 +134,16 @@ jobs:
           name: publish-health-${{ github.run_id }}
           path: build/site/v1/health.json
           retention-days: 7
+
+      # A health rejection still completed useful classification and
+      # translation work. Persist it so the next run advances instead of
+      # retrying the same first batch while Pages keeps the last good feed.
+      - name: Save article database
+        if: ${{ always() && steps.health_diagnostic.outputs.exists == 'true' && hashFiles('news.db') != '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: news.db
+          key: news-db-${{ github.run_id }}
 
       - uses: actions/configure-pages@v5
 

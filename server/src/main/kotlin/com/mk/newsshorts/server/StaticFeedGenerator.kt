@@ -16,6 +16,7 @@ import com.mk.newsshorts.server.share.SharePage
 import com.mk.newsshorts.server.share.ShareSlug
 import com.mk.newsshorts.server.share.SharedArticle
 import com.mk.newsshorts.server.store.ArticleStore
+import com.mk.newsshorts.server.summarize.buildClassifier
 import com.mk.newsshorts.server.summarize.buildSummarizer
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -111,13 +112,15 @@ object StaticFeedGenerator {
 
     fun generate(outputDir: File, dbPath: String) = runBlocking {
         val store = ArticleStore(dbPath)
-        val cycle = IngestionPipeline(store, RssFetcher(), buildSummarizer()).runCycle()
+        val cycle = IngestionPipeline(store, RssFetcher(), buildSummarizer(), buildClassifier()).runCycle()
         val generatedAt = System.currentTimeMillis()
 
         val feedDir = File(outputDir, "v1/feed").apply { mkdirs() }
         var filesWritten = 0
         val feedArticles = linkedMapOf<String, Int>()
         val newestArticleAt = linkedMapOf<String, Long?>()
+        val categoryFeedArticles = linkedMapOf<String, Int>()
+        val newestCategoryArticleAt = linkedMapOf<String, Long?>()
 
         FeedCatalog.languages.forEach { language ->
             val languageFeed = write(feedDir, store, feedKey = language, language = language, category = null)
@@ -126,10 +129,17 @@ object StaticFeedGenerator {
             newestArticleAt[language] = newestPlausibleArticleAt(languageFeed.articles, generatedAt)
 
             FeedCatalog.categories.forEach { category ->
-                filesWritten += write(
+                val feedKey = "$language-$category"
+                val categoryFeed = write(
                     feedDir, store,
-                    feedKey = "$language-$category", language = language, category = category,
-                ).filesWritten
+                    feedKey = feedKey, language = language, category = category,
+                )
+                filesWritten += categoryFeed.filesWritten
+                categoryFeedArticles[feedKey] = categoryFeed.articles.size
+                newestCategoryArticleAt[feedKey] = newestPlausibleArticleAt(
+                    categoryFeed.articles,
+                    generatedAt,
+                )
             }
         }
 
@@ -194,6 +204,14 @@ object StaticFeedGenerator {
 
         val guardsDisabled = System.getenv("DISABLE_PUBLISH_HEALTH_GUARDS")
             ?.trim()?.toBooleanStrictOrNull() == true
+        val minCategoryArticles = envPositiveInt(
+            "MIN_CATEGORY_ARTICLES",
+            DEFAULT_MIN_CATEGORY_ARTICLES,
+        )
+        val categoryGuardsReady = store.categoryFeedsReady(
+            categoryFeedArticles,
+            minCategoryArticles,
+        )
         val health = writePublishHealth(
             outputDir = outputDir,
             health = PublishHealth(
@@ -205,12 +223,20 @@ object StaticFeedGenerator {
                 textsFailed = cycle.textsFailed,
                 feedArticles = feedArticles,
                 newestArticleAt = newestArticleAt,
+                sourcesRejected = cycle.sourcesRejected,
+                categoryFeedArticles = categoryFeedArticles,
+                newestCategoryArticleAt = newestCategoryArticleAt,
+                categoryGuardsReady = categoryGuardsReady,
                 guardsDisabled = guardsDisabled,
             ),
             now = generatedAt,
             staleHours = envPositiveLong("STALE_HOURS", DEFAULT_STALE_HOURS),
+            minCategoryArticles = minCategoryArticles,
         )
         filesWritten++
+        if (health.warningChecks.isNotEmpty()) {
+            log.warn("Publish health warm-up warnings: ${health.warningChecks.joinToString()}")
+        }
         if (health.guardsDisabled && health.failedChecks.isNotEmpty()) {
             log.warn("Publish health guards were disabled for this run: ${health.failedChecks.joinToString()}")
         }
@@ -287,6 +313,14 @@ object StaticFeedGenerator {
     private fun envPositiveLong(name: String, default: Long): Long {
         val raw = System.getenv(name)?.takeUnless { it.isBlank() } ?: return default
         return raw.trim().toLongOrNull()?.takeIf { it > 0 } ?: run {
+            log.warn("$name is set to '$raw', which is not a positive number — using $default")
+            default
+        }
+    }
+
+    private fun envPositiveInt(name: String, default: Int): Int {
+        val raw = System.getenv(name)?.takeUnless { it.isBlank() } ?: return default
+        return raw.trim().toIntOrNull()?.takeIf { it > 0 } ?: run {
             log.warn("$name is set to '$raw', which is not a positive number — using $default")
             default
         }

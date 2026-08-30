@@ -1,6 +1,7 @@
 package com.mk.newsshorts.server.config
 
 import com.mk.newsshorts.server.model.FeedSource
+import com.mk.newsshorts.server.model.NewsCategories
 
 /**
  * RSS sources, grouped by language. Adding a language, category, or country is
@@ -19,27 +20,21 @@ object FeedCatalog {
         FeedSource("CNN بالعربية", "https://arabic.cnn.com/api/v1/rss/rss.xml", "ar", "general"),
 
         // ---- Arabic: categories ----
-        FeedSource("BBC عربي علوم", "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml", "ar", "science"),
-        FeedSource("BBC عربي رياضة", "https://feeds.bbci.co.uk/arabic/sports/rss.xml", "ar", "sports"),
-        FeedSource("BBC عربي اقتصاد", "https://feeds.bbci.co.uk/arabic/business/rss.xml", "ar", "business"),
         FeedSource("RT Arabic تكنولوجيا", "https://arabic.rt.com/rss/technology/", "ar", "technology"),
         FeedSource("RT Arabic رياضة", "https://arabic.rt.com/rss/sport/", "ar", "sports"),
         FeedSource("RT Arabic اقتصاد", "https://arabic.rt.com/rss/business/", "ar", "business"),
         FeedSource("CNN بالعربية اقتصاد", "https://arabic.cnn.com/api/v1/rss/business/rss.xml", "ar", "business"),
         FeedSource("CNN بالعربية رياضة", "https://arabic.cnn.com/api/v1/rss/sport/rss.xml", "ar", "sports"),
-        FeedSource("CNN بالعربية صحة", "https://arabic.cnn.com/api/v1/rss/health/rss.xml", "ar", "health"),
+        FeedSource(
+            "CNN بالعربية صحة وعلوم",
+            "https://arabic.cnn.com/api/v1/rss/science_and_health/rss.xml",
+            "ar",
+            "health",
+            additionalCategories = setOf("science"),
+        ),
         FeedSource("CNN بالعربية منوعات", "https://arabic.cnn.com/api/v1/rss/entertainment/rss.xml", "ar", "entertainment"),
-        FeedSource("CNN بالعربية تكنولوجيا", "https://arabic.cnn.com/api/v1/rss/tech/rss.xml", "ar", "technology"),
         FeedSource("CNN بالعربية ستايل", "https://arabic.cnn.com/api/v1/rss/style/rss.xml", "ar", "entertainment"),
         FeedSource("RT Arabic صحة", "https://arabic.rt.com/rss/health/", "ar", "health"),
-        // Independent Arabia is the only Arabic outlet with a feed for every
-        // category, which keeps the thinner tabs from sitting empty.
-        FeedSource("اندبندنت عربية علوم", "https://www.independentarabia.com/rss/science", "ar", "science"),
-        FeedSource("اندبندنت عربية صحة", "https://www.independentarabia.com/rss/health", "ar", "health"),
-        FeedSource("اندبندنت عربية تكنولوجيا", "https://www.independentarabia.com/rss/technology", "ar", "technology"),
-        FeedSource("اندبندنت عربية رياضة", "https://www.independentarabia.com/rss/sport", "ar", "sports"),
-        FeedSource("اندبندنت عربية اقتصاد", "https://www.independentarabia.com/rss/economy", "ar", "business"),
-        FeedSource("اندبندنت عربية ثقافة", "https://www.independentarabia.com/rss/culture", "ar", "entertainment"),
 
         // ---- Arabic: countries ----
         FeedSource("اليوم السابع", "https://www.youm7.com/rss/SectionRss?SectionID=65", "ar", "general", country = "eg"),
@@ -88,7 +83,9 @@ object FeedCatalog {
     )
 
     val languages: Set<String> = sources.map { it.language }.toSet()
-    val categories: Set<String> = sources.map { it.category }.toSet()
+    // The client exposes every category even when its only current source is in
+    // another language, so generation and health checks must do the same.
+    val categories: Set<String> = NewsCategories.all
     val countries: Set<String> = sources.mapNotNull { it.country }.toSet()
 
     /**

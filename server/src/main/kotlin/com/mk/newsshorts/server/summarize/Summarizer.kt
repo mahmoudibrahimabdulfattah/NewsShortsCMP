@@ -32,7 +32,12 @@ data class SummaryInput(
 )
 
 /** An article's title and summary in the requested language. */
-data class SummaryOutput(val title: String, val summary: String, val source: TextSource)
+data class SummaryOutput(
+    val title: String,
+    val summary: String,
+    val source: TextSource,
+    val categories: Set<String>? = null,
+)
 
 interface Summarizer {
     /** Returns article id -> rendered text. Missing ids mean rendering failed. */
@@ -65,8 +70,10 @@ class GeminiSummarizer(
                     "write its headline and a neutral, factual summary of 50-70 words, both in " +
                     "$languageName. Translate them if the article is in another language. " +
                     "Keep the headline under 15 words. No opinions, no clickbait. " +
+                    CATEGORY_INSTRUCTION + " " +
                     "Respond ONLY with a JSON array of objects: " +
-                    "[{\"id\": <number>, \"title\": \"<text>\", \"summary\": \"<text>\"}]."
+                    "[{\"id\": <number>, \"title\": \"<text>\", \"summary\": \"<text>\", " +
+                    "\"categories\": [\"<category>\"]}]."
             )
             batch.forEach { article ->
                 appendLine()
@@ -123,7 +130,13 @@ class GeminiSummarizer(
                     ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
                 val title = obj["title"]?.jsonPrimitive?.content?.trim()
                     ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                id to SummaryOutput(title = title, summary = summary, source = TextSource.AI)
+                val categories = parseCategories(obj["categories"])
+                id to SummaryOutput(
+                    title = title,
+                    summary = summary,
+                    source = TextSource.AI,
+                    categories = categories,
+                )
             }.toMap()
         } catch (e: Exception) {
             log.warn("Gemini JSON parse failed: ${e.message}")
