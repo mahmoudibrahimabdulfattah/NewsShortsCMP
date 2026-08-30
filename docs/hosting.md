@@ -10,9 +10,9 @@ translation layer.
 
 1. Create or select a Cloudflare account, then copy its account ID from the
    account overview.
-2. In **My Profile → API Tokens**, create a token from the **Edit Cloudflare
-   Workers** template. Restrict its account resources to the account that will
-   own `news-shorts-feed`.
+2. In **My Profile → API Tokens**, create a custom token with **Workers Scripts:
+   Edit** and **Account Analytics: Read**. Restrict its account resources to
+   the account that will own `news-shorts-feed`.
 3. Add two GitHub Actions repository secrets:
    `CLOUDFLARE_API_TOKEN` with that token and `CLOUDFLARE_ACCOUNT_ID` with the
    account ID. The environment variable overrides the explicit placeholder in
@@ -34,6 +34,13 @@ The Worker adds only the cross-origin response header browser builds need; it
 does not rewrite paths or content. A request for a file missing from the
 artifact remains a 404, which lets the app distinguish a missing publish from
 an unavailable host.
+
+Successful `v1/feed/*.json` responses are also counted in the
+`news_shorts_feed_requests` Analytics Engine dataset. Every publish queries its
+rolling 30-day sampled total. The result and the fixed 5,000,000-response limit
+are added to `v1/health.json`; crossing the limit fails the publish so the
+existing `publish-failure` issue carries the diagnostic. With no Cloudflare
+token, the report records the check as skipped and Pages publishing continues.
 
 ## Local verification
 
