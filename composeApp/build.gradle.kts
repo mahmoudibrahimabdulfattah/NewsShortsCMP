@@ -353,6 +353,12 @@ tasks.matching {
     dependsOn(verifyReleaseSigning)
 }
 
+// A shared test suite that Native cannot compile must fail the ordinary
+// verification path instead of leaving iOS silently untested.
+tasks.named("check") {
+    dependsOn("iosSimulatorArm64Test")
+}
+
 dependencies {
     debugImplementation(compose.uiTooling)
 }

@@ -107,7 +107,7 @@ class ArticleDeepLinkTest {
     }
 
     @Test
-    fun `a share link carries the article's language, not the reader's`() {
+    fun `a share link carries the article language instead of the reader language`() {
         val article = ArticleDeepLinks.parse(validLink)!!.toNewsArticle()!!
 
         // Trailing slash on the base must not double up.
