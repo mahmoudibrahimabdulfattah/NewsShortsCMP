@@ -21,14 +21,17 @@ if (hasFirebaseConfig) {
     apply(plugin = libs.plugins.firebaseCrashlytics.get().pluginId)
 }
 
-// Load backend base URL from local.properties and generate BuildConfig
+// Load backend origins from local.properties and generate BuildConfig. The old
+// singular key remains a fallback so existing developer machines keep working.
 val localPropertiesFile = rootProject.file("local.properties")
 val localProperties = Properties().apply {
     if (localPropertiesFile.exists()) {
         load(localPropertiesFile.inputStream())
     }
 }
-val backendBaseUrl: String = localProperties.getProperty("BACKEND_BASE_URL") ?: "http://localhost:8091"
+val backendOrigins: String = localProperties.getProperty("BACKEND_ORIGINS")
+    ?: localProperties.getProperty("BACKEND_BASE_URL")
+    ?: "http://localhost:8091"
 
 // Shared links point at the published site, never at a local server: a link
 // sent to someone else has to resolve on their device.
@@ -117,7 +120,7 @@ buildConfigFile.writeText(
     |package com.mk.newsshorts.config
     |
     |object BuildConfig {
-    |    const val BACKEND_BASE_URL: String = "$backendBaseUrl"
+    |    const val BACKEND_ORIGINS: String = "$backendOrigins"
     |    const val SHARE_BASE_URL: String = "$shareBaseUrl"
     |    const val VERSION_CODE: Int = $appVersionCode
     |    const val VERSION_NAME: String = "$appVersionName"

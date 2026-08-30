@@ -7,6 +7,10 @@ import com.mk.newsshorts.data.local.PendingSignInEmailStore
 import com.mk.newsshorts.data.local.RecentSearchesStore
 import com.mk.newsshorts.data.local.SeenArticlesStore
 import com.mk.newsshorts.data.local.SettingsManager
+import com.mk.newsshorts.data.local.OriginPreferenceStore
+import com.mk.newsshorts.data.local.SettingsOriginPreferenceStore
+import com.mk.newsshorts.data.remote.ApiConfig
+import com.mk.newsshorts.data.remote.OriginFailoverClient
 import com.mk.newsshorts.data.remote.RemoteConfigClient
 import com.mk.newsshorts.data.remote.NewsApiClient
 import com.mk.newsshorts.data.remote.NotificationInboxClient
@@ -26,10 +30,17 @@ val dataModule = module {
     single { NotificationBus() }
     single { SignInLinkBus() }
     single(createdAtStart = false) { createHttpClient() }
-    single(createdAtStart = false) { NewsApiClient(httpClient = get()) }
-    single(createdAtStart = false) { RemoteConfigClient(httpClient = get()) }
+    single(createdAtStart = false) { ApiConfig() }
+    single<OriginPreferenceStore>(createdAtStart = false) {
+        SettingsOriginPreferenceStore(settingsStorage = get())
+    }
+    single(createdAtStart = false) {
+        OriginFailoverClient(httpClient = get(), apiConfig = get(), preferenceStore = get())
+    }
+    single(createdAtStart = false) { NewsApiClient(originClient = get(), apiConfig = get()) }
+    single(createdAtStart = false) { RemoteConfigClient(originClient = get(), apiConfig = get()) }
     single(createdAtStart = false) { SharePageResolver(httpClient = get()) }
-    single(createdAtStart = false) { NotificationInboxClient(httpClient = get()) }
+    single(createdAtStart = false) { NotificationInboxClient(originClient = get(), apiConfig = get()) }
     single(createdAtStart = false) { NewsLocalDataSource(settingsStorage = get()) }
     single(createdAtStart = false) { SettingsManager(settingsStorage = get()) }
     single(createdAtStart = false) { SavedArticlesStore(settingsStorage = get()) }
@@ -45,4 +56,3 @@ val dataModule = module {
         )
     }
 }
-

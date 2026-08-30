@@ -1,8 +1,6 @@
 package com.mk.newsshorts.data.remote
 
-import io.ktor.client.HttpClient
 import io.ktor.client.call.body
-import io.ktor.client.request.get
 import kotlinx.serialization.Serializable
 
 /**
@@ -19,12 +17,13 @@ import kotlinx.serialization.Serializable
  * apology.
  */
 class NotificationInboxClient(
-    private val httpClient: HttpClient,
+    private val originClient: OriginFailoverClient,
+    private val apiConfig: ApiConfig,
 ) {
 
     suspend fun fetch(language: String): List<SentNotificationDto> =
         runCatching {
-            httpClient.get(ApiConfig.notificationsUrl(language))
+            originClient.get(apiConfig.notificationsPath(language))
                 .body<NotificationsResponseDto>()
                 .notifications
         }.getOrElse { emptyList() }
