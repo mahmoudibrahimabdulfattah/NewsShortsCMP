@@ -193,7 +193,7 @@ class SourceAuditTest {
                                 "ملخص رياضي موثوق"
                             },
                             source = TextSource.AI,
-                            categories = setOf("sports"),
+                            category = "sports",
                         )
                     }
             }

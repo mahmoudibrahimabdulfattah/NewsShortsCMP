@@ -205,6 +205,8 @@ class PublishHealthTest {
             articlesInserted = 37,
             textsRendered = 29,
             textsFailed = 4,
+            articlesClassified = 31,
+            articlesPendingClassification = 43,
             feedArticles = mapOf("ar" to 17, "en" to 23),
             newestArticleAt = mapOf("ar" to now - 2_000, "en" to now - 1_000),
         )
@@ -212,6 +214,17 @@ class PublishHealthTest {
         write(outputDir, report)
 
         assertEquals(report, readHealth(outputDir))
+    }
+
+    @Test
+    fun `older health json defaults classification diagnostics`() {
+        val cached = json.encodeToString(PublishHealth.serializer(), healthyHealth())
+
+        assertFalse("articlesClassified" in cached)
+        assertFalse("articlesPendingClassification" in cached)
+        val health = json.decodeFromString(PublishHealth.serializer(), cached)
+        assertEquals(0, health.articlesClassified)
+        assertEquals(0, health.articlesPendingClassification)
     }
 
     // Negative control: this passes with the guards deleted and is a control,

@@ -27,8 +27,8 @@ import org.slf4j.LoggerFactory
 data class ClassifyInput(val id: Long, val title: String, val description: String?)
 
 interface Classifier {
-    /** Returns article id -> categories. A missing id means classification failed. */
-    suspend fun classify(batch: List<ClassifyInput>): Map<Long, Set<String>>
+    /** Returns article id -> category. A missing id means classification failed. */
+    suspend fun classify(batch: List<ClassifyInput>): Map<Long, String>
 }
 
 /**
@@ -42,23 +42,27 @@ interface Classifier {
 internal const val CATEGORY_INSTRUCTION =
     "Classify each article by what it is about, ignoring which feed it arrived in. " +
         "Choose from general, business, technology, science, health, sports, entertainment. " +
-        "Give one category, or two when the article belongs squarely in both. " +
+        "Give exactly one category. " +
         "Politics, war, crime, disasters, and world news are general. Use general whenever no " +
         "specialised category clearly fits — a wrong specialised tab is worse than general."
 
 /**
- * Reads the categories out of one object of a model response, or null when the
- * model returned something unusable. An unknown name invalidates the whole
- * answer rather than being dropped: a model inventing one category has not
- * understood the list, and the remaining names are no more trustworthy.
+ * Reads the category out of one object of a model response, or null when the
+ * model returned something unusable. A one-element array is tolerated because
+ * response shapes drift, but a longer one is refused rather than choosing an
+ * arbitrary category. An unknown name invalidates the whole answer: a model
+ * inventing a name has not understood the list.
  */
-internal fun parseCategories(element: JsonElement?): Set<String>? =
-    (element as? JsonArray)
-        ?.mapNotNull { category ->
-            (category as? JsonPrimitive)?.content?.trim()?.lowercase()?.takeIf(String::isNotEmpty)
-        }
-        ?.takeIf { it.isNotEmpty() && it.all(NewsCategories.all::contains) }
-        ?.toSet()
+internal fun parseCategory(element: JsonElement?): String? {
+    val category = when (element) {
+        is JsonPrimitive -> element.takeIf { it.isString }?.content
+        is JsonArray -> (element.singleOrNull() as? JsonPrimitive)
+            ?.takeIf { it.isString }
+            ?.content
+        else -> null
+    }
+    return category?.trim()?.lowercase()?.takeIf(NewsCategories.all::contains)
+}
 
 /**
  * Classifies articles that already have their text.
@@ -77,13 +81,13 @@ class GeminiClassifier(
     private val json = Json { ignoreUnknownKeys = true }
     private val http = HttpClient(OkHttp)
 
-    override suspend fun classify(batch: List<ClassifyInput>): Map<Long, Set<String>> {
+    override suspend fun classify(batch: List<ClassifyInput>): Map<Long, String> {
         if (batch.isEmpty()) return emptyMap()
 
         val prompt = buildString {
             appendLine(
                 "$CATEGORY_INSTRUCTION Respond ONLY with a JSON array of objects: " +
-                    "[{\"id\": <number>, \"categories\": [\"<category>\"]}]."
+                    "[{\"id\": <number>, \"category\": \"<category>\"}]."
             )
             batch.forEach { article ->
                 appendLine()
@@ -125,7 +129,7 @@ class GeminiClassifier(
         }
     }
 
-    private fun parseClassifications(responseBody: String): Map<Long, Set<String>> {
+    private fun parseClassifications(responseBody: String): Map<Long, String> {
         val text = json.parseToJsonElement(responseBody).jsonObject["candidates"]
             ?.jsonArray?.firstOrNull()?.jsonObject
             ?.get("content")?.jsonObject
@@ -137,8 +141,8 @@ class GeminiClassifier(
             json.parseToJsonElement(text).jsonArray.mapNotNull { element ->
                 val obj = element.jsonObject
                 val id = obj["id"]?.jsonPrimitive?.content?.toLongOrNull() ?: return@mapNotNull null
-                val categories = parseCategories(obj["categories"]) ?: return@mapNotNull null
-                id to categories
+                val category = parseCategory(obj["category"]) ?: return@mapNotNull null
+                id to category
             }.toMap()
         } catch (e: Exception) {
             log.warn("Gemini classify parse failed: ${e.message}")
@@ -161,7 +165,7 @@ class GeminiClassifier(
  * pipeline running in dev, where an unclassified article stays in General.
  */
 object NoClassifier : Classifier {
-    override suspend fun classify(batch: List<ClassifyInput>): Map<Long, Set<String>> = emptyMap()
+    override suspend fun classify(batch: List<ClassifyInput>): Map<Long, String> = emptyMap()
 }
 
 fun buildClassifier(): Classifier {

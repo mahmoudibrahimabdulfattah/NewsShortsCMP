@@ -738,7 +738,7 @@ class ArticleStore(dbPath: String) {
     }
 
     /**
-     * Records one classification attempt and returns the categories the article
+     * Records one classification attempt and returns the category the article
      * may now be published in.
      *
      * The answer comes from the article's own text. The categories its feeds
@@ -747,13 +747,14 @@ class ArticleStore(dbPath: String) {
      * رياضة, and the mirror of that — a football story in a general feed with
      * no way into the sports tab — is what left the specialised tabs thin.
      *
-     * General is the outcome of every failure, and never an addition: an
-     * article the classifier calls both sport and general is sport.
+     * General is the outcome of every failure as well as a legitimate answer
+     * when no specialised category clearly fits.
      */
-    fun recordClassificationAttempt(articleId: Long, classified: Set<String>?): Set<String> = transaction {
+    fun recordClassificationAttempt(articleId: Long, classified: String?): String = transaction {
         val normalized = classified
-            ?.mapTo(linkedSetOf()) { it.trim().lowercase() }
-            ?.takeIf { it.isNotEmpty() && it.all(SUPPORTED_CATEGORIES::contains) }
+            ?.trim()
+            ?.lowercase()
+            ?.takeIf(SUPPORTED_CATEGORIES::contains)
 
         if (normalized == null) {
             val attempts = ArticleClassifications.selectAll()
@@ -766,20 +767,17 @@ class ArticleStore(dbPath: String) {
                 it[ArticleClassifications.attempts] = attempts + 1
                 it[complete] = false
             }
-            replaceVerifiedCategories(articleId, setOf(NewsCategories.GENERAL))
-            return@transaction setOf(NewsCategories.GENERAL)
+            replaceVerifiedCategory(articleId, NewsCategories.GENERAL)
+            return@transaction NewsCategories.GENERAL
         }
 
-        val verified = normalized
-            .filterTo(linkedSetOf()) { it != NewsCategories.GENERAL }
-            .ifEmpty { linkedSetOf(NewsCategories.GENERAL) }
-        replaceVerifiedCategories(articleId, verified)
+        replaceVerifiedCategory(articleId, normalized)
         ArticleClassifications.upsert {
             it[ArticleClassifications.articleId] = articleId
             it[attempts] = 0
             it[complete] = true
         }
-        verified
+        normalized
     }
 
     /** One article that has its text but not yet a category of its own. */
@@ -826,13 +824,28 @@ class ArticleStore(dbPath: String) {
             .toList()
     }
 
-    private fun replaceVerifiedCategories(articleId: Long, categories: Set<String>) {
+    /** Counts the queue without pretending that an arbitrarily large limit is unbounded. */
+    fun countPendingClassifications(): Int = transaction {
+        val progress = ArticleClassifications.selectAll().associate {
+            it[ArticleClassifications.articleId] to
+                (it[ArticleClassifications.attempts] to it[ArticleClassifications.complete])
+        }
+        val rendered = ArticleTexts.selectAll()
+            .andWhere { ArticleTexts.textSource neq TextSource.UNSERVED }
+            .mapTo(HashSet()) { it[ArticleTexts.articleId] }
+
+        Articles.selectAll().count {
+            val attempt = progress[it[Articles.id]]
+            it[Articles.id] in rendered &&
+                (attempt == null || (!attempt.second && attempt.first < MAX_CLASSIFICATION_ATTEMPTS))
+        }
+    }
+
+    private fun replaceVerifiedCategory(articleId: Long, category: String) {
         VerifiedArticleCategories.deleteWhere { VerifiedArticleCategories.articleId eq articleId }
-        categories.forEach { category ->
-            VerifiedArticleCategories.insert {
-                it[VerifiedArticleCategories.articleId] = articleId
-                it[VerifiedArticleCategories.category] = category
-            }
+        VerifiedArticleCategories.insert {
+            it[VerifiedArticleCategories.articleId] = articleId
+            it[VerifiedArticleCategories.category] = category
         }
     }
 
@@ -967,12 +980,13 @@ class ArticleStore(dbPath: String) {
      * one caller genuinely wants the single newest article and nothing else:
      * the breaking-news push.
      *
-     * [excludeCountryTagged] keeps a country's own sources out. The general
-     * feed is what a reader sees before choosing anything, and a country feed
-     * is what they see after choosing; publishing an article in both made the
-     * Countries tab look like a copy of For You, which for an Egyptian reader
-     * it largely was. Country sources publish far more often than the
-     * international ones, so interleaving alone only spread the duplicates out.
+     * [excludeCountryTagged] keeps a country's own sources out of the
+     * unfiltered feed. That feed is what a reader sees before choosing
+     * anything, and a country feed is what they see after choosing; publishing
+     * an article in both made the Countries tab look like a copy of For You,
+     * which for an Egyptian reader it largely was. Country sources publish far
+     * more often than the international ones, so interleaving alone only spread
+     * the duplicates out.
      */
     fun feed(
         language: String?,

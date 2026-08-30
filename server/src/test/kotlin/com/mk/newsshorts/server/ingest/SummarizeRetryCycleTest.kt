@@ -54,7 +54,7 @@ class SummarizeRetryCycleTest {
                         "AI title",
                         "AI summary",
                         TextSource.AI,
-                        categories = setOf("general"),
+                        category = "general",
                     )
                 ),
             ),
@@ -202,7 +202,7 @@ class SummarizeRetryCycleTest {
                         "English title",
                         "English AI summary",
                         TextSource.AI,
-                        categories = setOf("general"),
+                        category = "general",
                     )
                 ),
                 mapOf(articleId to SummaryOutput("English title", "Arabic summary", TextSource.AI)),

@@ -16,6 +16,8 @@ data class PublishHealth(
     val feedArticles: Map<String, Int>,
     val newestArticleAt: Map<String, Long?>,
     val sourcesRejected: List<String> = emptyList(),
+    val articlesClassified: Int = 0,
+    val articlesPendingClassification: Int = 0,
     val categoryFeedArticles: Map<String, Int> = emptyMap(),
     val newestCategoryArticleAt: Map<String, Long?> = emptyMap(),
     val categoryGuardsReady: Set<String> = emptySet(),

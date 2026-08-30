@@ -42,10 +42,10 @@ class ClassifyCycleTest {
         return id
     }
 
-    private class ScriptedClassifier(private val answer: Set<String>?) : Classifier {
+    private class ScriptedClassifier(private val answer: String?) : Classifier {
         val seen = mutableListOf<Long>()
 
-        override suspend fun classify(batch: List<ClassifyInput>): Map<Long, Set<String>> {
+        override suspend fun classify(batch: List<ClassifyInput>): Map<Long, String> {
             batch.forEach { seen += it.id }
             return if (answer == null) emptyMap() else batch.associate { it.id to answer }
         }
@@ -76,7 +76,7 @@ class ClassifyCycleTest {
         runBlocking {
             val (store, db) = store()
             val id = store.seedRendered("https://example.com/backlog")
-            val classifier = ScriptedClassifier(setOf("sports"))
+            val classifier = ScriptedClassifier("sports")
 
             val report = pipeline(store, classifier, RefusingSummarizer).runCycle()
 
@@ -93,7 +93,7 @@ class ClassifyCycleTest {
         runBlocking {
             val (store, db) = store()
             store.seedRendered("https://example.com/once")
-            val classifier = ScriptedClassifier(setOf("health"))
+            val classifier = ScriptedClassifier("health")
 
             pipeline(store, classifier).runCycle()
             val afterFirstCycle = classifier.seen.size

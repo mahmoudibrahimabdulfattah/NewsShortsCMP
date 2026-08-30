@@ -117,7 +117,7 @@ jobs:
         shell: bash
         run: |
           if [[ -f build/site/v1/health.json ]]; then
-            summary="$(jq -c '{generatedAt, guardsDisabled, warningChecks, failedChecks, sourcesTotal, sourcesEmpty, sourcesRejected, articlesInserted, textsRendered, textsFailed, feedArticles, newestArticleAt, categoryFeedArticles, newestCategoryArticleAt, categoryGuardsReady}' build/site/v1/health.json)"
+            summary="$(jq -c '{generatedAt, guardsDisabled, warningChecks, failedChecks, sourcesTotal, sourcesEmpty, sourcesRejected, articlesInserted, textsRendered, textsFailed, articlesClassified, articlesPendingClassification, feedArticles, newestArticleAt, categoryFeedArticles, newestCategoryArticleAt, categoryGuardsReady}' build/site/v1/health.json)"
             echo "summary=$summary" >> "$GITHUB_OUTPUT"
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
