@@ -496,14 +496,21 @@ private fun NewsArticlesPager(
             onEvent(NewsUiEvent.ScrollToArticle(page))
         }
     }
-    // Keyed on the revision rather than on what caused it: a refresh replaces
-    // the list with one the same length whose first card is often the same
-    // article, so nothing else here changes when the feed underneath the reader
-    // does. Appending a page deliberately does not bump it — that must leave
-    // the reader exactly where they are.
+    // The revision now means the feed was genuinely replaced as a new reading
+    // session, such as by an explicit refresh or a first category visit.
+    // Re-selecting a remembered category and appending a page deliberately
+    // leave it alone, because both must preserve the reader's position.
     LaunchedEffect(uiState.feedRevision) {
         if (uiState.articles.isNotEmpty()) {
             pagerState.scrollToPage(0)
+        }
+    }
+    // A first visit changes category while the previous category's articles
+    // may still be on screen. This revision changes only after remembered
+    // articles and their index have been published together.
+    LaunchedEffect(uiState.categoryRestoreRevision) {
+        if (uiState.categoryRestoreRevision > 0 && uiState.articles.isNotEmpty()) {
+            pagerState.scrollToPage(uiState.currentArticleIndex)
         }
     }
     PullToRefreshBox(
@@ -514,7 +521,10 @@ private fun NewsArticlesPager(
         VerticalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
-            beyondViewportPageCount = 2
+            beyondViewportPageCount = 2,
+            // A stable identity keeps the visible story anchored when a
+            // background refresh inserts or re-ranks cards before it.
+            key = { pageIndex -> uiState.articles[pageIndex].articleUrl.value },
         ) { pageIndex ->
             val article = uiState.articles[pageIndex]
             val isArticleSaved: Boolean = uiState.savedArticles.any { it.articleUrl == article.articleUrl }
