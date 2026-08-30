@@ -21,6 +21,12 @@ object FeedCatalog {
 
         // ---- Arabic: categories ----
         FeedSource("RT Arabic تكنولوجيا", "https://arabic.rt.com/rss/technology/", "ar", "technology"),
+        FeedSource(
+            "يورونيوز عربية تكنولوجيا",
+            "https://arabic.euronews.com/rss?level=vertical&name=next",
+            "ar",
+            "technology",
+        ),
         FeedSource("RT Arabic رياضة", "https://arabic.rt.com/rss/sport/", "ar", "sports"),
         FeedSource("RT Arabic اقتصاد", "https://arabic.rt.com/rss/business/", "ar", "business"),
         FeedSource("CNN بالعربية اقتصاد", "https://arabic.cnn.com/api/v1/rss/business/rss.xml", "ar", "business"),
@@ -51,13 +57,22 @@ object FeedCatalog {
         FeedSource("BBC Science", "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml", "en", "science"),
         FeedSource("BBC Health", "https://feeds.bbci.co.uk/news/health/rss.xml", "en", "health"),
         FeedSource("BBC Entertainment", "https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml", "en", "entertainment"),
+        FeedSource("BBC Sport", "https://feeds.bbci.co.uk/sport/rss.xml", "en", "sports"),
         FeedSource("Sky Sports", "https://www.skysports.com/rss/12040", "en", "sports"),
         FeedSource("TechCrunch", "https://techcrunch.com/feed/", "en", "technology"),
+        FeedSource("Ars Technica", "https://arstechnica.com/feed/", "en", "technology"),
+        FeedSource("Engadget", "https://www.engadget.com/rss.xml", "en", "technology"),
         FeedSource("The Guardian Science", "https://www.theguardian.com/science/rss", "en", "science"),
         FeedSource("The Guardian Sport", "https://www.theguardian.com/uk/sport/rss", "en", "sports"),
         FeedSource("The Guardian Culture", "https://www.theguardian.com/uk/culture/rss", "en", "entertainment"),
         FeedSource("The Guardian Technology", "https://www.theguardian.com/uk/technology/rss", "en", "technology"),
         FeedSource("The Guardian Business", "https://www.theguardian.com/uk/business/rss", "en", "business"),
+        // Specialised English articles are rendered into every feed language,
+        // so these sources also fill the Arabic science and health tabs.
+        FeedSource("ScienceDaily", "https://www.sciencedaily.com/rss/all.xml", "en", "science"),
+        FeedSource("Phys.org", "https://phys.org/rss-feed/", "en", "science"),
+        FeedSource("STAT", "https://www.statnews.com/feed/", "en", "health"),
+        FeedSource("The Guardian Health", "https://www.theguardian.com/society/health/rss", "en", "health"),
 
         // ---- English: countries ----
         // Every country the app offers needs at least one source; readers who

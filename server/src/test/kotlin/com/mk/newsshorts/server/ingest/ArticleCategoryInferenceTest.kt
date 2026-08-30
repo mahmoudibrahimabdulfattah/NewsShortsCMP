@@ -37,6 +37,19 @@ class ArticleCategoryInferenceTest {
     }
 
     @Test
+    fun `every category has at least two source feeds`() {
+        val sourceCountByCategory = FeedCatalog.sources
+            .flatMap { it.categories }
+            .groupingBy { it }
+            .eachCount()
+
+        assertTrue(
+            FeedCatalog.categories.all { sourceCountByCategory.getOrDefault(it, 0) >= 2 },
+            "Source coverage: $sourceCountByCategory",
+        )
+    }
+
+    @Test
     fun `a topic word inside a slug is not treated as source taxonomy`() {
         assertTrue(
             inferArticleCategories(

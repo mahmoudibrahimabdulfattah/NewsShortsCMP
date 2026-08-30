@@ -44,8 +44,11 @@ data class NewsUiState(
      */
     val categoryOrder: List<NewsCategory> = NewsCategory.entries,
     /**
-     * Bumped every time [articles] is *replaced* — a refresh, a new category, a
-     * new country — and deliberately not when a page is appended to it.
+     * Bumped when [articles] starts a genuinely new reading session and the
+     * reader's position must reset — an explicit refresh, a first visit to a
+     * category, or a new country. Re-selecting a remembered category and
+     * appending a page both preserve the existing session, so neither changes
+     * it.
      *
      * The pager scrolls back to the top when this changes, which nothing else
      * in the state can tell it: after a refresh the list is a different list,
@@ -53,6 +56,15 @@ data class NewsUiState(
      * otherwise sit exactly where it was on a feed that had moved underneath it.
      */
     val feedRevision: Int = 0,
+    /**
+     * Bumped only when [articles] returns to a category remembered in this
+     * session, with [currentArticleIndex] restored alongside it.
+     *
+     * The pager follows this revision to the remembered card. Category identity
+     * cannot carry that signal because it also changes on a first visit, while
+     * the previous feed may still be on screen.
+     */
+    val categoryRestoreRevision: Int = 0,
     /**
      * The file holding the page below the last one loaded, or null at the end
      * of the feed. Comes from the feed itself — each published page names the

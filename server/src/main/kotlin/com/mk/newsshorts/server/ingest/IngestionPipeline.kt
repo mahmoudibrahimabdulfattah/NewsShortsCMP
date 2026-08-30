@@ -214,11 +214,11 @@ class IngestionPipeline(
                         // translation is a copy of a copy. A miss here is not
                         // recorded as an attempt — the article now has text, so
                         // classifyPending picks it up with its own retry budget.
-                        val categories = text.categories?.takeIf {
+                        val category = text.category?.takeIf {
                             text.source == TextSource.AI && article.sourceLanguage == targetLanguage
                         }
-                        if (categories != null) {
-                            store.recordClassificationAttempt(article.id, categories)
+                        if (category != null) {
+                            store.recordClassificationAttempt(article.id, category)
                         }
                         renderedCount++
                     }
@@ -249,9 +249,9 @@ class IngestionPipeline(
                 chunk.map { ClassifyInput(id = it.id, title = it.title, description = it.description) }
             )
             chunk.forEach { article ->
-                val categories = answers[article.id]
-                store.recordClassificationAttempt(article.id, categories)
-                if (categories != null) classified++
+                val category = answers[article.id]
+                store.recordClassificationAttempt(article.id, category)
+                if (category != null) classified++
             }
             delay(renderDelay)
         }

@@ -36,7 +36,7 @@ data class SummaryOutput(
     val title: String,
     val summary: String,
     val source: TextSource,
-    val categories: Set<String>? = null,
+    val category: String? = null,
 )
 
 interface Summarizer {
@@ -73,7 +73,7 @@ class GeminiSummarizer(
                     CATEGORY_INSTRUCTION + " " +
                     "Respond ONLY with a JSON array of objects: " +
                     "[{\"id\": <number>, \"title\": \"<text>\", \"summary\": \"<text>\", " +
-                    "\"categories\": [\"<category>\"]}]."
+                    "\"category\": \"<category>\"}]."
             )
             batch.forEach { article ->
                 appendLine()
@@ -130,12 +130,12 @@ class GeminiSummarizer(
                     ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
                 val title = obj["title"]?.jsonPrimitive?.content?.trim()
                     ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                val categories = parseCategories(obj["categories"])
+                val category = parseCategory(obj["category"])
                 id to SummaryOutput(
                     title = title,
                     summary = summary,
                     source = TextSource.AI,
-                    categories = categories,
+                    category = category,
                 )
             }.toMap()
         } catch (e: Exception) {

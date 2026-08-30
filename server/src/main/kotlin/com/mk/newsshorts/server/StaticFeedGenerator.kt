@@ -224,6 +224,8 @@ object StaticFeedGenerator {
                 feedArticles = feedArticles,
                 newestArticleAt = newestArticleAt,
                 sourcesRejected = cycle.sourcesRejected,
+                articlesClassified = cycle.articlesClassified,
+                articlesPendingClassification = store.countPendingClassifications(),
                 categoryFeedArticles = categoryFeedArticles,
                 newestCategoryArticleAt = newestCategoryArticleAt,
                 categoryGuardsReady = categoryGuardsReady,
@@ -509,10 +511,10 @@ object StaticFeedGenerator {
             language = language, category = category,
             limit = MAX_FEED_ARTICLES, offset = 0, country = country,
             diversifyBySource = true,
-            // A country's sources belong to that country's feed and nowhere
-            // else. Without this every Egyptian daily also filled For You, and
-            // the two tabs served the same stories in nearly the same order.
-            excludeCountryTagged = country == null,
+            // Country sources stay out of For You because publishing them both
+            // there and in Countries made the tabs duplicate each other. A
+            // category tab is neither side of that duplication.
+            excludeCountryTagged = country == null && category == null,
         )
 
         val layout = repaginate(

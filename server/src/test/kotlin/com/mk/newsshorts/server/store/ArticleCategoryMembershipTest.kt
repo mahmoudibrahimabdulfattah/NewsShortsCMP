@@ -2,8 +2,10 @@ package com.mk.newsshorts.server.store
 
 import com.mk.newsshorts.server.feed.FeedLayout
 import com.mk.newsshorts.server.feed.repaginate
+import com.mk.newsshorts.server.summarize.parseCategory
 import java.io.File
 import java.sql.DriverManager
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -43,10 +45,10 @@ class ArticleCategoryMembershipTest {
     private fun ArticleStore.putAiText(
         id: Long,
         language: String = "en",
-        categories: Set<String> = setOf("general"),
+        category: String = "general",
     ) {
         putText(id, language, "Rendered $id", "Summary $id", TextSource.AI)
-        recordClassificationAttempt(id, categories)
+        recordClassificationAttempt(id, category)
     }
 
     private fun membershipCount(db: File, articleId: Long? = null): Int =
@@ -142,7 +144,7 @@ class ArticleCategoryMembershipTest {
                 publishedAt = 1_000L,
             ),
         )
-        store.putAiText(id, categories = setOf("sports"))
+        store.putAiText(id, category = "sports")
 
         val general = store.feed("en", "general", limit = 10, offset = 0)
         val sports = store.feed("en", "sports", limit = 10, offset = 0)
@@ -171,7 +173,7 @@ class ArticleCategoryMembershipTest {
             country = null,
             publishedAt = 1_000L,
         )
-        store.putAiText(id, categories = setOf("sports"))
+        store.putAiText(id, category = "sports")
 
         val sports = store.feed("en", "sports", limit = 10, offset = 0)
         assertEquals(listOf(id), sports.first.map { it.id })
@@ -189,7 +191,7 @@ class ArticleCategoryMembershipTest {
         )
         store.putText(id, "en", "Floods", "Flood summary", TextSource.AI)
 
-        assertEquals(setOf("general"), store.recordClassificationAttempt(id, setOf("general")))
+        assertEquals("general", store.recordClassificationAttempt(id, "general"))
 
         assertEquals(listOf(id), store.feed("en", "general", 10, 0).first.map { it.id })
         assertTrue(store.feed("en", "sports", 10, 0).first.isEmpty())
@@ -205,7 +207,7 @@ class ArticleCategoryMembershipTest {
         // No feed ever filed this under sport. The classifier read the article,
         // which is the only reason the specialised tabs are not starved of the
         // publishers that carry the most news.
-        assertEquals(setOf("sports"), store.recordClassificationAttempt(id, setOf("sports")))
+        assertEquals("sports", store.recordClassificationAttempt(id, "sports"))
 
         assertEquals(listOf(id), store.feed("en", "sports", 10, 0).first.map { it.id })
         assertTrue(store.feed("en", "general", 10, 0).first.isEmpty())
@@ -213,29 +215,49 @@ class ArticleCategoryMembershipTest {
     }
 
     @Test
-    fun `general is a fallback, never an addition`() {
+    fun `a two-category answer stays in general pending a retry`() {
         val (store, db) = store()
         val id = store.seedArticle("https://example.com/both-answers", category = "general")
         store.putText(id, "en", "Tech", "Tech summary", TextSource.AI)
 
-        assertEquals(setOf("technology"), store.recordClassificationAttempt(id, setOf("technology", "general")))
+        val answer = parseCategory(Json.parseToJsonElement("""["technology", "general"]"""))
+        assertEquals(null, answer)
+        assertEquals("general", store.recordClassificationAttempt(id, answer))
 
-        assertTrue(store.feed("en", "general", 10, 0).first.isEmpty())
+        assertEquals(listOf(id), store.feed("en", "general", 10, 0).first.map { it.id })
+        assertTrue(store.feed("en", "technology", 10, 0).first.isEmpty())
+        assertEquals(listOf(id), store.pendingClassifications(10).map { it.id })
         db.delete()
     }
 
     @Test
     fun `an unclassified article with text waits in the classification queue`() {
         val (store, db) = store()
-        val id = store.seedArticle("https://example.com/awaiting-classification", category = "general")
-        store.putText(id, "en", "Headline", "Summary", TextSource.AI)
+        val firstId = store.seedArticle(
+            "https://example.com/awaiting-classification",
+            category = "general",
+        )
+        val secondId = store.seedArticle(
+            "https://example.com/also-awaiting-classification",
+            category = "general",
+        )
+        store.putText(firstId, "en", "Headline", "Summary", TextSource.AI)
+        store.putText(secondId, "en", "Another headline", "Another summary", TextSource.AI)
 
-        // Its text is finished, so it must never be re-summarized to be filed.
-        assertTrue(store.pendingTexts(10, setOf("ar", "en")).none { it.id == id })
-        assertEquals(listOf(id), store.pendingClassifications(10).map { it.id })
+        // Their text is finished, so they must never be re-summarized to be
+        // filed.
+        assertTrue(store.pendingTexts(10, setOf("ar", "en")).none { it.id == firstId })
+        assertEquals(
+            setOf(firstId, secondId),
+            store.pendingClassifications(10).mapTo(mutableSetOf()) { it.id },
+        )
+        assertEquals(2, store.countPendingClassifications())
 
-        store.recordClassificationAttempt(id, setOf("health"))
-        assertTrue(store.pendingClassifications(10).none { it.id == id })
+        store.recordClassificationAttempt(firstId, "health")
+        assertEquals(1, store.countPendingClassifications())
+        store.recordClassificationAttempt(secondId, "technology")
+        assertTrue(store.pendingClassifications(10).isEmpty())
+        assertEquals(0, store.countPendingClassifications())
         db.delete()
     }
 
@@ -269,8 +291,8 @@ class ArticleCategoryMembershipTest {
         store.putText(id, "en", "Headline", "Summary", TextSource.AI)
 
         assertEquals(
-            setOf("general"),
-            store.recordClassificationAttempt(id, setOf("sports", "not-a-category")),
+            "general",
+            store.recordClassificationAttempt(id, "not-a-category"),
         )
 
         assertTrue(store.feed("en", "sports", 10, 0).first.isEmpty())
@@ -283,7 +305,7 @@ class ArticleCategoryMembershipTest {
         val (store, db) = store()
         val id = store.seedArticle("https://example.com/global-sport", category = "sports")
         store.putText(id, "en", "Sport", "Sport summary", TextSource.AI)
-        store.recordClassificationAttempt(id, setOf("sports"))
+        store.recordClassificationAttempt(id, "sports")
 
         val pending = store.pendingTexts(10, setOf("ar", "en"))
         assertTrue(pending.any { it.id == id && it.targetLanguage == "ar" })
@@ -352,7 +374,7 @@ class ArticleCategoryMembershipTest {
         )
 
         assertTrue(store.feed("en", "sports", limit = 10, offset = 0).first.isEmpty())
-        assertEquals(setOf("sports"), store.recordClassificationAttempt(shared, setOf("sports")))
+        assertEquals("sports", store.recordClassificationAttempt(shared, "sports"))
 
         val secondGeneralOrder = store.feed("en", "general", limit = 10, offset = 0).first.map { it.id }
         val savedGeneral = store.feedLayout("en-general")
@@ -388,6 +410,43 @@ class ArticleCategoryMembershipTest {
     }
 
     @Test
+    fun `country-tagged sport reaches its category but not For You`() {
+        val (store, db) = store()
+        val id = store.seedArticle(
+            url = "https://example.com/egypt-sport",
+            language = "ar",
+            category = "sports",
+            country = "eg",
+        )
+        store.putAiText(id, language = "ar", category = "sports")
+
+        val sports = store.feed(
+            language = "ar",
+            category = "sports",
+            limit = 10,
+            offset = 0,
+            country = null,
+            diversifyBySource = true,
+            excludeCountryTagged = false,
+        )
+        val unfiltered = store.feed(
+            language = "ar",
+            category = null,
+            limit = 10,
+            offset = 0,
+            country = null,
+            diversifyBySource = true,
+            excludeCountryTagged = true,
+        )
+
+        assertEquals(listOf(id), sports.first.map { it.id })
+        assertEquals(1, sports.second)
+        assertTrue(unfiltered.first.isEmpty())
+        assertEquals(0, unfiltered.second)
+        db.delete()
+    }
+
+    @Test
     fun `unfiltered feed does not multiply articles by membership`() {
         val (store, db) = store()
         val id = store.seedArticle("https://example.com/unfiltered", category = "general")
@@ -402,7 +461,7 @@ class ArticleCategoryMembershipTest {
             country = null,
             publishedAt = 1_000L,
         )
-        store.putAiText(id, categories = setOf("sports"))
+        store.putAiText(id, category = "sports")
 
         val unfiltered = store.feed("en", category = null, limit = 10, offset = 0)
 
@@ -472,7 +531,7 @@ class ArticleCategoryMembershipTest {
         repeat(3) {
             store.recordUnservedTextAttempt(capped, "en", "Rendered $capped", "Summary $capped")
         }
-        store.recordClassificationAttempt(capped, setOf("sports"))
+        store.recordClassificationAttempt(capped, "sports")
         val fresh = store.seedArticle("https://example.com/fresh-pending", category = "sports", publishedAt = 9_000L)
 
         val pendingIds = store.pendingTexts(limit = 10, countryLanguages = emptySet()).map { it.id }

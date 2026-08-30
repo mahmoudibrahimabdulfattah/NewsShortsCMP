@@ -83,6 +83,137 @@ import com.mk.newsshorts.presentation.mvi.Overlay
 import com.mk.newsshorts.presentation.mvi.ThemeMode
 import com.mk.newsshorts.presentation.mvi.afterUnsuccessfulAuth
 
+internal data class RememberedCategoryFeed(
+    val articles: List<NewsArticle>,
+    val nextPageFile: String?,
+    val currentArticleIndex: Int,
+)
+
+private data class CategoryFeedKey(
+    val category: NewsCategory,
+    val language: String,
+)
+
+/**
+ * A category is a place the reader can leave and return to, so its position
+ * survives that short trip. The cap keeps this session convenience from
+ * quietly becoming a second, unbounded feed cache.
+ */
+internal class CategoryFeedMemory(
+    private val maxEntries: Int = MAX_REMEMBERED_CATEGORY_FEEDS,
+) {
+    private val feeds = linkedMapOf<CategoryFeedKey, RememberedCategoryFeed>()
+
+    init {
+        require(maxEntries > 0) { "Category feed memory must hold at least one feed." }
+    }
+
+    fun rememberAndFind(
+        currentState: NewsUiState,
+        selectedCategory: NewsCategory,
+    ): RememberedCategoryFeed? {
+        remember(currentState)
+        return find(selectedCategory, currentState.selectedLanguage.code)
+    }
+
+    fun clear() {
+        feeds.clear()
+    }
+
+    private fun remember(state: NewsUiState) {
+        if (state.currentTab != NavigationTab.FOR_YOU || state.articles.isEmpty()) return
+        val key = CategoryFeedKey(state.selectedCategory, state.selectedLanguage.code)
+        feeds.remove(key)
+        feeds[key] = RememberedCategoryFeed(
+            articles = state.articles,
+            nextPageFile = state.nextPageFile,
+            currentArticleIndex = state.currentArticleIndex,
+        )
+        while (feeds.size > maxEntries) {
+            feeds.remove(feeds.keys.first())
+        }
+    }
+
+    private fun find(category: NewsCategory, language: String): RememberedCategoryFeed? {
+        val key = CategoryFeedKey(category, language)
+        val remembered = feeds.remove(key) ?: return null
+        // A category just revisited is less likely to be the next one evicted.
+        feeds[key] = remembered
+        return remembered
+    }
+
+    private companion object {
+        const val MAX_REMEMBERED_CATEGORY_FEEDS: Int = 4
+    }
+}
+
+internal fun NewsUiState.withSelectedCategory(
+    category: NewsCategory,
+    remembered: RememberedCategoryFeed?,
+): NewsUiState {
+    if (remembered == null) {
+        return copy(
+            selectedCategory = category,
+            currentArticleIndex = 0,
+            errorMessage = null,
+        )
+    }
+    return copy(
+        isLoading = false,
+        articles = remembered.articles,
+        selectedCategory = category,
+        categoryRestoreRevision = categoryRestoreRevision + 1,
+        currentArticleIndex = remembered.currentArticleIndex.coerceIn(
+            minimumValue = 0,
+            maximumValue = remembered.articles.lastIndex.coerceAtLeast(0),
+        ),
+        errorMessage = null,
+        isRefreshing = false,
+        isBackgroundRefreshing = true,
+        isOfflineMode = false,
+        nextPageFile = remembered.nextPageFile,
+        isLoadingNextPage = false,
+        nextPageFailed = false,
+    )
+}
+
+internal fun NewsUiState.withLoadedFeed(
+    articles: List<NewsArticle>,
+    nextPageFile: String?,
+    preserveReaderPosition: Boolean,
+): NewsUiState {
+    val fallbackIndex = currentArticleIndex.coerceIn(
+        minimumValue = 0,
+        maximumValue = articles.lastIndex.coerceAtLeast(0),
+    )
+    val preservedIndex = if (preserveReaderPosition) {
+        // An index is only a position in the old list, which no longer exists
+        // after a refresh. The URL is the only part of the reader's place that
+        // survives into the replacement list.
+        this.articles.getOrNull(currentArticleIndex)?.articleUrl
+            ?.let { currentUrl ->
+                articles.indexOfFirst { article -> article.articleUrl == currentUrl }
+                    .takeIf { it >= 0 }
+            }
+            ?: fallbackIndex
+    } else {
+        0
+    }
+    return copy(
+        isLoading = false,
+        isRefreshing = false,
+        isBackgroundRefreshing = false,
+        feedRevision = if (preserveReaderPosition) feedRevision else feedRevision + 1,
+        articles = articles,
+        nextPageFile = nextPageFile,
+        isLoadingNextPage = false,
+        nextPageFailed = false,
+        errorMessage = null,
+        currentArticleIndex = preservedIndex,
+        isOfflineMode = false,
+    )
+}
+
 class NewsViewModel(
     private val getTopHeadlinesUseCase: GetTopHeadlinesUseCase,
     private val searchNewsUseCase: SearchNewsUseCase,
@@ -110,6 +241,8 @@ class NewsViewModel(
 
     private val mutableEffect: MutableSharedFlow<NewsUiEffect> = MutableSharedFlow()
     val uiEffect: SharedFlow<NewsUiEffect> = mutableEffect.asSharedFlow()
+
+    private val categoryFeedMemory = CategoryFeedMemory()
 
     private val deleteAccountUseCase = DeleteAccountUseCase(authClient, remoteSyncClient)
 
@@ -197,6 +330,7 @@ class NewsViewModel(
         settingsManager.setNotifyReminder(settings.notifyReminder)
 
         val languageChanged = newsLanguage != mutableState.value.selectedLanguage
+        if (languageChanged) categoryFeedMemory.clear()
         mutableState.update { state ->
             state.copy(
                 selectedLanguage = newsLanguage,
@@ -620,16 +754,28 @@ class NewsViewModel(
 
     private fun handleSelectCategory(category: NewsCategory) {
         if (category == mutableState.value.selectedCategory) return
+        val remembered = categoryFeedMemory.rememberAndFind(mutableState.value, category)
+        // The previous generation is invalidated before the restored feed is
+        // published, so an answer from the category just left cannot land in
+        // the gap and replace it.
+        val restoreGeneration: Int? = remembered?.let { startNewFeed() }
         mutableState.update { state ->
-            state.copy(
-                selectedCategory = category,
-                currentArticleIndex = 0,
-                errorMessage = null
-            )
+            state.withSelectedCategory(category, remembered)
         }
         analytics.logEvent(AnalyticsEvent.CategorySelected(category.apiValue))
         resetArticleTracking()
-        loadNewsWithCache()
+        if (restoreGeneration == null) {
+            loadNewsWithCache()
+        } else {
+            val request = currentRequest()
+            viewModelScope.launch {
+                fetchNewsInBackground(
+                    request = request,
+                    generation = restoreGeneration,
+                    preserveReaderPosition = true,
+                )
+            }
+        }
     }
 
     private fun handleSelectCountry(country: CountryOption) {
@@ -659,8 +805,8 @@ class NewsViewModel(
             language = currentState.selectedLanguage.code,
             useCountry = true
         )
-        showCachedFeed(request)
         val generation = startNewFeed()
+        showCachedFeed(request)
         viewModelScope.launch {
             fetchNewsInBackground(request, generation)
         }
@@ -668,6 +814,7 @@ class NewsViewModel(
 
     private fun handleSelectLanguage(language: LanguageOption) {
         if (language == mutableState.value.selectedLanguage) return
+        categoryFeedMemory.clear()
         mutableState.update { state ->
             state.copy(
                 selectedLanguage = language,
@@ -1359,8 +1506,8 @@ class NewsViewModel(
 
     private fun loadNewsWithCache() {
         val request = currentRequest()
-        showCachedFeed(request)
         val generation = startNewFeed()
+        showCachedFeed(request)
         viewModelScope.launch {
             fetchNewsInBackground(request, generation)
         }
@@ -1410,23 +1557,20 @@ class NewsViewModel(
         }
     }
 
-    private suspend fun fetchNewsInBackground(request: GetTopHeadlinesRequest, generation: Int) {
-        when (val result = getTopHeadlinesUseCase.execute(request)) {
+    private suspend fun fetchNewsInBackground(
+        request: GetTopHeadlinesRequest,
+        generation: Int,
+        preserveReaderPosition: Boolean = false,
+    ) {
+        val result = getTopHeadlinesUseCase.execute(request)
+        if (generation != feedGeneration) return
+        when (result) {
             is NewsResult.Success -> {
-                if (generation != feedGeneration) return
                 mutableState.update { state ->
-                    state.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        isBackgroundRefreshing = false,
-                        feedRevision = state.feedRevision + 1,
+                    state.withLoadedFeed(
                         articles = applyRanking(result.data.articles),
                         nextPageFile = result.data.nextPage,
-                        isLoadingNextPage = false,
-                        nextPageFailed = false,
-                        errorMessage = null,
-                        currentArticleIndex = 0,
-                        isOfflineMode = false
+                        preserveReaderPosition = preserveReaderPosition,
                     )
                 }
             }
@@ -1449,25 +1593,21 @@ class NewsViewModel(
     }
 
     private fun loadNews() {
+        val request = currentRequest()
         val generation = startNewFeed()
         viewModelScope.launch {
-            when (val result = getTopHeadlinesUseCase.execute(currentRequest())) {
+            val result = getTopHeadlinesUseCase.execute(request)
+            // A refresh that landed after the reader had already moved on
+            // belongs to a feed that no longer exists, whether it succeeded or
+            // failed.
+            if (generation != feedGeneration) return@launch
+            when (result) {
                 is NewsResult.Success -> {
-                    // A refresh that landed after the reader had already moved
-                    // on belongs to a feed that no longer exists.
-                    if (generation != feedGeneration) return@launch
                     mutableState.update { state ->
-                        state.copy(
-                            isLoading = false,
-                            isRefreshing = false,
-                            feedRevision = state.feedRevision + 1,
-                        articles = applyRanking(result.data.articles),
+                        state.withLoadedFeed(
+                            articles = applyRanking(result.data.articles),
                             nextPageFile = result.data.nextPage,
-                            isLoadingNextPage = false,
-                            nextPageFailed = false,
-                            errorMessage = null,
-                            currentArticleIndex = 0,
-                            isOfflineMode = false
+                            preserveReaderPosition = false,
                         )
                     }
                     resetArticleTracking()

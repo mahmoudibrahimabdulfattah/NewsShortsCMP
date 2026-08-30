@@ -37,7 +37,7 @@ class ArticleTextProvenanceTest {
     )!!
 
     private fun ArticleStore.classifyGeneral(id: Long) {
-        recordClassificationAttempt(id, setOf("general"))
+        recordClassificationAttempt(id, "general")
     }
 
     @Test
