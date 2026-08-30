@@ -36,6 +36,10 @@ class ArticleTextProvenanceTest {
         publishedAt = publishedAt,
     )!!
 
+    private fun ArticleStore.classifyGeneral(id: Long) {
+        recordClassificationAttempt(id, setOf("general"))
+    }
+
     @Test
     fun `AI text is final and is not pending`() {
         val (store, db) = store()
@@ -43,6 +47,7 @@ class ArticleTextProvenanceTest {
 
         store.putText(id, "en", "AI title", "AI summary", TextSource.AI)
         store.putText(id, "en", "Fallback title", "Fallback summary", TextSource.FALLBACK)
+        store.classifyGeneral(id)
 
         val article = store.feed("en", "general", limit = 10, offset = 0).first.single()
         assertEquals("AI title", article.title)
@@ -55,6 +60,7 @@ class ArticleTextProvenanceTest {
     fun `fallback retries stop after the attempt cap`() {
         val (store, db) = store()
         val id = store.seedArticle("https://example.com/retry-cap")
+        store.classifyGeneral(id)
 
         store.putText(id, "en", "Fallback 1", "Summary 1", TextSource.FALLBACK)
         assertTrue(store.pendingTexts(10, emptySet()).any { it.id == id && it.targetLanguage == "en" })
@@ -74,6 +80,7 @@ class ArticleTextProvenanceTest {
         store.putText(id, "en", "Fallback title", "Fallback summary", TextSource.FALLBACK)
 
         store.putText(id, "en", "AI title", "AI summary", TextSource.AI)
+        store.classifyGeneral(id)
 
         val article = store.feed("en", "general", limit = 10, offset = 0).first.single()
         assertEquals("AI title", article.title)
@@ -88,6 +95,7 @@ class ArticleTextProvenanceTest {
         val retryId = store.seedArticle("https://example.com/retry", publishedAt = 2_000L)
         val freshId = store.seedArticle("https://example.com/fresh", publishedAt = 1_000L)
         store.putText(retryId, "en", "Fallback", "Fallback summary", TextSource.FALLBACK)
+        store.classifyGeneral(retryId)
 
         val pending = store.pendingTexts(limit = 1, countryLanguages = emptySet()).single()
 
@@ -163,6 +171,7 @@ class ArticleTextProvenanceTest {
 
         val newId = store.seedArticle("https://example.com/after-migration", publishedAt = 2_000L)
         store.putText(newId, "en", "New title", "New summary", TextSource.AI)
+        store.classifyGeneral(newId)
         assertEquals(2, store.feed("en", "general", limit = 10, offset = 0).first.size)
         db.delete()
     }

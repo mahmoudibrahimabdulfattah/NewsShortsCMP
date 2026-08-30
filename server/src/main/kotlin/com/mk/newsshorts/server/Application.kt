@@ -23,6 +23,7 @@ import com.mk.newsshorts.server.ingest.IngestionPipeline
 import com.mk.newsshorts.server.ingest.RssFetcher
 import com.mk.newsshorts.server.model.FeedResponse
 import com.mk.newsshorts.server.store.ArticleStore
+import com.mk.newsshorts.server.summarize.buildClassifier
 import com.mk.newsshorts.server.summarize.buildSummarizer
 
 fun main(args: Array<String>) {
@@ -47,7 +48,7 @@ private val PAGE_SUFFIX = Regex("-p(\\d+)$")
 
 fun Application.module() {
     val store = ArticleStore(System.getenv("DB_PATH") ?: "news.db")
-    val pipeline = IngestionPipeline(store, RssFetcher(), buildSummarizer())
+    val pipeline = IngestionPipeline(store, RssFetcher(), buildSummarizer(), buildClassifier())
     pipeline.start(this)
 
     install(ContentNegotiation) { json(Json { encodeDefaults = true }) }

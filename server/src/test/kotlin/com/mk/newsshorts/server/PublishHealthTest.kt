@@ -26,6 +26,32 @@ class PublishHealthTest {
     }
 
     @Test
+    fun `a rejected source is not a silent one`() {
+        // Rejecting a section only voids its label; the feed still hands over
+        // its articles, so a run of rejections is not a run that fetched
+        // nothing and must not be failed as one.
+        val health = write(
+            tempDir(),
+            healthyHealth().copy(
+                sourcesTotal = 3,
+                sourcesEmpty = 1,
+                sourcesRejected = listOf("Broken sport", "Duplicate science"),
+            ),
+        )
+
+        assertEquals(emptyList(), health.failedChecks)
+    }
+
+    @Test
+    fun `a run where every source returned nothing fails`() {
+        val failure = assertFailsWith<PublishHealthFailure> {
+            write(tempDir(), healthyHealth().copy(sourcesTotal = 3, sourcesEmpty = 3))
+        }
+
+        assertTrue(PublishHealthChecks.ALL_SOURCES_EMPTY in failure.failedChecks)
+    }
+
+    @Test
     fun `a language with no articles fails the publish`() {
         val failure = assertFailsWith<PublishHealthFailure> {
             write(
@@ -71,6 +97,61 @@ class PublishHealthTest {
         }
 
         assertEquals(listOf(PublishHealthChecks.ALL_RENDERS_FAILED), failure.failedChecks)
+    }
+
+    @Test
+    fun `a category with less than one page fails the publish`() {
+        val health = healthyHealth().copy(
+            categoryFeedArticles = mapOf("ar-sports" to 39),
+            newestCategoryArticleAt = mapOf("ar-sports" to now - hour),
+            categoryGuardsReady = setOf("ar-sports"),
+        )
+
+        val failure = assertFailsWith<PublishHealthFailure> { write(tempDir(), health) }
+
+        assertEquals(listOf(PublishHealthChecks.thinCategory("ar-sports")), failure.failedChecks)
+    }
+
+    @Test
+    fun `a full but stale category fails the publish`() {
+        val health = healthyHealth().copy(
+            categoryFeedArticles = mapOf("ar-science" to 40),
+            newestCategoryArticleAt = mapOf("ar-science" to now - 24 * hour - 1),
+            categoryGuardsReady = setOf("ar-science"),
+        )
+
+        val failure = assertFailsWith<PublishHealthFailure> { write(tempDir(), health) }
+
+        assertEquals(listOf(PublishHealthChecks.staleCategory("ar-science")), failure.failedChecks)
+    }
+
+    @Test
+    fun `a fresh category with one page publishes`() {
+        val health = healthyHealth().copy(
+            categoryFeedArticles = mapOf("ar-health" to 40),
+            newestCategoryArticleAt = mapOf("ar-health" to now - hour),
+        )
+
+        assertTrue(write(tempDir(), health).failedChecks.isEmpty())
+    }
+
+    @Test
+    fun `a category still warming up reports warnings without freezing publish`() {
+        val health = healthyHealth().copy(
+            categoryFeedArticles = mapOf("ar-sports" to 0),
+            newestCategoryArticleAt = mapOf("ar-sports" to null),
+        )
+
+        val saved = write(tempDir(), health)
+
+        assertTrue(saved.failedChecks.isEmpty())
+        assertEquals(
+            listOf(
+                PublishHealthChecks.thinCategory("ar-sports"),
+                PublishHealthChecks.staleCategory("ar-sports"),
+            ),
+            saved.warningChecks,
+        )
     }
 
     @Test

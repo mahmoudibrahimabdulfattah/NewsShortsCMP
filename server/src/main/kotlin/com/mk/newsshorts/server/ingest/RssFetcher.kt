@@ -9,20 +9,61 @@ import com.mk.newsshorts.server.model.FeedSource
 import com.mk.newsshorts.server.model.RawArticle
 import org.jdom2.Element
 import org.slf4j.LoggerFactory
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URI
 
-class RssFetcher {
+data class SourceSnapshot(
+    val source: FeedSource,
+    val articles: List<RawArticle>,
+    val effectiveUrl: String,
+)
+
+fun interface FeedFetcher {
+    suspend fun fetch(source: FeedSource): SourceSnapshot
+}
+
+/**
+ * Extracts source-side section evidence without reading the headline or body.
+ * RSS category labels are explicit taxonomy. URL evidence is deliberately
+ * stricter: only a complete path segment counts, so a slug such as
+ * `sports-car-sales` cannot turn a business story into sport.
+ */
+internal fun inferArticleCategories(labels: Iterable<String>, articleUrl: String): Set<String> =
+    buildSet {
+        labels.forEach { label ->
+            LABEL_TOKEN.split(label.lowercase()).filter(String::isNotBlank).forEach { token ->
+                addAll(CATEGORY_ALIASES[token].orEmpty())
+            }
+        }
+        try {
+            URI(articleUrl).path.orEmpty()
+                .split('/')
+                .map { it.trim().lowercase() }
+                .filter(String::isNotEmpty)
+                .forEach { segment -> addAll(CATEGORY_ALIASES[segment].orEmpty()) }
+        } catch (_: Exception) {
+            // A malformed article URL is rejected later by normal feed use; it
+            // simply provides no category evidence here.
+        }
+    }
+
+class RssFetcher : FeedFetcher {
 
     private val log = LoggerFactory.getLogger(RssFetcher::class.java)
 
-    suspend fun fetch(source: FeedSource): List<RawArticle> = withContext(Dispatchers.IO) {
+    override suspend fun fetch(source: FeedSource): SourceSnapshot = withContext(Dispatchers.IO) {
         try {
-            val feed = open(source.url).use { SyndFeedInput().build(XmlReader(it)) }
-            feed.entries.mapNotNull { entry -> entry.toRawArticle(source) }
+            val opened = open(source.url)
+            val feed = opened.stream.use { SyndFeedInput().build(XmlReader(it)) }
+            SourceSnapshot(
+                source = source,
+                articles = feed.entries.mapNotNull { entry -> entry.toRawArticle(source) },
+                effectiveUrl = opened.effectiveUrl,
+            )
         } catch (e: Exception) {
             log.warn("Fetch failed for ${source.name}: ${e.message}")
-            emptyList()
+            SourceSnapshot(source, emptyList(), source.url)
         }
     }
 
@@ -30,7 +71,9 @@ class RssFetcher {
      * HttpURLConnection refuses to follow redirects that switch protocol, which
      * silently empties feeds that redirect http -> https, so follow them here.
      */
-    private fun open(url: String, hop: Int = 0): java.io.InputStream {
+    private data class OpenedFeed(val stream: InputStream, val effectiveUrl: String)
+
+    private fun open(url: String, hop: Int = 0): OpenedFeed {
         val connection = (URI(url).toURL().openConnection() as HttpURLConnection).apply {
             connectTimeout = 10_000
             readTimeout = 15_000
@@ -43,7 +86,7 @@ class RssFetcher {
             connection.disconnect()
             return open(URI(url).resolve(location).toString(), hop + 1)
         }
-        return connection.inputStream
+        return OpenedFeed(connection.inputStream, connection.url.toString())
     }
 
     private fun SyndEntry.toRawArticle(source: FeedSource): RawArticle? {
@@ -61,6 +104,7 @@ class RssFetcher {
             imageUrl = extractImage(descriptionHtml),
             publishedAtMillis = (publishedDate ?: updatedDate)?.time ?: System.currentTimeMillis(),
             source = source,
+            candidateCategories = inferArticleCategories(categories.map { it.name }, link),
         )
     }
 
@@ -83,4 +127,26 @@ class RssFetcher {
         private val WHITESPACE_REGEX = Regex("\\s+")
         private const val MAX_REDIRECTS = 5
     }
+}
+
+private val LABEL_TOKEN = Regex("[^\\p{L}\\p{N}_]+")
+
+private val CATEGORY_ALIASES: Map<String, Set<String>> = buildMap {
+    fun aliases(category: String, vararg names: String) {
+        names.forEach { name -> put(name, setOf(category)) }
+    }
+
+    aliases("business", "business", "economy", "economics", "finance", "markets")
+    aliases("business", "اقتصاد", "الاقتصاد", "اقتصادي", "اقتصادية", "اعمال", "أعمال", "اسواق", "أسواق")
+    aliases("technology", "technology", "tech", "digital", "gadgets")
+    aliases("technology", "تكنولوجيا", "تقنية", "التقنية", "تقنيه", "رقمي", "رقمية")
+    aliases("science", "science", "environment", "space")
+    aliases("science", "علوم", "العلوم", "علم", "بيئة", "البيئة", "بيئه", "فضاء")
+    aliases("health", "health", "wellness", "medicine", "medical")
+    aliases("health", "صحة", "الصحة", "صحه", "طب", "طبي", "طبية")
+    aliases("sports", "sport", "sports", "football", "soccer", "cricket", "tennis")
+    aliases("sports", "رياضة", "الرياضة", "رياضه", "رياضي", "رياضية", "رياضيه", "كرة")
+    aliases("entertainment", "entertainment", "culture", "arts", "movies", "film", "television", "music", "style")
+    aliases("entertainment", "ترفيه", "ثقافة", "الثقافة", "ثقافه", "فن", "الفن", "سينما", "موسيقى", "منوعات")
+    put("science_and_health", setOf("science", "health"))
 }

@@ -49,7 +49,14 @@ class SummarizeRetryCycleTest {
         val summarizer = ChainedSummarizer(
             ScriptedPrimarySummarizer(
                 emptyMap(),
-                mapOf(articleId to SummaryOutput("AI title", "AI summary", TextSource.AI)),
+                mapOf(
+                    articleId to SummaryOutput(
+                        "AI title",
+                        "AI summary",
+                        TextSource.AI,
+                        categories = setOf("general"),
+                    )
+                ),
             ),
             FallbackSummarizer(),
         )
@@ -190,7 +197,14 @@ class SummarizeRetryCycleTest {
         )!!
         val summarizer = ChainedSummarizer(
             ScriptedPrimarySummarizer(
-                mapOf(articleId to SummaryOutput("English title", "English AI summary", TextSource.AI)),
+                mapOf(
+                    articleId to SummaryOutput(
+                        "English title",
+                        "English AI summary",
+                        TextSource.AI,
+                        categories = setOf("general"),
+                    )
+                ),
                 mapOf(articleId to SummaryOutput("English title", "Arabic summary", TextSource.AI)),
             ),
             FallbackSummarizer(),

@@ -3,6 +3,7 @@ package com.mk.newsshorts.server.store
 import com.mk.newsshorts.server.feed.FeedLayout
 import com.mk.newsshorts.server.feed.FeedPage
 import com.mk.newsshorts.server.model.FeedArticleDto
+import com.mk.newsshorts.server.model.NewsCategories
 import com.mk.newsshorts.server.push.SentNotification
 import com.mk.newsshorts.server.share.SharedArticle
 import org.jetbrains.exposed.sql.Database
@@ -46,18 +47,55 @@ object Articles : Table("articles") {
 }
 
 /**
- * Categories where an article URL has appeared.
+ * Candidate categories where an article URL has appeared.
  *
  * [Articles.category] is still the first-seen category, because legacy rows
- * need a backfill source and unfiltered outputs need a stable badge. Feed
- * membership lives here so a publisher's general feed cannot permanently steal
- * a sports, tech, or business story from its own tab.
+ * need a backfill source. A candidate is source evidence, not permission to
+ * publish in that tab; [VerifiedArticleCategories] holds that permission after
+ * the article text agrees with the source section.
  */
 object ArticleCategories : Table("article_categories") {
     val articleId = long("article_id")
     val category = varchar("category", 32).index()
 
     override val primaryKey = PrimaryKey(articleId, category)
+}
+
+/** Categories an article is allowed to appear in after content verification. */
+object VerifiedArticleCategories : Table("verified_article_categories") {
+    val articleId = long("article_id").index()
+    val category = varchar("category", 32).index()
+
+    override val primaryKey = PrimaryKey(articleId, category)
+}
+
+/**
+ * How far classification has got with one article.
+ *
+ * A classification reads the article, so nothing a later feed says about it can
+ * change the answer — the row is written once and never invalidated. Attempts
+ * are counted apart from text retries because an article whose summary already
+ * reads well still needs a category, and must not be rewritten to get one.
+ */
+object ArticleClassifications : Table("article_classifications") {
+    val articleId = long("article_id")
+    val attempts = integer("attempts").default(0)
+    val complete = bool("complete").default(false)
+
+    override val primaryKey = PrimaryKey(articleId)
+}
+
+/**
+ * Remembers which published category feeds have completed their initial
+ * backfill. Before that point thin/stale checks are warnings; afterwards the
+ * same checks are fatal regressions. The threshold is stored so raising the
+ * configured minimum starts a new warm-up instead of inheriting weaker proof.
+ */
+object CategoryPublishReadiness : Table("category_publish_readiness") {
+    val feedKey = varchar("feed_key", 64)
+    val minimumArticles = integer("minimum_articles")
+
+    override val primaryKey = PrimaryKey(feedKey)
 }
 
 /**
@@ -227,12 +265,27 @@ class ArticleStore(dbPath: String) {
         transaction {
             SchemaUtils.createMissingTablesAndColumns(
                 Articles, ArticleTexts, PushLog, FeedPages, FeedPlaced, FeedPageState,
-                SharedArticles, PushHistory, ArticleCategories,
+                SharedArticles, PushHistory, ArticleCategories, VerifiedArticleCategories,
+                ArticleClassifications, CategoryPublishReadiness,
             )
             exec(
                 """
                 INSERT OR IGNORE INTO article_categories (article_id, category)
                 SELECT id, category FROM articles
+                """.trimIndent()
+            )
+            // Expand-only migration: every cached article starts in General
+            // until its existing text is re-read by the classifier. The old
+            // candidate table is preserved, so rolling back this binary loses
+            // no source observations.
+            exec(
+                """
+                INSERT OR IGNORE INTO verified_article_categories (article_id, category)
+                SELECT id, 'general' FROM articles
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM verified_article_categories verified
+                    WHERE verified.article_id = articles.id
+                )
                 """.trimIndent()
             )
         }
@@ -474,6 +527,10 @@ class ArticleStore(dbPath: String) {
                 it[articleId] = id
                 it[ArticleCategories.category] = category
             }
+            VerifiedArticleCategories.insertIgnore {
+                it[articleId] = id
+                it[VerifiedArticleCategories.category] = NewsCategories.GENERAL
+            }
             return@transaction id
         }
 
@@ -573,6 +630,8 @@ class ArticleStore(dbPath: String) {
         if (stale.isEmpty()) return@transaction 0
         ArticleTexts.deleteWhere { ArticleTexts.articleId inList stale }
         ArticleCategories.deleteWhere { ArticleCategories.articleId inList stale }
+        VerifiedArticleCategories.deleteWhere { VerifiedArticleCategories.articleId inList stale }
+        ArticleClassifications.deleteWhere { ArticleClassifications.articleId inList stale }
         Articles.deleteWhere { Articles.id inList stale }
         stale.size
     }
@@ -645,6 +704,138 @@ class ArticleStore(dbPath: String) {
         summary: String,
     ): TextWriteResult = putText(articleId, language, title, summary, TextSource.UNSERVED)
 
+    /**
+     * Marks feeds ready once they have reached [minimumArticles], and keeps the
+     * mark if retention later makes them thin. This is rollout state rather
+     * than current health: current counts are evaluated separately.
+     */
+    fun categoryFeedsReady(
+        articleCounts: Map<String, Int>,
+        minimumArticles: Int,
+    ): Set<String> = transaction {
+        require(minimumArticles > 0) { "minimumArticles must be positive" }
+        if (articleCounts.isEmpty()) return@transaction emptySet()
+
+        val previous = CategoryPublishReadiness.selectAll().associate {
+            it[CategoryPublishReadiness.feedKey] to it[CategoryPublishReadiness.minimumArticles]
+        }
+        articleCounts.forEach { (feedKey, count) ->
+            val provedMinimum = previous[feedKey] ?: 0
+            if (count >= minimumArticles && provedMinimum < minimumArticles) {
+                CategoryPublishReadiness.upsert {
+                    it[CategoryPublishReadiness.feedKey] = feedKey
+                    it[CategoryPublishReadiness.minimumArticles] = minimumArticles
+                }
+            }
+        }
+
+        CategoryPublishReadiness.selectAll()
+            .filter {
+                it[CategoryPublishReadiness.feedKey] in articleCounts &&
+                    it[CategoryPublishReadiness.minimumArticles] >= minimumArticles
+            }
+            .mapTo(linkedSetOf()) { it[CategoryPublishReadiness.feedKey] }
+    }
+
+    /**
+     * Records one classification attempt and returns the categories the article
+     * may now be published in.
+     *
+     * The answer comes from the article's own text. The categories its feeds
+     * claimed are deliberately not consulted: a publisher's sports section
+     * carrying a flood story was the whole reason a reader found floods under
+     * رياضة, and the mirror of that — a football story in a general feed with
+     * no way into the sports tab — is what left the specialised tabs thin.
+     *
+     * General is the outcome of every failure, and never an addition: an
+     * article the classifier calls both sport and general is sport.
+     */
+    fun recordClassificationAttempt(articleId: Long, classified: Set<String>?): Set<String> = transaction {
+        val normalized = classified
+            ?.mapTo(linkedSetOf()) { it.trim().lowercase() }
+            ?.takeIf { it.isNotEmpty() && it.all(SUPPORTED_CATEGORIES::contains) }
+
+        if (normalized == null) {
+            val attempts = ArticleClassifications.selectAll()
+                .andWhere { ArticleClassifications.articleId eq articleId }
+                .singleOrNull()
+                ?.get(ArticleClassifications.attempts)
+                ?: 0
+            ArticleClassifications.upsert {
+                it[ArticleClassifications.articleId] = articleId
+                it[ArticleClassifications.attempts] = attempts + 1
+                it[complete] = false
+            }
+            replaceVerifiedCategories(articleId, setOf(NewsCategories.GENERAL))
+            return@transaction setOf(NewsCategories.GENERAL)
+        }
+
+        val verified = normalized
+            .filterTo(linkedSetOf()) { it != NewsCategories.GENERAL }
+            .ifEmpty { linkedSetOf(NewsCategories.GENERAL) }
+        replaceVerifiedCategories(articleId, verified)
+        ArticleClassifications.upsert {
+            it[ArticleClassifications.articleId] = articleId
+            it[attempts] = 0
+            it[complete] = true
+        }
+        verified
+    }
+
+    /** One article that has its text but not yet a category of its own. */
+    data class PendingClassification(val id: Long, val title: String, val description: String?)
+
+    /**
+     * Articles already rendered but still unclassified, newest first.
+     *
+     * A brand-new article is classified inside the request that writes its
+     * summary, which costs nothing extra. This is the other queue: everything
+     * already sitting in the database, which would otherwise have to be
+     * re-summarized — regenerating text that reads perfectly well — purely to
+     * find out what it is about.
+     */
+    fun pendingClassifications(limit: Int): List<PendingClassification> = transaction {
+        if (limit <= 0) return@transaction emptyList()
+        val progress = ArticleClassifications.selectAll().associate {
+            it[ArticleClassifications.articleId] to
+                (it[ArticleClassifications.attempts] to it[ArticleClassifications.complete])
+        }
+        // Only text a reader can actually be served counts. An article whose
+        // one row is UNSERVED reaches no feed, so classifying it would spend
+        // the budget on a story no tab can show either way.
+        val rendered = ArticleTexts.selectAll()
+            .andWhere { ArticleTexts.textSource neq TextSource.UNSERVED }
+            .mapTo(HashSet()) { it[ArticleTexts.articleId] }
+
+        Articles.selectAll()
+            .orderBy(Articles.publishedAt, SortOrder.DESC)
+            .asSequence()
+            .filter { it[Articles.id] in rendered }
+            .filter {
+                val attempt = progress[it[Articles.id]]
+                attempt == null || (!attempt.second && attempt.first < MAX_CLASSIFICATION_ATTEMPTS)
+            }
+            .take(limit)
+            .map {
+                PendingClassification(
+                    id = it[Articles.id],
+                    title = it[Articles.title],
+                    description = it[Articles.description],
+                )
+            }
+            .toList()
+    }
+
+    private fun replaceVerifiedCategories(articleId: Long, categories: Set<String>) {
+        VerifiedArticleCategories.deleteWhere { VerifiedArticleCategories.articleId eq articleId }
+        categories.forEach { category ->
+            VerifiedArticleCategories.insert {
+                it[VerifiedArticleCategories.articleId] = articleId
+                it[VerifiedArticleCategories.category] = category
+            }
+        }
+    }
+
     data class PendingText(
         val id: Long,
         val title: String,
@@ -671,6 +862,13 @@ class ArticleStore(dbPath: String) {
         val memberships: Map<Long, List<String>> = ArticleCategories.selectAll()
             .map { it[ArticleCategories.articleId] to it[ArticleCategories.category] }
             .groupBy({ it.first }) { it.second }
+        // Translation follows the verified category, not the claimed one. A
+        // feed's own label is free to be wrong, and rendering an article into a
+        // second language on the strength of it would spend the budget twice
+        // over on a story that never reaches that tab.
+        val verified: Map<Long, Set<String>> = VerifiedArticleCategories.selectAll()
+            .groupBy({ it[VerifiedArticleCategories.articleId] }) { it[VerifiedArticleCategories.category] }
+            .mapValues { (_, categories) -> categories.toSet() }
 
         data class PendingBucket(val targetLanguage: String, val country: String?, val category: String)
 
@@ -684,9 +882,10 @@ class ArticleStore(dbPath: String) {
                 val id = row[Articles.id]
                 val sourceLanguage = row[Articles.language]
                 val country = row[Articles.country]
+                val isSpecialised = verified[id].orEmpty().any { it != NewsCategories.GENERAL }
                 val targets = buildSet {
                     add(sourceLanguage)
-                    if (country != null) addAll(countryLanguages)
+                    if (country != null || isSpecialised) addAll(countryLanguages)
                 }
                 targets.mapNotNull { target ->
                     val stored = existing[id to target]
@@ -785,16 +984,28 @@ class ArticleStore(dbPath: String) {
         excludeCountryTagged: Boolean = false,
     ): Pair<List<FeedArticleDto>, Long> =
         transaction {
+            val verifiedByArticle = if (category == null) {
+                VerifiedArticleCategories.selectAll()
+                    .map { it[VerifiedArticleCategories.articleId] to it[VerifiedArticleCategories.category] }
+                    .groupBy({ it.first }) { it.second }
+            } else {
+                emptyMap()
+            }
             fun base() = (if (category == null) {
                 Articles
             } else {
-                Articles.join(ArticleCategories, JoinType.INNER, Articles.id, ArticleCategories.articleId)
+                Articles.join(
+                    VerifiedArticleCategories,
+                    JoinType.INNER,
+                    Articles.id,
+                    VerifiedArticleCategories.articleId,
+                )
             })
                 .join(ArticleTexts, JoinType.INNER, onColumn = Articles.id, otherColumn = ArticleTexts.articleId)
                 .selectAll()
                 .also { query ->
                     language?.let { query.andWhere { ArticleTexts.language eq it } }
-                    category?.let { query.andWhere { ArticleCategories.category eq it } }
+                    category?.let { query.andWhere { VerifiedArticleCategories.category eq it } }
                     country?.let { query.andWhere { Articles.country eq it } }
                     if (excludeCountryTagged) query.andWhere { Articles.country.isNull() }
                     query.andWhere { ArticleTexts.textSource neq TextSource.UNSERVED }
@@ -820,7 +1031,10 @@ class ArticleStore(dbPath: String) {
                         imageUrl = it[Articles.imageUrl],
                         sourceName = it[Articles.sourceName],
                         language = it[ArticleTexts.language],
-                        category = category ?: it[Articles.category],
+                        category = category ?: verifiedByArticle[it[Articles.id]]
+                            ?.sorted()
+                            ?.firstOrNull()
+                            ?: NewsCategories.GENERAL,
                         publishedAt = it[Articles.publishedAt],
                     )
                 }
@@ -837,6 +1051,8 @@ class ArticleStore(dbPath: String) {
         const val PLACED_GRACE_MILLIS = 90L * 24 * 60 * 60 * 1000
 
         const val MAX_TEXT_ATTEMPTS = 3
+        const val MAX_CLASSIFICATION_ATTEMPTS = 3
+        val SUPPORTED_CATEGORIES = NewsCategories.all
     }
 }
 
