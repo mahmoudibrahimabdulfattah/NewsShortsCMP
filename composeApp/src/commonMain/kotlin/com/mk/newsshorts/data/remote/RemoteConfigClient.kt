@@ -1,9 +1,7 @@
 package com.mk.newsshorts.data.remote
 
 import com.mk.newsshorts.config.BuildConfig
-import io.ktor.client.HttpClient
 import io.ktor.client.call.body
-import io.ktor.client.request.get
 import kotlinx.serialization.Serializable
 
 /**
@@ -14,13 +12,14 @@ import kotlinx.serialization.Serializable
  * One request covers both, fetched once per launch.
  */
 class RemoteConfigClient(
-    private val httpClient: HttpClient,
+    private val originClient: OriginFailoverClient,
+    private val apiConfig: ApiConfig,
     private val currentVersionCode: Int = BuildConfig.VERSION_CODE,
 ) {
 
     /** Null on any failure — see [requiredUpdateFor] for why that matters. */
     suspend fun fetch(): AppConfigDto? =
-        runCatching { httpClient.get(ApiConfig.appConfigUrl()).body<AppConfigDto>() }.getOrNull()
+        runCatching { originClient.get(apiConfig.appConfigPath()).body<AppConfigDto>() }.getOrNull()
 
     suspend fun requiredUpdate(): RequiredUpdate? =
         fetch()?.let { config -> requiredUpdateFor(config, currentVersionCode) }

@@ -11,7 +11,6 @@ import com.mk.newsshorts.security.SecurityNotice
 import com.mk.newsshorts.security.SecurityReason
 import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.domain.model.NewsCategory
-import com.mk.newsshorts.presentation.localization.AppLocale
 
 data class NewsUiState(
     val isLoading: Boolean = true,
@@ -23,9 +22,7 @@ data class NewsUiState(
     val isBackgroundRefreshing: Boolean = false,
     val selectedCountry: CountryOption = CountryOption.UNITED_STATES,
     val selectedLanguage: LanguageOption = LanguageOption.ENGLISH,
-    val appLocale: AppLocale = AppLocale.ENGLISH,
     val currentTab: NavigationTab = NavigationTab.FOR_YOU,
-    val savedArticles: List<NewsArticle> = emptyList(),
     val isOfflineMode: Boolean = false,
     /**
      * Which onboarding step is showing, or null once it is done or was never
@@ -35,8 +32,6 @@ data class NewsUiState(
     val onboarding: OnboardingStep? = null,
     /** Ticked during onboarding; written to settings only when it finishes. */
     val onboardingCategories: List<NewsCategory> = emptyList(),
-    /** How large the reader wants text. Applied by the theme, not per screen. */
-    val textScale: TextScale = TextScale.DEFAULT,
     /**
      * The category row's order — the reader's picks first. Held in state rather
      * than read from settings at each call site, so the row and the feed can
@@ -108,11 +103,6 @@ data class NewsUiState(
     val securityNotice: SecurityNotice = SecurityNotice.NONE,
     /** Which signals produced [securityNotice]; decides the wording shown. */
     val securityReason: SecurityReason = SecurityReason.INTEGRITY,
-    val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val notificationsEnabled: Boolean = true,
-    val notifyBreaking: Boolean = true,
-    val notifyTopStory: Boolean = true,
-    val notifyReminder: Boolean = true,
     /** Null for a guest. Every screen already works without one. */
     val authUser: AuthUser? = null,
     /** True while a sign-in/up/delete call is in flight — drives a spinner. */
@@ -135,21 +125,6 @@ data class NewsUiState(
      * screen can ask who it belongs to instead of discarding it.
      */
     val unclaimedSignInLink: String? = null,
-    /** Exactly what the reader has typed, unfolded — this is what the field shows. */
-    val searchQuery: String = "",
-    val searchResults: List<NewsArticle> = emptyList(),
-    val isSearching: Boolean = false,
-    /**
-     * A search finished for the query currently in the field. Without it an
-     * empty result list is ambiguous — it looks the same before the first
-     * search runs as it does after one that found nothing, and those are two
-     * different screens.
-     */
-    val searchSettled: Boolean = false,
-    /** The corpus could not be reached and nothing was held from earlier. */
-    val searchFailed: Boolean = false,
-    /** Most recent first. Never leaves the device — see `RecentSearchesStore`. */
-    val recentSearches: List<String> = emptyList(),
 ) {
     val hasArticles: Boolean
         get() = articles.isNotEmpty()
@@ -159,9 +134,6 @@ data class NewsUiState(
 
     val isError: Boolean
         get() = errorMessage != null && !isLoading
-
-    val hasSavedArticles: Boolean
-        get() = savedArticles.isNotEmpty()
 
     val hasMorePages: Boolean
         get() = nextPageFile != null
@@ -194,10 +166,6 @@ data class NewsUiState(
             .toSet()
 
     val unreadInboxCount: Int get() = unreadInboxIds.size
-
-    /** A search ran for what is in the field and came back with nothing. */
-    val hasNoSearchResults: Boolean
-        get() = searchSettled && !searchFailed && searchResults.isEmpty()
 
     /**
      * The details overlay, if that is what is on top. Kept as a derived

@@ -4,63 +4,58 @@ import com.mk.newsshorts.config.BuildConfig
 
 expect fun isWebPlatform(): Boolean
 
-/**
- * Adjusts the backend base URL for the current platform
- * (e.g. Android emulator reaches the host machine via 10.0.2.2).
- */
+/** Makes a local backend reachable from each platform's development runtime. */
 expect fun adjustBaseUrlForPlatform(url: String): String
 
-object ApiConfig {
-    /** News Shorts backend — configured via BACKEND_BASE_URL in local.properties. */
-    val baseUrl: String = adjustBaseUrlForPlatform(BuildConfig.BACKEND_BASE_URL.trimEnd('/'))
+class ApiConfig(
+    configuredOrigins: List<String> = BuildConfig.BACKEND_ORIGINS.split(','),
+) {
+    val origins: List<String> = configuredOrigins
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .map { origin -> adjustBaseUrlForPlatform(origin.trimEnd('/')) }
+        .distinct()
+        .also { origins -> require(origins.isNotEmpty()) { "At least one backend origin is required" } }
+
+    val primaryOrigin: String = origins.first()
 
     /**
-     * The feed is published as static JSON (GitHub Pages), so language and
-     * category are part of the path rather than query parameters. A local Ktor
-     * server serves the same paths, so both work with one client.
+     * The feed is static JSON, so every origin serves the same relative paths.
+     * Keeping the origin out of the path lets one failed host be replaced
+     * without changing what resource the caller asked for.
      */
-    fun feedUrl(language: String?, category: String?): String {
+    fun feedPath(language: String?, category: String?): String {
         val name = when {
             language == null -> DEFAULT_LANGUAGE
             category == null -> language
             else -> "$language-$category"
         }
-        return "$baseUrl/v1/feed/$name.json"
+        return "/v1/feed/$name.json"
     }
 
-    fun countryFeedUrl(countryCode: String, language: String): String =
-        "$baseUrl/v1/feed/country-$countryCode-$language.json"
+    fun countryFeedPath(countryCode: String, language: String): String =
+        "/v1/feed/country-$countryCode-$language.json"
 
     /**
-     * A later page of a feed, named by the page before it.
-     *
-     * The name comes out of a downloaded file, so it is checked rather than
-     * pasted into a URL: a plain file name, no path of its own. Anything else
-     * returns null and the feed simply ends there — a feed file has no business
-     * sending the app to a directory, let alone another host.
+     * Anything other than a plain published file name ends the feed locally;
+     * a downloaded page cannot redirect the app to another path or host.
      */
-    fun feedPageUrl(pageFile: String): String? {
+    fun feedPagePath(pageFile: String): String? {
         if (!PAGE_FILE.matches(pageFile)) return null
-        return "$baseUrl/v1/feed/$pageFile"
+        return "/v1/feed/$pageFile"
     }
 
-    private val PAGE_FILE = Regex("[A-Za-z0-9_-]+\\.json")
+    fun searchIndexPath(language: String): String = "/v1/search/$language.json"
 
-    /**
-     * Everything published in one language, as one file.
-     *
-     * A static host cannot answer `?q=`, so there is no search endpoint to call
-     * — the corpus comes down whole and the app matches against it. [language]
-     * has already been narrowed to one the backend publishes, the same as every
-     * feed URL above, or this would request a file that was never generated.
-     */
-    fun searchIndexUrl(language: String): String = "$baseUrl/v1/search/$language.json"
+    fun notificationsPath(language: String): String = "/v1/notifications/$language.json"
 
-    /** What has been pushed in one language, for the in-app inbox. */
-    fun notificationsUrl(language: String): String = "$baseUrl/v1/notifications/$language.json"
+    fun appConfigPath(): String = "/v1/app.json"
 
-    /** Minimum supported build and store link — see [AppUpdateClient]. */
-    fun appConfigUrl(): String = "$baseUrl/v1/app.json"
+    fun url(origin: String, path: String): String =
+        "${origin.trimEnd('/')}/${path.trimStart('/')}"
 
-    private const val DEFAULT_LANGUAGE: String = "en"
+    private companion object {
+        val PAGE_FILE = Regex("[A-Za-z0-9_-]+\\.json")
+        const val DEFAULT_LANGUAGE: String = "en"
+    }
 }

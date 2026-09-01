@@ -1,8 +1,6 @@
 package com.mk.newsshorts.data.remote
 
-import io.ktor.client.HttpClient
 import io.ktor.client.call.body
-import io.ktor.client.request.get
 import io.ktor.http.HttpStatusCode
 import com.mk.newsshorts.domain.model.FeedLanguage
 import com.mk.newsshorts.domain.model.NewsCategory
@@ -17,7 +15,8 @@ import com.mk.newsshorts.domain.model.NewsResult
  * and ViewModel layers stay unchanged.
  */
 class NewsApiClient(
-    private val httpClient: HttpClient
+    private val originClient: OriginFailoverClient,
+    private val apiConfig: ApiConfig,
 ) {
     suspend fun fetchTopHeadlines(
         category: NewsCategory?,
@@ -51,7 +50,7 @@ class NewsApiClient(
      */
     private suspend fun fetchCountry(country: String, language: String): NewsResult<NewsApiResponse> {
         val code = countryToCode(country) ?: return fetchFeed(supportedLanguage(language), category = null)
-        return fetchFeedUrl(ApiConfig.countryFeedUrl(code, supportedLanguage(language)))
+        return fetchFeedPath(apiConfig.countryFeedPath(code, supportedLanguage(language)))
     }
 
     private fun supportedLanguage(language: String): String = FeedLanguage.resolve(language)
@@ -61,17 +60,17 @@ class NewsApiClient(
      * on the device.
      *
      * The backend is static JSON on a CDN, so there is nothing to send a query
-     * to — see [ApiConfig.searchIndexUrl]. This replaced a `fetchNewsByQuery`
+     * to — see [ApiConfig.searchIndexPath]. This replaced a `fetchNewsByQuery`
      * that took a query and quietly fetched the default feed, so every search
      * returned the front page no matter what was typed.
      */
     suspend fun fetchSearchIndex(language: String): NewsResult<NewsApiResponse> =
-        fetchFeedUrl(ApiConfig.searchIndexUrl(supportedLanguage(language)))
+        fetchFeedPath(apiConfig.searchIndexPath(supportedLanguage(language)))
 
     private suspend fun fetchFeed(
         language: String?,
         category: String?,
-    ): NewsResult<NewsApiResponse> = fetchFeedUrl(ApiConfig.feedUrl(language, category))
+    ): NewsResult<NewsApiResponse> = fetchFeedPath(apiConfig.feedPath(language, category))
 
     /**
      * A later page, named by the page before it.
@@ -84,24 +83,28 @@ class NewsApiClient(
      * requested at all.
      */
     suspend fun fetchFeedPage(pageFile: String): NewsResult<NewsApiResponse> {
-        val url = ApiConfig.feedPageUrl(pageFile)
+        val path = apiConfig.feedPagePath(pageFile)
             ?: return NewsResult.Error(NewsError.NotFound)
         return try {
-            val response = httpClient.get(url)
-            if (response.status == HttpStatusCode.NotFound) {
-                NewsResult.Error(NewsError.NotFound)
-            } else {
-                NewsResult.Success(response.body<BackendFeedResponse>().toNewsApiResponse())
+            val response = originClient.get(path)
+            when {
+                response.status == HttpStatusCode.NotFound -> NewsResult.Error(NewsError.NotFound)
+                response.status.value >= 500 -> NewsResult.Error(NewsError.ServerError)
+                else -> NewsResult.Success(response.body<BackendFeedResponse>().toNewsApiResponse())
             }
         } catch (exception: Exception) {
             NewsResult.Error(exception.toNewsError())
         }
     }
 
-    private suspend fun fetchFeedUrl(url: String): NewsResult<NewsApiResponse> {
+    private suspend fun fetchFeedPath(path: String): NewsResult<NewsApiResponse> {
         return try {
-            val response: BackendFeedResponse = httpClient.get(url).body()
-            NewsResult.Success(response.toNewsApiResponse())
+            val response = originClient.get(path)
+            if (response.status.value >= 500) {
+                NewsResult.Error(NewsError.ServerError)
+            } else {
+                NewsResult.Success(response.body<BackendFeedResponse>().toNewsApiResponse())
+            }
         } catch (exception: Exception) {
             NewsResult.Error(exception.toNewsError())
         }

@@ -98,7 +98,7 @@ class AppPreferencesTest {
     }
 
     @Test
-    fun `a reader's real preferences are what sync would push, not the defaults`() {
+    fun `sync pushes a reader's real preferences instead of the defaults`() {
         // The regression this phase exists for: sync used to build its payload
         // from the UI state, which holds hardcoded defaults until
         // loadSavedSettings finishes. A sign-in landing first pushed English,

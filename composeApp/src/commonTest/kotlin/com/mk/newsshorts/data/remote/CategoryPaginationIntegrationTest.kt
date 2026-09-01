@@ -1,6 +1,7 @@
 package com.mk.newsshorts.data.remote
 
 import com.mk.newsshorts.data.mapper.NewsMapper
+import com.mk.newsshorts.data.local.OriginPreferenceStore
 import com.mk.newsshorts.domain.feed.appendPage
 import com.mk.newsshorts.domain.feed.shouldLoadNextPage
 import com.mk.newsshorts.domain.model.NewsCategory
@@ -38,7 +39,11 @@ class CategoryPaginationIntegrationTest {
         val client = HttpClient(engine) {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
         }
-        val api = NewsApiClient(client)
+        val config = ApiConfig(listOf("https://primary.test"))
+        val api = NewsApiClient(
+            originClient = OriginFailoverClient(client, config, InMemoryOriginPreferenceStore()),
+            apiConfig = config,
+        )
 
         val firstResult = api.fetchNewsByLanguage(NewsCategory.SPORTS, "ar")
         assertTrue(firstResult is NewsResult.Success)
@@ -77,4 +82,9 @@ class CategoryPaginationIntegrationTest {
         total = 51,
         nextPage = nextPage,
     )
+
+    private class InMemoryOriginPreferenceStore : OriginPreferenceStore {
+        override fun preferredOrigin(): String? = null
+        override fun savePreferredOrigin(origin: String) = Unit
+    }
 }

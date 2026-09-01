@@ -10,7 +10,7 @@ import com.mk.newsshorts.domain.model.NewsCategory
 import com.mk.newsshorts.domain.model.NewsError
 import com.mk.newsshorts.domain.model.NewsResult
 import com.mk.newsshorts.domain.repository.NewsRepository
-import com.mk.newsshorts.domain.search.SearchIndex
+import com.mk.newsshorts.feature.search.SearchIndex
 
 class NewsRepositoryImpl(
     private val newsApiClient: NewsApiClient,

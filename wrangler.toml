@@ -1,0 +1,13 @@
+name = "news-shorts-feed"
+main = "cloudflare/src/index.mjs"
+compatibility_date = "2026-08-30"
+account_id = "replace-with-cloudflare-account-id"
+
+[assets]
+directory = "./build/site"
+binding = "ASSETS"
+run_worker_first = true
+
+[[analytics_engine_datasets]]
+binding = "FEED_ANALYTICS"
+dataset = "news_shorts_feed_requests"

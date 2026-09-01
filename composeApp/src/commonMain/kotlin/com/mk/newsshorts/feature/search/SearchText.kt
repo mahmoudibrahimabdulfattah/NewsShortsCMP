@@ -1,4 +1,4 @@
-package com.mk.newsshorts.domain.search
+package com.mk.newsshorts.feature.search
 
 /**
  * Folding text into the form search compares on.

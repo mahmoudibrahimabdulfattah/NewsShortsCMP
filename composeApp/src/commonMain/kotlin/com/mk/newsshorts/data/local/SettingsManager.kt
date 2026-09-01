@@ -5,9 +5,21 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+interface SettingsPersistence {
+    val preferences: StateFlow<AppPreferences>
+
+    suspend fun saveAppLocale(localeCode: String)
+    suspend fun saveThemeMode(mode: String)
+    suspend fun saveTextScale(scale: String)
+    suspend fun setNotificationsEnabled(enabled: Boolean)
+    suspend fun setNotifyBreaking(enabled: Boolean)
+    suspend fun setNotifyTopStory(enabled: Boolean)
+    suspend fun setNotifyReminder(enabled: Boolean)
+}
+
 class SettingsManager(
     private val settingsStorage: SettingsStorage
-) {
+) : SettingsPersistence {
     private val preferencesState: MutableStateFlow<AppPreferences> =
         MutableStateFlow(readAppPreferences(settingsStorage::getString))
 
@@ -16,14 +28,14 @@ class SettingsManager(
      * constructor, so by the time anything can ask, these are the reader's real
      * preferences and not the defaults — which is what sign-in sync depends on.
      */
-    val preferences: StateFlow<AppPreferences> = preferencesState.asStateFlow()
+    override val preferences: StateFlow<AppPreferences> = preferencesState.asStateFlow()
 
     suspend fun saveNewsLanguage(languageCode: String) {
         settingsStorage.putString(KEY_NEWS_LANGUAGE, languageCode)
         preferencesState.update { it.copy(newsLanguage = languageCode) }
     }
 
-    suspend fun saveAppLocale(localeCode: String) {
+    override suspend fun saveAppLocale(localeCode: String) {
         settingsStorage.putString(KEY_APP_LOCALE, localeCode)
         preferencesState.update { it.copy(appLocale = localeCode) }
     }
@@ -33,32 +45,32 @@ class SettingsManager(
         preferencesState.update { it.copy(selectedCountry = countryCode) }
     }
 
-    suspend fun saveThemeMode(mode: String) {
+    override suspend fun saveThemeMode(mode: String) {
         settingsStorage.putString(KEY_THEME_MODE, mode)
         preferencesState.update { it.copy(themeMode = mode) }
     }
 
-    suspend fun saveTextScale(scale: String) {
+    override suspend fun saveTextScale(scale: String) {
         settingsStorage.putString(KEY_TEXT_SCALE, scale)
         preferencesState.update { it.copy(textScale = scale) }
     }
 
-    suspend fun setNotificationsEnabled(enabled: Boolean) {
+    override suspend fun setNotificationsEnabled(enabled: Boolean) {
         settingsStorage.putString(NotificationPreferenceKeys.ENABLED, enabled.toString())
         preferencesState.update { it.copy(notificationsEnabled = enabled) }
     }
 
-    suspend fun setNotifyBreaking(enabled: Boolean) {
+    override suspend fun setNotifyBreaking(enabled: Boolean) {
         settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_BREAKING, enabled.toString())
         preferencesState.update { it.copy(notifyBreaking = enabled) }
     }
 
-    suspend fun setNotifyTopStory(enabled: Boolean) {
+    override suspend fun setNotifyTopStory(enabled: Boolean) {
         settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_TOP_STORY, enabled.toString())
         preferencesState.update { it.copy(notifyTopStory = enabled) }
     }
 
-    suspend fun setNotifyReminder(enabled: Boolean) {
+    override suspend fun setNotifyReminder(enabled: Boolean) {
         settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_REMINDER, enabled.toString())
         preferencesState.update { it.copy(notifyReminder = enabled) }
     }

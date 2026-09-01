@@ -4,4 +4,7 @@
     <string name="notification_channel_breaking_news">أخبار عاجلة</string>
     <string name="notification_channel_breaking_news_description">أهم الأخبار فور حدوثها</string>
     <string name="unable_to_open_link">تعذّر فتح الرابط</string>
+    <string name="widget_description">أهم خبر بلغتك الإخبارية</string>
+    <string name="widget_top_story">أهم خبر</string>
+    <string name="widget_unavailable">افتح أخبار مختصرة للاطلاع على أحدث الأخبار</string>
 </resources>
