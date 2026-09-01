@@ -6,6 +6,7 @@ import com.mk.newsshorts.data.repository.SavedArticlesRepository
 import com.mk.newsshorts.data.repository.ToggleResult
 import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.presentation.viewmodel.BaseViewModel
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,12 +36,13 @@ sealed interface SavedArticlesMutation {
 class SavedArticlesViewModel(
     private val repository: SavedArticlesRepository,
     private val analytics: AnalyticsReporter,
+    private val scopeOverride: CoroutineScope? = null,
 ) : BaseViewModel() {
     private val mutableState = MutableStateFlow(SavedArticlesUiState())
     val uiState: StateFlow<SavedArticlesUiState> = mutableState.asStateFlow()
 
     init {
-        viewModelScope.launch {
+        (scopeOverride ?: viewModelScope).launch {
             repository.saved.collect { articles ->
                 mutableState.update { it.copy(articles = articles) }
             }

@@ -3,7 +3,7 @@ package com.mk.newsshorts.feature.settings
 import com.mk.newsshorts.analytics.AnalyticsEvent
 import com.mk.newsshorts.analytics.AnalyticsReporter
 import com.mk.newsshorts.data.local.AppPreferences
-import com.mk.newsshorts.data.local.SettingsManager
+import com.mk.newsshorts.data.local.SettingsPersistence
 import com.mk.newsshorts.domain.model.FeedLanguage
 import com.mk.newsshorts.notifications.PushSubscriber
 import com.mk.newsshorts.presentation.localization.AppLocale
@@ -13,6 +13,8 @@ import com.mk.newsshorts.presentation.mvi.TextScale
 import com.mk.newsshorts.presentation.mvi.ThemeMode
 import com.mk.newsshorts.presentation.viewmodel.BaseViewModel
 import com.mk.newsshorts.sync.SyncedSettings
+import com.mk.newsshorts.sync.toSyncedSettings
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -46,9 +48,10 @@ sealed interface SettingsUiEffect {
 }
 
 class SettingsViewModel(
-    private val settingsManager: SettingsManager,
+    private val settingsManager: SettingsPersistence,
     private val analytics: AnalyticsReporter,
     private val pushSubscriber: PushSubscriber,
+    private val scopeOverride: CoroutineScope? = null,
 ) : BaseViewModel() {
     private val mutableState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = mutableState.asStateFlow()
@@ -56,9 +59,15 @@ class SettingsViewModel(
     private val mutableEffect = MutableSharedFlow<SettingsUiEffect>()
     val uiEffect: SharedFlow<SettingsUiEffect> = mutableEffect.asSharedFlow()
 
+    private val settingsScope: CoroutineScope
+        get() = scopeOverride ?: viewModelScope
+
     fun applyStored(preferences: AppPreferences) {
         mutableState.value = preferences.toUiState()
     }
+
+    internal fun currentSyncedSettings(): SyncedSettings =
+        settingsManager.preferences.value.toSyncedSettings()
 
     suspend fun applySynced(settings: SyncedSettings) {
         val locale = AppLocale.fromCode(settings.appLocale)
@@ -100,7 +109,7 @@ class SettingsViewModel(
     private fun selectAppLocale(locale: AppLocale): Boolean {
         if (locale == mutableState.value.appLocale) return false
         mutableState.update { it.copy(appLocale = locale) }
-        viewModelScope.launch {
+        settingsScope.launch {
             analytics.logEvent(AnalyticsEvent.AppLanguageChanged(locale.code))
             analytics.setProperty("app_language", locale.code)
             settingsManager.saveAppLocale(locale.code)
@@ -114,21 +123,21 @@ class SettingsViewModel(
     private fun selectThemeMode(mode: ThemeMode): Boolean {
         if (mode == mutableState.value.themeMode) return false
         mutableState.update { it.copy(themeMode = mode) }
-        viewModelScope.launch { settingsManager.saveThemeMode(mode.name.lowercase()) }
+        settingsScope.launch { settingsManager.saveThemeMode(mode.name.lowercase()) }
         return true
     }
 
     private fun selectTextScale(scale: TextScale): Boolean {
         if (scale == mutableState.value.textScale) return false
         mutableState.update { it.copy(textScale = scale) }
-        viewModelScope.launch { settingsManager.saveTextScale(scale.stored) }
+        settingsScope.launch { settingsManager.saveTextScale(scale.stored) }
         return true
     }
 
     private fun toggleNotifications(newsLanguage: String): Boolean {
         val enabling = !mutableState.value.notificationsEnabled
         mutableState.update { it.copy(notificationsEnabled = enabling) }
-        viewModelScope.launch {
+        settingsScope.launch {
             settingsManager.setNotificationsEnabled(enabling)
             if (enabling) {
                 pushSubscriber.subscribeToLanguage(FeedLanguage.resolve(newsLanguage))
@@ -146,17 +155,17 @@ class SettingsViewModel(
             NotificationTier.BREAKING -> {
                 val enabling = !state.notifyBreaking
                 mutableState.update { it.copy(notifyBreaking = enabling) }
-                viewModelScope.launch { settingsManager.setNotifyBreaking(enabling) }
+                settingsScope.launch { settingsManager.setNotifyBreaking(enabling) }
             }
             NotificationTier.TOP_STORY -> {
                 val enabling = !state.notifyTopStory
                 mutableState.update { it.copy(notifyTopStory = enabling) }
-                viewModelScope.launch { settingsManager.setNotifyTopStory(enabling) }
+                settingsScope.launch { settingsManager.setNotifyTopStory(enabling) }
             }
             NotificationTier.REMINDER -> {
                 val enabling = !state.notifyReminder
                 mutableState.update { it.copy(notifyReminder = enabling) }
-                viewModelScope.launch { settingsManager.setNotifyReminder(enabling) }
+                settingsScope.launch { settingsManager.setNotifyReminder(enabling) }
             }
         }
         return true

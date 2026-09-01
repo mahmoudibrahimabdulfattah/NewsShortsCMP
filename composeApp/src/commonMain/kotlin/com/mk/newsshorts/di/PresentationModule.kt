@@ -1,5 +1,6 @@
 package com.mk.newsshorts.di
 
+import com.mk.newsshorts.data.local.SettingsManager
 import com.mk.newsshorts.feature.saved.SavedArticlesViewModel
 import com.mk.newsshorts.feature.search.SearchViewModel
 import com.mk.newsshorts.feature.settings.SettingsViewModel
@@ -12,7 +13,7 @@ val presentationModule = module {
     }
     single(createdAtStart = false) {
         SettingsViewModel(
-            settingsManager = get(),
+            settingsManager = get<SettingsManager>(),
             analytics = get(),
             pushSubscriber = get(),
         )

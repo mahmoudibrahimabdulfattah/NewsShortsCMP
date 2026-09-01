@@ -285,7 +285,7 @@ class NewsViewModel(
      * and "system" over whatever the reader had actually chosen. The store has
      * the real values from the moment it is constructed.
      */
-    private fun currentSyncedSettings(): SyncedSettings = settingsManager.preferences.value.toSyncedSettings()
+    private fun currentSyncedSettings(): SyncedSettings = settingsViewModel.currentSyncedSettings()
 
     /** The remote copy becomes the local one — this is the "remote wins" side of sync. */
     private suspend fun applySyncedSettings(settings: SyncedSettings) {
