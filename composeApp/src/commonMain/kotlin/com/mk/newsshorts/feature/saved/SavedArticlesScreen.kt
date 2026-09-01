@@ -1,4 +1,4 @@
-package com.mk.newsshorts.presentation.ui.screen
+package com.mk.newsshorts.feature.saved
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -35,7 +35,7 @@ import com.mk.newsshorts.presentation.ui.components.SavedArticleCard
  */
 @Composable
 fun SavedArticlesScreen(
-    savedArticles: List<NewsArticle>,
+    uiState: SavedArticlesUiState,
     onEvent: (NewsUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -47,7 +47,7 @@ fun SavedArticlesScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             OverlayTopBar(title = strings.savedArticles, onBack = { onEvent(NewsUiEvent.CloseOverlay) })
-            if (savedArticles.isEmpty()) {
+            if (!uiState.hasArticles) {
                 EmptySavedArticlesCard(
                     strings = strings,
                     modifier = Modifier.padding(16.dp)
@@ -63,7 +63,7 @@ fun SavedArticlesScreen(
                         .asPaddingValues(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(savedArticles, key = { it.articleUrl.value }) { article ->
+                    items(uiState.articles, key = { it.articleUrl.value }) { article ->
                         SavedArticleCard(
                             article = article,
                             onClick = {

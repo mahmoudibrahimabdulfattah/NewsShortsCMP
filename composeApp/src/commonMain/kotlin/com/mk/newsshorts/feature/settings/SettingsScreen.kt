@@ -1,4 +1,4 @@
-package com.mk.newsshorts.presentation.ui.screen
+package com.mk.newsshorts.feature.settings
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -86,7 +86,8 @@ private const val ANIMATION_DURATION_MILLIS: Int = 200
  */
 @Composable
 fun SettingsScreen(
-    uiState: NewsUiState,
+    newsUiState: NewsUiState,
+    settingsUiState: SettingsUiState,
     onEvent: (NewsUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -109,44 +110,44 @@ fun SettingsScreen(
             ) {
                 item {
                     AppLanguageSection(
-                        selectedLocale = uiState.appLocale,
+                        selectedLocale = settingsUiState.appLocale,
                         onLocaleSelected = { onEvent(NewsUiEvent.SelectAppLocale(it)) },
                     )
                 }
                 item {
                     Spacer(modifier = Modifier.height(28.dp))
                     NewsLanguageSection(
-                        selectedLanguage = uiState.selectedLanguage,
+                        selectedLanguage = newsUiState.selectedLanguage,
                         onLanguageSelected = { onEvent(NewsUiEvent.SelectLanguage(it)) },
                     )
                 }
                 item {
                     Spacer(modifier = Modifier.height(28.dp))
                     ThemeSection(
-                        selectedMode = uiState.themeMode,
+                        selectedMode = settingsUiState.themeMode,
                         onModeSelected = { onEvent(NewsUiEvent.SelectThemeMode(it)) },
                     )
                 }
                 item {
                     Spacer(modifier = Modifier.height(28.dp))
                     TextSizeSection(
-                        selectedScale = uiState.textScale,
+                        selectedScale = settingsUiState.textScale,
                         onScaleSelected = { onEvent(NewsUiEvent.SelectTextScale(it)) },
                     )
                 }
                 item {
                     Spacer(modifier = Modifier.height(28.dp))
                     NotificationsSection(
-                        uiState = uiState,
+                        uiState = settingsUiState,
                         onEvent = onEvent,
                     )
                 }
                 item {
                     Spacer(modifier = Modifier.height(28.dp))
                     AccountSection(
-                        authUser = uiState.authUser,
-                        isLoading = uiState.authInProgress,
-                        authError = uiState.authError,
+                        authUser = newsUiState.authUser,
+                        isLoading = newsUiState.authInProgress,
+                        authError = newsUiState.authError,
                         onEvent = onEvent,
                     )
                 }
@@ -311,7 +312,7 @@ private fun ThemeSection(
 
 @Composable
 private fun NotificationsSection(
-    uiState: NewsUiState,
+    uiState: SettingsUiState,
     onEvent: (NewsUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {

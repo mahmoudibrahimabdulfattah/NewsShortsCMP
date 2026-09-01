@@ -46,6 +46,7 @@ import coil3.compose.AsyncImage
 import com.mk.newsshorts.auth.AuthUser
 import com.mk.newsshorts.config.BuildConfig
 import com.mk.newsshorts.domain.model.NewsArticle
+import com.mk.newsshorts.feature.saved.SavedArticlesUiState
 import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
@@ -64,6 +65,7 @@ import com.mk.newsshorts.presentation.mvi.Overlay
 @Composable
 fun ProfileScreen(
     uiState: NewsUiState,
+    savedArticlesUiState: SavedArticlesUiState,
     onEvent: (NewsUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -96,7 +98,7 @@ fun ProfileScreen(
             item {
                 Spacer(modifier = Modifier.height(28.dp))
                 SavedArticlesPreviewSection(
-                    savedArticles = uiState.savedArticles,
+                    savedArticles = savedArticlesUiState.articles,
                     onArticleClick = { article ->
                         onEvent(NewsUiEvent.OpenArticleDetails(article, ArticleOpenOrigin.SAVED))
                     },

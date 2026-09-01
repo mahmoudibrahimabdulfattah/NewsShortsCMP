@@ -19,7 +19,10 @@ import androidx.compose.ui.graphics.painter.Painter
 import newsshorts.composeapp.generated.resources.Res
 import newsshorts.composeapp.generated.resources.logo
 import com.mk.newsshorts.di.provideNewsViewModel
+import com.mk.newsshorts.di.provideSavedArticlesViewModel
 import com.mk.newsshorts.di.provideSearchViewModel
+import com.mk.newsshorts.di.provideSettingsViewModel
+import com.mk.newsshorts.feature.settings.SettingsUiState
 import com.mk.newsshorts.presentation.localization.LocaleProvider
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.mvi.NavigationTab
@@ -59,12 +62,15 @@ fun App(
     // is inside LocaleProvider too — otherwise it always renders in English.
     val viewModel = provideNewsViewModel()
     val searchViewModel = provideSearchViewModel()
+    val savedArticlesViewModel = provideSavedArticlesViewModel()
+    val settingsViewModel = provideSettingsViewModel()
     val uiState: NewsUiState by viewModel.uiState.collectAsState()
+    val settingsUiState: SettingsUiState by settingsViewModel.uiState.collectAsState()
     // Resolved once here rather than inside NewsShortsTheme's own default: the
     // feed branch inside NewsScreen overrides this with a forced-dark theme of
     // its own, so the resolution has to be visible at this level to differ
     // from what gets passed down.
-    val isDarkTheme: Boolean = uiState.themeMode.resolveIsDark(isSystemInDarkTheme())
+    val isDarkTheme: Boolean = settingsUiState.themeMode.resolveIsDark(isSystemInDarkTheme())
     // Resolved here for the same reason, and in one place rather than per
     // screen: two of these branches are drawn by a Crossfade, and rival
     // SideEffects would fight over the bars for the length of the animation.
@@ -82,7 +88,7 @@ fun App(
     SystemBarAppearance(useDarkIcons = barsUseDarkIcons)
     // Covers the one frame the two lines above cannot: the launch window the
     // system paints from `values-night` before the app is running.
-    ApplyAppNightMode(themeMode = uiState.themeMode)
+    ApplyAppNightMode(themeMode = settingsUiState.themeMode)
     // Screens below take a plain (String) -> Unit; the theme is bound here so
     // none of them has to carry it. Deliberately `isDarkTheme` and not the
     // per-screen theme: the feed is forced dark, but a reader who chose Light
@@ -90,8 +96,8 @@ fun App(
     val openUrl: (String) -> Unit = { url -> onOpenUrl(url, isDarkTheme) }
     // Provided outside every theme so the feed's own forced-dark theme picks
     // the reader's text size up too.
-    CompositionLocalProvider(LocalTextScale provides uiState.textScale.multiplier) {
-    LocaleProvider(locale = uiState.appLocale) {
+    CompositionLocalProvider(LocalTextScale provides settingsUiState.textScale.multiplier) {
+    LocaleProvider(locale = settingsUiState.appLocale) {
         // The one place the resolved app theme is applied. The two blocking
         // screens below override it back to forced-dark — full-bleed branded
         // moments, not content — and so does the feed inside NewsScreen.
@@ -156,6 +162,7 @@ fun App(
                     // which feed that should have been — see finishOnboarding.
                     OnboardingScreen(
                         uiState = uiState,
+                        settingsUiState = settingsUiState,
                         onEvent = viewModel::processEvent,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -163,6 +170,8 @@ fun App(
                     NewsScreen(
                         viewModel = viewModel,
                         searchViewModel = searchViewModel,
+                        savedArticlesViewModel = savedArticlesViewModel,
+                        settingsViewModel = settingsViewModel,
                         onOpenUrl = openUrl,
                         onShareContent = onShareContent,
                         onShowToast = onShowToast,

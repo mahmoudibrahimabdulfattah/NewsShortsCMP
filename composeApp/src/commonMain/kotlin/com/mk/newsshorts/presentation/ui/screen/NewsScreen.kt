@@ -53,10 +53,17 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.mk.newsshorts.feature.saved.SavedArticlesUiState
+import com.mk.newsshorts.feature.saved.SavedArticlesViewModel
+import com.mk.newsshorts.feature.saved.SavedArticlesScreen
 import com.mk.newsshorts.feature.search.SearchScreen
 import com.mk.newsshorts.feature.search.SearchUiEvent
 import com.mk.newsshorts.feature.search.SearchUiState
 import com.mk.newsshorts.feature.search.SearchViewModel
+import com.mk.newsshorts.feature.settings.SettingsUiEffect
+import com.mk.newsshorts.feature.settings.SettingsUiState
+import com.mk.newsshorts.feature.settings.SettingsViewModel
+import com.mk.newsshorts.feature.settings.SettingsScreen
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.localization.countryName
 import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
@@ -82,6 +89,8 @@ import com.mk.newsshorts.presentation.viewmodel.NewsViewModel
 fun NewsScreen(
     viewModel: NewsViewModel,
     searchViewModel: SearchViewModel,
+    savedArticlesViewModel: SavedArticlesViewModel,
+    settingsViewModel: SettingsViewModel,
     onOpenUrl: (String) -> Unit = {},
     onShareContent: (String, String, String) -> Unit = { _, _, _ -> },
     onShowToast: (String) -> Unit = {},
@@ -90,6 +99,8 @@ fun NewsScreen(
 ) {
     val uiState: NewsUiState by viewModel.uiState.collectAsState()
     val searchUiState: SearchUiState by searchViewModel.uiState.collectAsState()
+    val savedArticlesUiState: SavedArticlesUiState by savedArticlesViewModel.uiState.collectAsState()
+    val settingsUiState: SettingsUiState by settingsViewModel.uiState.collectAsState()
     // Read through rememberUpdatedState, not captured directly: the collector
     // below is started once and never restarts, so it would otherwise hold the
     // handlers from the first composition for the life of the process. That
@@ -110,6 +121,14 @@ fun NewsScreen(
                     shareContent(effect.title, effect.url, effect.chooserTitle)
                 is NewsUiEffect.ShowToast -> showToast(effect.message)
                 NewsUiEffect.RequestNotificationPermission -> requestNotificationPermission()
+            }
+        }
+    }
+    LaunchedEffect(Unit) {
+        settingsViewModel.uiEffect.collect { effect ->
+            when (effect) {
+                is SettingsUiEffect.ShowToast -> showToast(effect.message)
+                SettingsUiEffect.RequestNotificationPermission -> requestNotificationPermission()
             }
         }
     }
@@ -136,6 +155,8 @@ fun NewsScreen(
     NewsScreenContent(
         uiState = uiState,
         searchUiState = searchUiState,
+        savedArticlesUiState = savedArticlesUiState,
+        settingsUiState = settingsUiState,
         onEvent = onNewsEvent,
         onSearchEvent = onSearchEvent,
         modifier = modifier
@@ -147,6 +168,8 @@ fun NewsScreen(
 private fun NewsScreenContent(
     uiState: NewsUiState,
     searchUiState: SearchUiState,
+    savedArticlesUiState: SavedArticlesUiState,
+    settingsUiState: SettingsUiState,
     onEvent: (NewsUiEvent) -> Unit,
     onSearchEvent: (SearchUiEvent) -> Unit,
     modifier: Modifier = Modifier
@@ -177,6 +200,7 @@ private fun NewsScreenContent(
             NavigationTab.PROFILE -> {
                 ProfileScreen(
                     uiState = uiState,
+                    savedArticlesUiState = savedArticlesUiState,
                     onEvent = onEvent,
                 )
             }
@@ -200,6 +224,7 @@ private fun NewsScreenContent(
                             uiState.hasArticles -> {
                                 NewsArticlesPager(
                                     uiState = uiState,
+                                    savedArticlesUiState = savedArticlesUiState,
                                     onEvent = onEvent
                                 )
                             }
@@ -253,21 +278,24 @@ private fun NewsScreenContent(
             is Overlay.Details -> {
                 ArticleDetailsScreen(
                     article = topOverlay.article,
-                    isSaved = uiState.savedArticles.any { it.articleUrl == topOverlay.article.articleUrl },
+                    isSaved = savedArticlesUiState.articles.any {
+                        it.articleUrl == topOverlay.article.articleUrl
+                    },
                     onEvent = onEvent,
                     modifier = Modifier.fillMaxSize()
                 )
             }
             Overlay.Settings -> {
                 SettingsScreen(
-                    uiState = uiState,
+                    newsUiState = uiState,
+                    settingsUiState = settingsUiState,
                     onEvent = onEvent,
                     modifier = Modifier.fillMaxSize()
                 )
             }
             Overlay.SavedArticles -> {
                 SavedArticlesScreen(
-                    savedArticles = uiState.savedArticles,
+                    uiState = savedArticlesUiState,
                     onEvent = onEvent,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -514,6 +542,7 @@ private fun getHeaderSubtitle(
 @Composable
 private fun NewsArticlesPager(
     uiState: NewsUiState,
+    savedArticlesUiState: SavedArticlesUiState,
     onEvent: (NewsUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -557,7 +586,9 @@ private fun NewsArticlesPager(
             key = { pageIndex -> uiState.articles[pageIndex].articleUrl.value },
         ) { pageIndex ->
             val article = uiState.articles[pageIndex]
-            val isArticleSaved: Boolean = uiState.savedArticles.any { it.articleUrl == article.articleUrl }
+            val isArticleSaved: Boolean = savedArticlesUiState.articles.any {
+                it.articleUrl == article.articleUrl
+            }
             NewsCard(
                 article = article,
                 isSaved = isArticleSaved,

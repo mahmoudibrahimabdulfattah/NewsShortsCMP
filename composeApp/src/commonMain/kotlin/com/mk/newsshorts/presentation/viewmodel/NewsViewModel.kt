@@ -45,6 +45,11 @@ import com.mk.newsshorts.domain.model.NewsResult
 import com.mk.newsshorts.domain.use_case.GetTopHeadlinesRequest
 import com.mk.newsshorts.domain.use_case.GetTopHeadlinesUseCase
 import com.mk.newsshorts.domain.use_case.DeleteAccountUseCase
+import com.mk.newsshorts.feature.saved.SavedArticlesMutation
+import com.mk.newsshorts.feature.saved.SavedArticlesUiEvent
+import com.mk.newsshorts.feature.saved.SavedArticlesViewModel
+import com.mk.newsshorts.feature.settings.SettingsUiEvent
+import com.mk.newsshorts.feature.settings.SettingsViewModel
 import com.mk.newsshorts.analytics.AnalyticsEvent
 import com.mk.newsshorts.analytics.AnalyticsReporter
 import com.mk.newsshorts.config.BuildConfig
@@ -210,6 +215,8 @@ internal fun NewsUiState.withLoadedFeed(
 
 class NewsViewModel(
     private val getTopHeadlinesUseCase: GetTopHeadlinesUseCase,
+    private val savedArticlesViewModel: SavedArticlesViewModel,
+    private val settingsViewModel: SettingsViewModel,
     private val settingsManager: SettingsManager,
     private val analytics: AnalyticsReporter,
     private val pushSubscriber: PushSubscriber,
@@ -239,37 +246,15 @@ class NewsViewModel(
     private val deleteAccountUseCase = DeleteAccountUseCase(authClient, remoteSyncClient)
 
     /** Toast text is built here rather than in the UI, so it needs the locale too. */
-    private fun strings(): AppStrings = getStrings(mutableState.value.appLocale)
+    private fun strings(): AppStrings = getStrings(settingsViewModel.uiState.value.appLocale)
 
     init {
-        observeSavedArticles()
         loadSavedSettings()
         observeDeepLinks()
         observeArrivingNotifications()
         observeSignInLinks()
         checkForRequiredUpdate()
         observeAuthState()
-    }
-
-    /**
-     * One listener covers sign-in, sign-out and deletion, since [AuthClient]
-     * reports all three through the same flow. A newly-non-null uid — whether
-     * from an interactive sign-in or a session Firebase restored at cold
-     * start — triggers a sync; the point is the transition into "signed in",
-     * not the particular action that caused it.
-     */
-    /**
-     * The repository owns the list; the state object mirrors it so the UI keeps
-     * reading one place. Anything inside the ViewModel that needs the current
-     * bookmarks reads the repository directly instead of this mirror, which
-     * lags it by a dispatch.
-     */
-    private fun observeSavedArticles() {
-        viewModelScope.launch {
-            savedArticlesRepository.saved.collect { articles ->
-                mutableState.update { it.copy(savedArticles = articles) }
-            }
-        }
     }
 
     /**
@@ -306,39 +291,20 @@ class NewsViewModel(
     private suspend fun applySyncedSettings(settings: SyncedSettings) {
         val newsLanguage = LanguageOption.entries.find { it.code == settings.newsLanguage }
             ?: mutableState.value.selectedLanguage
-        val appLocale = AppLocale.fromCode(settings.appLocale)
         val country = CountryOption.entries.find { it.code == settings.selectedCountry }
             ?: mutableState.value.selectedCountry
-        val themeMode = ThemeMode.entries.find { it.name.equals(settings.themeMode, ignoreCase = true) }
-            ?: mutableState.value.themeMode
 
         settingsManager.saveNewsLanguage(newsLanguage.code)
-        settingsManager.saveAppLocale(appLocale.code)
         settingsManager.saveSelectedCountry(country.code)
-        settingsManager.saveThemeMode(themeMode.name.lowercase())
-        settingsManager.setNotificationsEnabled(settings.notificationsEnabled)
-        settingsManager.setNotifyBreaking(settings.notifyBreaking)
-        settingsManager.setNotifyTopStory(settings.notifyTopStory)
-        settingsManager.setNotifyReminder(settings.notifyReminder)
+        settingsViewModel.applySynced(settings)
 
         val languageChanged = newsLanguage != mutableState.value.selectedLanguage
         if (languageChanged) categoryFeedMemory.clear()
         mutableState.update { state ->
             state.copy(
                 selectedLanguage = newsLanguage,
-                appLocale = appLocale,
                 selectedCountry = country,
-                themeMode = themeMode,
-                notificationsEnabled = settings.notificationsEnabled,
-                notifyBreaking = settings.notifyBreaking,
-                notifyTopStory = settings.notifyTopStory,
-                notifyReminder = settings.notifyReminder,
             )
-        }
-        if (settings.notificationsEnabled) {
-            pushSubscriber.subscribeToLanguage(FeedLanguage.resolve(newsLanguage.code))
-        } else {
-            pushSubscriber.unsubscribeAll()
         }
         if (languageChanged) loadNewsWithCache()
     }
@@ -386,7 +352,7 @@ class NewsViewModel(
         }
         mutableState.update { it.copy(authInProgress = true, authError = null) }
         viewModelScope.launch {
-            val language = mutableState.value.appLocale.code
+            val language = settingsViewModel.uiState.value.appLocale.code
             when (val result = authClient.sendSignInLink(address, language)) {
                 AuthResult.Success -> {
                     pendingSignInEmailStore.save(address)
@@ -620,15 +586,12 @@ class NewsViewModel(
             // One snapshot: reading nine separate flows left a window where
             // half of them had been answered and half had not.
             val stored = settingsManager.preferences.value
+            settingsViewModel.applyStored(stored)
             val notificationsEnabled: Boolean = stored.notificationsEnabled
             val newsLanguage: LanguageOption = LanguageOption.entries.find { it.code == stored.newsLanguage }
                 ?: LanguageOption.ENGLISH
-            val appLocale: AppLocale = AppLocale.fromCode(stored.appLocale)
             val country: CountryOption = CountryOption.entries.find { it.code == stored.selectedCountry }
                 ?: CountryOption.UNITED_STATES
-            val themeMode: ThemeMode = ThemeMode.entries.find { it.name.equals(stored.themeMode, ignoreCase = true) }
-                ?: ThemeMode.SYSTEM
-            val textScale: TextScale = TextScale.fromStored(stored.textScale)
             val preferred: List<String> = settingsManager.preferredCategories()
             // Read once, at the only moment it can be true. Asked again later
             // it would re-open the flow the reader has just finished.
@@ -636,20 +599,13 @@ class NewsViewModel(
             mutableState.update { state ->
                 state.copy(
                     onboarding = if (needsOnboarding) OnboardingStep.LANGUAGE else null,
-                    textScale = textScale,
                     selectedCategory = openingCategory(preferred),
                     categoryOrder = orderedCategories(preferred),
                     selectedLanguage = newsLanguage,
-                    appLocale = appLocale,
                     selectedCountry = country,
-                    themeMode = themeMode,
-                    notificationsEnabled = notificationsEnabled,
-                    notifyBreaking = stored.notifyBreaking,
-                    notifyTopStory = stored.notifyTopStory,
-                    notifyReminder = stored.notifyReminder,
                 )
             }
-            savedArticlesRepository.load()
+            savedArticlesViewModel.load()
             if (notificationsEnabled) {
                 pushSubscriber.subscribeToLanguage(FeedLanguage.resolve(newsLanguage.code))
             }
@@ -824,21 +780,8 @@ class NewsViewModel(
     }
 
     private fun handleSelectAppLocale(locale: AppLocale) {
-        if (locale == mutableState.value.appLocale) return
-        mutableState.update { state ->
-            state.copy(appLocale = locale)
-        }
-        viewModelScope.launch {
-            analytics.logEvent(AnalyticsEvent.AppLanguageChanged(locale.code))
-            analytics.setProperty("app_language", locale.code)
-            settingsManager.saveAppLocale(locale.code)
-            val newStrings = getStrings(locale)
-            val languageName = newStrings.languageNames[locale.code] ?: locale.displayName
-            mutableEffect.emit(
-                NewsUiEffect.ShowToast("${newStrings.languageChangedTo} $languageName")
-            )
-        }
-        pushSettingsIfSignedIn()
+        val changed = settingsViewModel.processEvent(SettingsUiEvent.SelectAppLocale(locale))
+        if (changed) pushSettingsIfSignedIn()
     }
 
     private fun handleSelectTab(tab: NavigationTab) {
@@ -935,7 +878,7 @@ class NewsViewModel(
                 // The system dialog only for a yes. Showing it to someone who
                 // just said no would collect the denial that locks the
                 // permission for good.
-                if (mutableState.value.notificationsEnabled) {
+                if (settingsViewModel.uiState.value.notificationsEnabled) {
                     mutableEffect.emit(NewsUiEffect.RequestNotificationPermission)
                 }
             }
@@ -959,9 +902,7 @@ class NewsViewModel(
     }
 
     private fun handleSelectTextScale(scale: TextScale) {
-        if (scale == mutableState.value.textScale) return
-        mutableState.update { it.copy(textScale = scale) }
-        viewModelScope.launch { settingsManager.saveTextScale(scale.stored) }
+        settingsViewModel.processEvent(SettingsUiEvent.SelectTextScale(scale))
     }
 
     /** Start of the current card's time on screen, for the viewed/skipped split. */
@@ -1158,7 +1099,7 @@ class NewsViewModel(
 
     /** The policy page picks its language from this, not from the browser. */
     private fun privacyPolicyUrl(): String =
-        urlInLanguage(BuildConfig.PRIVACY_POLICY_URL, mutableState.value.appLocale.code)
+        urlInLanguage(BuildConfig.PRIVACY_POLICY_URL, settingsViewModel.uiState.value.appLocale.code)
 
     private fun handleOpenArticleSource() {
         val article = mutableState.value.articleDetails?.article ?: return
@@ -1195,7 +1136,7 @@ class NewsViewModel(
     private fun handleOpenDeepLink(link: ArticleDeepLink) {
         val state = mutableState.value
         val article = state.articles.firstOrNull { it.articleUrl.value == link.url }
-            ?: savedArticlesRepository.saved.value.firstOrNull { it.articleUrl.value == link.url }
+            ?: savedArticlesViewModel.findByUrl(link.url)
             ?: link.toNewsArticle()
             ?: return
         // A shared link marks itself, so notification_opened stays a count of
@@ -1248,13 +1189,10 @@ class NewsViewModel(
     }
 
     private fun handleSaveArticle(article: NewsArticle) {
-        val result = savedArticlesRepository.toggle(article)
-        val saved = savedArticlesRepository.saved.value
-        pushSavedArticlesIfSignedIn(saved)
-        if (result == ToggleResult.SAVED) {
-            analytics.logEvent(AnalyticsEvent.ArticleSaved(article.category.apiValue))
-        }
-        val message = when (result) {
+        val mutation = savedArticlesViewModel.processEvent(SavedArticlesUiEvent.Toggle(article))
+            as SavedArticlesMutation.Changed
+        pushSavedArticlesIfSignedIn(mutation.articles)
+        val message = when (mutation.result) {
             ToggleResult.SAVED -> strings().articleSaved
             ToggleResult.REMOVED -> strings().articleRemoved
         }
@@ -1264,58 +1202,28 @@ class NewsViewModel(
     }
 
     private fun handleRemoveSavedArticle(article: NewsArticle) {
-        if (!savedArticlesRepository.remove(article)) return
-        pushSavedArticlesIfSignedIn(savedArticlesRepository.saved.value)
+        val mutation = savedArticlesViewModel.processEvent(SavedArticlesUiEvent.Remove(article))
+        if (mutation !is SavedArticlesMutation.Changed) return
+        pushSavedArticlesIfSignedIn(mutation.articles)
         viewModelScope.launch {
             mutableEffect.emit(NewsUiEffect.ShowToast(strings().articleRemoved))
         }
     }
 
     private fun handleSelectThemeMode(mode: ThemeMode) {
-        if (mode == mutableState.value.themeMode) return
-        mutableState.update { state -> state.copy(themeMode = mode) }
-        viewModelScope.launch { settingsManager.saveThemeMode(mode.name.lowercase()) }
-        pushSettingsIfSignedIn()
+        val changed = settingsViewModel.processEvent(SettingsUiEvent.SelectThemeMode(mode))
+        if (changed) pushSettingsIfSignedIn()
     }
 
     private fun handleToggleNotificationsEnabled() {
-        val enabling = !mutableState.value.notificationsEnabled
-        mutableState.update { state -> state.copy(notificationsEnabled = enabling) }
-        viewModelScope.launch {
-            settingsManager.setNotificationsEnabled(enabling)
-            if (enabling) {
-                pushSubscriber.subscribeToLanguage(
-                    FeedLanguage.resolve(mutableState.value.selectedLanguage.code)
-                )
-                // Turning the switch on is the moment consent is meaningful —
-                // the OS dialog belongs right here, not at cold start.
-                mutableEffect.emit(NewsUiEffect.RequestNotificationPermission)
-            } else {
-                pushSubscriber.unsubscribeAll()
-            }
-        }
+        settingsViewModel.processEvent(
+            SettingsUiEvent.ToggleNotifications(mutableState.value.selectedLanguage.code)
+        )
         pushSettingsIfSignedIn()
     }
 
     private fun handleToggleNotificationTier(tier: NotificationTier) {
-        val state = mutableState.value
-        when (tier) {
-            NotificationTier.BREAKING -> {
-                val enabling = !state.notifyBreaking
-                mutableState.update { it.copy(notifyBreaking = enabling) }
-                viewModelScope.launch { settingsManager.setNotifyBreaking(enabling) }
-            }
-            NotificationTier.TOP_STORY -> {
-                val enabling = !state.notifyTopStory
-                mutableState.update { it.copy(notifyTopStory = enabling) }
-                viewModelScope.launch { settingsManager.setNotifyTopStory(enabling) }
-            }
-            NotificationTier.REMINDER -> {
-                val enabling = !state.notifyReminder
-                mutableState.update { it.copy(notifyReminder = enabling) }
-                viewModelScope.launch { settingsManager.setNotifyReminder(enabling) }
-            }
-        }
+        settingsViewModel.processEvent(SettingsUiEvent.ToggleNotificationTier(tier))
         pushSettingsIfSignedIn()
     }
 
