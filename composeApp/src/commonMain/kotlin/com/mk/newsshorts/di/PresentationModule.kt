@@ -1,14 +1,20 @@
 package com.mk.newsshorts.di
 
+import com.mk.newsshorts.feature.search.SearchViewModel
 import com.mk.newsshorts.presentation.viewmodel.NewsViewModel
 import org.koin.dsl.module
 
 val presentationModule = module {
     single(createdAtStart = false) {
+        SearchViewModel(
+            searchNews = get(),
+            recentSearches = get(),
+            analytics = get(),
+        )
+    }
+    single(createdAtStart = false) {
         NewsViewModel(
             getTopHeadlinesUseCase = get(),
-            searchNewsUseCase = get(),
-            recentSearchesStore = get(),
             settingsManager = get(),
             analytics = get(),
             pushSubscriber = get(),
@@ -28,4 +34,3 @@ val presentationModule = module {
         )
     }
 }
-

@@ -1,4 +1,4 @@
-package com.mk.newsshorts.presentation.ui.screen
+package com.mk.newsshorts.feature.search
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -57,9 +57,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.appStrings
-import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
-import com.mk.newsshorts.presentation.mvi.NewsUiEvent
-import com.mk.newsshorts.presentation.mvi.NewsUiState
 import com.mk.newsshorts.presentation.ui.components.SavedArticleCard
 
 /**
@@ -71,8 +68,8 @@ import com.mk.newsshorts.presentation.ui.components.SavedArticleCard
  */
 @Composable
 fun SearchScreen(
-    uiState: NewsUiState,
-    onEvent: (NewsUiEvent) -> Unit,
+    uiState: SearchUiState,
+    onEvent: (SearchUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -88,19 +85,19 @@ fun SearchScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             SearchField(
-                query = uiState.searchQuery,
+                query = uiState.query,
                 strings = strings,
                 focusRequester = focusRequester,
-                onQueryChange = { onEvent(NewsUiEvent.SearchQueryChanged(it)) },
-                onSubmit = { onEvent(NewsUiEvent.RunSearch(uiState.searchQuery)) },
-                onClear = { onEvent(NewsUiEvent.ClearSearchQuery) },
-                onBack = { onEvent(NewsUiEvent.CloseOverlay) },
+                onQueryChange = { onEvent(SearchUiEvent.QueryChanged(it)) },
+                onSubmit = { onEvent(SearchUiEvent.Submitted(uiState.query)) },
+                onClear = { onEvent(SearchUiEvent.QueryCleared) },
+                onBack = { onEvent(SearchUiEvent.Closed) },
             )
             when {
                 // Only when there is nothing to show underneath it: replacing a
                 // result list with a spinner on every keystroke makes the whole
                 // screen flicker while someone types.
-                uiState.isSearching && uiState.searchResults.isEmpty() -> {
+                uiState.isSearching && uiState.results.isEmpty() -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -108,32 +105,32 @@ fun SearchScreen(
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     }
                 }
-                uiState.searchFailed -> {
+                uiState.hasFailed -> {
                     SearchMessage(
                         icon = Icons.Filled.WifiOff,
                         title = strings.searchFailedTitle,
                         body = strings.searchFailedBody,
                         actionLabel = strings.tryAgain,
-                        onAction = { onEvent(NewsUiEvent.RunSearch(uiState.searchQuery)) },
+                        onAction = { onEvent(SearchUiEvent.Submitted(uiState.query)) },
                     )
                 }
-                uiState.searchResults.isNotEmpty() -> {
+                uiState.results.isNotEmpty() -> {
                     SearchResults(uiState = uiState, strings = strings, onEvent = onEvent)
                 }
-                uiState.hasNoSearchResults -> {
+                uiState.hasNoResults -> {
                     SearchMessage(
                         icon = Icons.Filled.SearchOff,
                         title = strings.searchNoResultsTitle,
-                        body = strings.searchNoResultsBody(uiState.searchQuery.trim()),
+                        body = strings.searchNoResultsBody(uiState.query.trim()),
                     )
                 }
                 uiState.recentSearches.isNotEmpty() -> {
                     RecentSearches(
                         queries = uiState.recentSearches,
                         strings = strings,
-                        onSelect = { onEvent(NewsUiEvent.RunSearch(it)) },
-                        onRemove = { onEvent(NewsUiEvent.RemoveRecentSearch(it)) },
-                        onClearAll = { onEvent(NewsUiEvent.ClearRecentSearches) },
+                        onSelect = { onEvent(SearchUiEvent.Submitted(it)) },
+                        onRemove = { onEvent(SearchUiEvent.RecentSearchRemoved(it)) },
+                        onClearAll = { onEvent(SearchUiEvent.RecentSearchesCleared) },
                     )
                 }
                 else -> {
@@ -216,9 +213,9 @@ private fun SearchField(
 
 @Composable
 private fun SearchResults(
-    uiState: NewsUiState,
+    uiState: SearchUiState,
     strings: AppStrings,
-    onEvent: (NewsUiEvent) -> Unit,
+    onEvent: (SearchUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -232,16 +229,16 @@ private fun SearchResults(
     ) {
         item {
             Text(
-                text = strings.searchResultsCount(uiState.searchResults.size),
+                text = strings.searchResultsCount(uiState.results.size),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
             )
         }
-        items(uiState.searchResults, key = { it.articleUrl.value }) { article ->
+        items(uiState.results, key = { it.articleUrl.value }) { article ->
             SavedArticleCard(
                 article = article,
                 onClick = {
-                    onEvent(NewsUiEvent.OpenArticleDetails(article, ArticleOpenOrigin.SEARCH))
+                    onEvent(SearchUiEvent.ResultOpened(article))
                 },
                 // A result is not a bookmark — there is nothing here to delete.
                 onRemove = null,

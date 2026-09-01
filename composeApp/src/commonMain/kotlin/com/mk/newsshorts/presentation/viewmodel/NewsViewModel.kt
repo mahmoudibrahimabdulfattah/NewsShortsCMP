@@ -1,7 +1,5 @@
 package com.mk.newsshorts.presentation.viewmodel
 
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -15,7 +13,6 @@ import com.mk.newsshorts.auth.AuthFailure
 import com.mk.newsshorts.auth.AuthResult
 import com.mk.newsshorts.data.local.NotificationInboxStore
 import com.mk.newsshorts.data.local.PendingSignInEmailStore
-import com.mk.newsshorts.data.local.RecentSearchesStore
 import com.mk.newsshorts.data.repository.SavedArticlesRepository
 import com.mk.newsshorts.data.repository.ToggleResult
 import com.mk.newsshorts.data.local.SeenArticlesStore
@@ -45,12 +42,9 @@ import com.mk.newsshorts.domain.model.NewsCategory
 import com.mk.newsshorts.domain.preferences.openingCategory
 import com.mk.newsshorts.domain.preferences.orderedCategories
 import com.mk.newsshorts.domain.model.NewsResult
-import com.mk.newsshorts.domain.search.isSearchable
 import com.mk.newsshorts.domain.use_case.GetTopHeadlinesRequest
 import com.mk.newsshorts.domain.use_case.GetTopHeadlinesUseCase
 import com.mk.newsshorts.domain.use_case.DeleteAccountUseCase
-import com.mk.newsshorts.domain.use_case.SearchNewsRequest
-import com.mk.newsshorts.domain.use_case.SearchNewsUseCase
 import com.mk.newsshorts.analytics.AnalyticsEvent
 import com.mk.newsshorts.analytics.AnalyticsReporter
 import com.mk.newsshorts.config.BuildConfig
@@ -216,8 +210,6 @@ internal fun NewsUiState.withLoadedFeed(
 
 class NewsViewModel(
     private val getTopHeadlinesUseCase: GetTopHeadlinesUseCase,
-    private val searchNewsUseCase: SearchNewsUseCase,
-    private val recentSearchesStore: RecentSearchesStore,
     private val settingsManager: SettingsManager,
     private val analytics: AnalyticsReporter,
     private val pushSubscriber: PushSubscriber,
@@ -724,11 +716,6 @@ class NewsViewModel(
             NewsUiEvent.RefreshNotificationInbox -> refreshNotificationInbox(pulled = true)
             is NewsUiEvent.DismissInboxNotification -> handleDismissInboxNotification(event.articleUrl)
             is NewsUiEvent.RestoreInboxNotification -> handleRestoreInboxNotification(event.articleUrl)
-            is NewsUiEvent.SearchQueryChanged -> handleSearchQueryChanged(event.query)
-            is NewsUiEvent.RunSearch -> handleRunSearch(event.query)
-            NewsUiEvent.ClearSearchQuery -> handleSearchQueryChanged("")
-            is NewsUiEvent.RemoveRecentSearch -> handleRemoveRecentSearch(event.query)
-            NewsUiEvent.ClearRecentSearches -> handleClearRecentSearches()
             NewsUiEvent.RefreshNews -> handleRefreshNews()
             NewsUiEvent.RetryLoading -> handleRetryLoading()
             NewsUiEvent.RetryNextPage -> handleRetryNextPage()
@@ -820,11 +807,6 @@ class NewsViewModel(
                 selectedLanguage = language,
                 currentArticleIndex = 0,
                 errorMessage = null,
-                // There is a corpus per language, so results found in the old
-                // one describe a search that can no longer be repeated.
-                searchResults = emptyList(),
-                searchSettled = false,
-                searchFailed = false
             )
         }
         viewModelScope.launch {
@@ -1055,9 +1037,6 @@ class NewsViewModel(
     }
 
     private fun handleOpenArticleDetails(article: NewsArticle, origin: ArticleOpenOrigin) {
-        // Opening a result is the strongest signal that this query was the one
-        // the reader meant, so it is what puts it in their recent searches.
-        if (origin == ArticleOpenOrigin.SEARCH) rememberSearch(mutableState.value.searchQuery)
         handleOpenOverlay(Overlay.Details(article, origin))
         analytics.logEvent(
             AnalyticsEvent.ArticleDetailsOpened(
@@ -1074,35 +1053,10 @@ class NewsViewModel(
 
     /** Pops whatever is on top — the details screen, Settings, Saved, or Search. */
     private fun handleCloseOverlay() {
-        val closing = mutableState.value.overlays.lastOrNull()
-        // Leaving search ends it: a result list from a query the reader has
-        // moved on from is not what they want to find waiting the next time
-        // they open the field. Opening a result does not go through here — it
-        // pushes the details screen *above* search, so the list survives a
-        // read-and-come-back.
-        if (closing == Overlay.Search) {
-            searchJob?.cancel()
-            searchJob = null
-        }
         mutableState.update { state ->
-            val remaining = state.overlays.dropLast(1)
-            if (closing == Overlay.Search) {
-                state.copy(
-                    overlays = remaining,
-                    searchQuery = "",
-                    searchResults = emptyList(),
-                    isSearching = false,
-                    searchSettled = false,
-                    searchFailed = false,
-                )
-            } else {
-                state.copy(overlays = remaining)
-            }
+            state.copy(overlays = state.overlays.dropLast(1))
         }
     }
-
-    /** In flight or waiting out the debounce; cancelled by the next keystroke. */
-    private var searchJob: Job? = null
 
     /**
      * Loads what has been pushed in the reader's language.
@@ -1199,102 +1153,7 @@ class NewsViewModel(
     }
 
     private fun handleOpenSearch() {
-        mutableState.update { it.copy(recentSearches = recentSearchesStore.load()) }
         handleOpenOverlay(Overlay.Search)
-    }
-
-    private fun handleSearchQueryChanged(query: String) {
-        searchJob?.cancel()
-        mutableState.update { it.copy(searchQuery = query) }
-        if (!isSearchable(query)) {
-            // Back to the empty state rather than to stale results for a
-            // longer query the reader has just deleted half of.
-            mutableState.update {
-                it.copy(
-                    searchResults = emptyList(),
-                    isSearching = false,
-                    searchSettled = false,
-                    searchFailed = false,
-                )
-            }
-            return
-        }
-        searchJob = viewModelScope.launch {
-            delay(SEARCH_DEBOUNCE_MILLIS)
-            runSearch(query)
-        }
-    }
-
-    private fun handleRunSearch(query: String) {
-        searchJob?.cancel()
-        mutableState.update { it.copy(searchQuery = query) }
-        rememberSearch(query)
-        if (!isSearchable(query)) return
-        searchJob = viewModelScope.launch { runSearch(query) }
-    }
-
-    private suspend fun runSearch(query: String) {
-        mutableState.update { it.copy(isSearching = true, searchFailed = false) }
-        val language = FeedLanguage.resolve(mutableState.value.selectedLanguage.code)
-        val result = searchNewsUseCase.execute(
-            SearchNewsRequest(query = query, language = language)
-        )
-        // The first search of a session downloads the corpus, which is long
-        // enough for the reader to have typed another word by the time it
-        // lands. Those results belong to a query that is no longer in the field.
-        if (mutableState.value.searchQuery != query) return
-        when (result) {
-            is NewsResult.Success -> {
-                analytics.logEvent(
-                    // Counts and a length, never the text — see SearchPerformed.
-                    AnalyticsEvent.SearchPerformed(
-                        resultCount = result.data.size,
-                        queryLength = query.trim().length,
-                        language = language,
-                    )
-                )
-                mutableState.update {
-                    it.copy(
-                        isSearching = false,
-                        searchResults = result.data,
-                        searchSettled = true,
-                        searchFailed = false,
-                    )
-                }
-            }
-            is NewsResult.Error -> {
-                // The message is the network's, never the query's.
-                analytics.recordError("Search failed: ${result.error.message}")
-                mutableState.update {
-                    it.copy(
-                        isSearching = false,
-                        searchResults = emptyList(),
-                        searchSettled = true,
-                        searchFailed = true,
-                    )
-                }
-            }
-        }
-    }
-
-    /**
-     * Records a query the reader clearly meant: they pressed search, or they
-     * opened something they found. A debounced keystroke is not that — half the
-     * history would otherwise be prefixes of the word they were typing.
-     */
-    private fun rememberSearch(query: String) {
-        val trimmed = query.trim()
-        if (!isSearchable(trimmed)) return
-        mutableState.update { it.copy(recentSearches = recentSearchesStore.add(trimmed)) }
-    }
-
-    private fun handleRemoveRecentSearch(query: String) {
-        mutableState.update { it.copy(recentSearches = recentSearchesStore.remove(query)) }
-    }
-
-    private fun handleClearRecentSearches() {
-        recentSearchesStore.clear()
-        mutableState.update { it.copy(recentSearches = emptyList()) }
     }
 
     /** The policy page picks its language from this, not from the browser. */
@@ -1705,11 +1564,5 @@ class NewsViewModel(
         /** Cards deep before the notification permission is worth asking for. */
         const val PERMISSION_PROMPT_DEPTH: Int = 5
 
-        /**
-         * How long typing has to stop before a search runs. Long enough that a
-         * word typed at speed is one search rather than six, short enough that
-         * results feel like they are keeping up.
-         */
-        const val SEARCH_DEBOUNCE_MILLIS: Long = 300
     }
 }

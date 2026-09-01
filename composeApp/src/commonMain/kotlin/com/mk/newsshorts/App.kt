@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.painter.Painter
 import newsshorts.composeapp.generated.resources.Res
 import newsshorts.composeapp.generated.resources.logo
 import com.mk.newsshorts.di.provideNewsViewModel
+import com.mk.newsshorts.di.provideSearchViewModel
 import com.mk.newsshorts.presentation.localization.LocaleProvider
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.mvi.NavigationTab
@@ -57,6 +58,7 @@ fun App(
     // The ViewModel is read here rather than inside MainContent so the splash
     // is inside LocaleProvider too — otherwise it always renders in English.
     val viewModel = provideNewsViewModel()
+    val searchViewModel = provideSearchViewModel()
     val uiState: NewsUiState by viewModel.uiState.collectAsState()
     // Resolved once here rather than inside NewsShortsTheme's own default: the
     // feed branch inside NewsScreen overrides this with a forced-dark theme of
@@ -160,6 +162,7 @@ fun App(
                 } else {
                     NewsScreen(
                         viewModel = viewModel,
+                        searchViewModel = searchViewModel,
                         onOpenUrl = openUrl,
                         onShareContent = onShareContent,
                         onShowToast = onShowToast,

@@ -4,7 +4,8 @@ import com.mk.newsshorts.data.local.NewsLocalDataSource
 import com.mk.newsshorts.data.local.NotificationInboxStore
 import com.mk.newsshorts.data.local.SavedArticlesStore
 import com.mk.newsshorts.data.local.PendingSignInEmailStore
-import com.mk.newsshorts.data.local.RecentSearchesStore
+import com.mk.newsshorts.feature.search.RecentSearchesStore
+import com.mk.newsshorts.feature.search.RecentSearches
 import com.mk.newsshorts.data.local.SeenArticlesStore
 import com.mk.newsshorts.data.local.SettingsManager
 import com.mk.newsshorts.data.local.OriginPreferenceStore
@@ -47,7 +48,9 @@ val dataModule = module {
     single(createdAtStart = false) { SavedArticlesRepository(store = get<SavedArticlesStore>()) }
     single(createdAtStart = false) { SeenArticlesStore(settingsStorage = get()) }
     single(createdAtStart = false) { NotificationInboxStore(settingsStorage = get()) }
-    single(createdAtStart = false) { RecentSearchesStore(settingsStorage = get()) }
+    single<RecentSearches>(createdAtStart = false) {
+        RecentSearchesStore(settingsStorage = get())
+    }
     single(createdAtStart = false) { PendingSignInEmailStore(settingsStorage = get()) }
     single<NewsRepository>(createdAtStart = false) {
         NewsRepositoryImpl(

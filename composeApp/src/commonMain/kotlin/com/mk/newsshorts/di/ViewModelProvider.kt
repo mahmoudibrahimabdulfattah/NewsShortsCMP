@@ -1,8 +1,11 @@
 package com.mk.newsshorts.di
 
 import androidx.compose.runtime.Composable
+import com.mk.newsshorts.feature.search.SearchViewModel
 import com.mk.newsshorts.presentation.viewmodel.NewsViewModel
 
 @Composable
 expect fun provideNewsViewModel(): NewsViewModel
 
+@Composable
+expect fun provideSearchViewModel(): SearchViewModel

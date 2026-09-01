@@ -135,21 +135,6 @@ data class NewsUiState(
      * screen can ask who it belongs to instead of discarding it.
      */
     val unclaimedSignInLink: String? = null,
-    /** Exactly what the reader has typed, unfolded — this is what the field shows. */
-    val searchQuery: String = "",
-    val searchResults: List<NewsArticle> = emptyList(),
-    val isSearching: Boolean = false,
-    /**
-     * A search finished for the query currently in the field. Without it an
-     * empty result list is ambiguous — it looks the same before the first
-     * search runs as it does after one that found nothing, and those are two
-     * different screens.
-     */
-    val searchSettled: Boolean = false,
-    /** The corpus could not be reached and nothing was held from earlier. */
-    val searchFailed: Boolean = false,
-    /** Most recent first. Never leaves the device — see `RecentSearchesStore`. */
-    val recentSearches: List<String> = emptyList(),
 ) {
     val hasArticles: Boolean
         get() = articles.isNotEmpty()
@@ -194,10 +179,6 @@ data class NewsUiState(
             .toSet()
 
     val unreadInboxCount: Int get() = unreadInboxIds.size
-
-    /** A search ran for what is in the field and came back with nothing. */
-    val hasNoSearchResults: Boolean
-        get() = searchSettled && !searchFailed && searchResults.isEmpty()
 
     /**
      * The details overlay, if that is what is on top. Kept as a derived

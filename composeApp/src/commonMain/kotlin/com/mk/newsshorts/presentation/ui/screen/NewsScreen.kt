@@ -53,6 +53,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.mk.newsshorts.feature.search.SearchScreen
+import com.mk.newsshorts.feature.search.SearchUiEvent
+import com.mk.newsshorts.feature.search.SearchUiState
+import com.mk.newsshorts.feature.search.SearchViewModel
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.localization.countryName
 import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
@@ -77,6 +81,7 @@ import com.mk.newsshorts.presentation.viewmodel.NewsViewModel
 @Composable
 fun NewsScreen(
     viewModel: NewsViewModel,
+    searchViewModel: SearchViewModel,
     onOpenUrl: (String) -> Unit = {},
     onShareContent: (String, String, String) -> Unit = { _, _, _ -> },
     onShowToast: (String) -> Unit = {},
@@ -84,6 +89,7 @@ fun NewsScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState: NewsUiState by viewModel.uiState.collectAsState()
+    val searchUiState: SearchUiState by searchViewModel.uiState.collectAsState()
     // Read through rememberUpdatedState, not captured directly: the collector
     // below is started once and never restarts, so it would otherwise hold the
     // handlers from the first composition for the life of the process. That
@@ -107,9 +113,31 @@ fun NewsScreen(
             }
         }
     }
+    val onNewsEvent: (NewsUiEvent) -> Unit = { event ->
+        when {
+            event == NewsUiEvent.OpenSearch -> searchViewModel.processEvent(
+                SearchUiEvent.Opened(uiState.selectedLanguage.code)
+            )
+            event == NewsUiEvent.CloseOverlay && uiState.overlays.lastOrNull() == Overlay.Search ->
+                searchViewModel.processEvent(SearchUiEvent.Closed)
+        }
+        viewModel.processEvent(event)
+    }
+    val onSearchEvent: (SearchUiEvent) -> Unit = { event ->
+        searchViewModel.processEvent(event)
+        when (event) {
+            SearchUiEvent.Closed -> viewModel.processEvent(NewsUiEvent.CloseOverlay)
+            is SearchUiEvent.ResultOpened -> viewModel.processEvent(
+                NewsUiEvent.OpenArticleDetails(event.article, ArticleOpenOrigin.SEARCH)
+            )
+            else -> Unit
+        }
+    }
     NewsScreenContent(
         uiState = uiState,
-        onEvent = viewModel::processEvent,
+        searchUiState = searchUiState,
+        onEvent = onNewsEvent,
+        onSearchEvent = onSearchEvent,
         modifier = modifier
     )
 }
@@ -118,7 +146,9 @@ fun NewsScreen(
 @Composable
 private fun NewsScreenContent(
     uiState: NewsUiState,
+    searchUiState: SearchUiState,
     onEvent: (NewsUiEvent) -> Unit,
+    onSearchEvent: (SearchUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // One rule for every screen pushed above the tabs — the details screen,
@@ -259,8 +289,8 @@ private fun NewsScreenContent(
             }
             Overlay.Search -> {
                 SearchScreen(
-                    uiState = uiState,
-                    onEvent = onEvent,
+                    uiState = searchUiState,
+                    onEvent = onSearchEvent,
                     modifier = Modifier.fillMaxSize()
                 )
             }

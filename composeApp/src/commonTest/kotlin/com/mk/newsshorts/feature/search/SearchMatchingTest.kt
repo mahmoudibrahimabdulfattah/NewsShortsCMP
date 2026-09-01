@@ -1,4 +1,4 @@
-package com.mk.newsshorts.domain.search
+package com.mk.newsshorts.feature.search
 
 import com.mk.newsshorts.domain.model.ArticleAuthor
 import com.mk.newsshorts.domain.model.ArticleContent

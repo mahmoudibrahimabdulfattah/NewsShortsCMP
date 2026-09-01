@@ -1,6 +1,6 @@
-package com.mk.newsshorts.data.local
+package com.mk.newsshorts.feature.search
 
-import com.mk.newsshorts.domain.search.normalizeForSearch
+import com.mk.newsshorts.data.local.SettingsStorage
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -16,12 +16,19 @@ import kotlinx.serialization.json.Json
 @Serializable
 private data class RecentSearchesDto(val queries: List<String> = emptyList())
 
+interface RecentSearches {
+    fun load(): List<String>
+    fun add(query: String): List<String>
+    fun remove(query: String): List<String>
+    fun clear()
+}
+
 class RecentSearchesStore(
     private val settingsStorage: SettingsStorage
-) {
+) : RecentSearches {
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun load(): List<String> {
+    override fun load(): List<String> {
         val raw = settingsStorage.getString(KEY_RECENT_SEARCHES, "")
         if (raw.isBlank()) return emptyList()
         return runCatching {
@@ -41,7 +48,7 @@ class RecentSearchesStore(
      * list. The text stored is what the reader actually typed — the folded form
      * is for comparing, never for showing back.
      */
-    fun add(query: String): List<String> {
+    override fun add(query: String): List<String> {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return load()
         val folded = normalizeForSearch(trimmed)
@@ -51,14 +58,14 @@ class RecentSearchesStore(
         return updated
     }
 
-    fun remove(query: String): List<String> {
+    override fun remove(query: String): List<String> {
         val folded = normalizeForSearch(query)
         val updated = load().filter { normalizeForSearch(it) != folded }
         persist(updated)
         return updated
     }
 
-    fun clear() {
+    override fun clear() {
         persist(emptyList())
     }
 
