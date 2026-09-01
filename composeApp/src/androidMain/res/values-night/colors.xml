@@ -10,4 +10,8 @@
          colour, and the Compose splash — which does read the app setting —
          paints over it. -->
     <color name="splash_background">#081726</color>
+    <color name="widget_background">#081726</color>
+    <color name="widget_on_background">#E4F1FF</color>
+    <color name="widget_accent">#73D5D2</color>
+    <color name="widget_muted">#AFC0CF</color>
 </resources>

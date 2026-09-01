@@ -223,6 +223,7 @@ kotlin {
             implementation(libs.google.id)
             implementation(libs.kotlinx.coroutinesPlayServices)
             implementation(libs.androidx.browser)
+            implementation(libs.androidx.glance.appwidget)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

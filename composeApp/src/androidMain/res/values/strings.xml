@@ -4,4 +4,7 @@
     <string name="notification_channel_breaking_news">Breaking news</string>
     <string name="notification_channel_breaking_news_description">Major stories as they happen</string>
     <string name="unable_to_open_link">Unable to open link</string>
+    <string name="widget_description">Top story in your news language</string>
+    <string name="widget_top_story">Top story</string>
+    <string name="widget_unavailable">Open News Shorts for the latest stories</string>
 </resources>
