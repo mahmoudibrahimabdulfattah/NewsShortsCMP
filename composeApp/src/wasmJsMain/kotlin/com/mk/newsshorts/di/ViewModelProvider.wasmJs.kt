@@ -9,12 +9,13 @@ import com.mk.newsshorts.feature.onboarding.OnboardingViewModel
 import com.mk.newsshorts.feature.saved.SavedArticlesViewModel
 import com.mk.newsshorts.feature.search.SearchViewModel
 import com.mk.newsshorts.feature.settings.SettingsViewModel
-import com.mk.newsshorts.presentation.viewmodel.NewsViewModel
+import com.mk.newsshorts.feature.feed.FeedViewModel
+import com.mk.newsshorts.presentation.viewmodel.AppShellViewModel
 import org.koin.mp.KoinPlatform
 
 @Composable
-actual fun provideNewsViewModel(): NewsViewModel {
-    return remember { KoinPlatform.getKoin().get<NewsViewModel>() }
+actual fun provideFeedViewModel(): FeedViewModel {
+    return remember { KoinPlatform.getKoin().get<FeedViewModel>() }
 }
 
 @Composable
@@ -46,3 +47,7 @@ actual fun provideAppGateViewModel(): AppGateViewModel =
 @Composable
 actual fun provideOnboardingViewModel(): OnboardingViewModel =
     remember { KoinPlatform.getKoin().get<OnboardingViewModel>() }
+
+@Composable
+actual fun provideAppShellViewModel(): AppShellViewModel =
+    remember { KoinPlatform.getKoin().get<AppShellViewModel>() }

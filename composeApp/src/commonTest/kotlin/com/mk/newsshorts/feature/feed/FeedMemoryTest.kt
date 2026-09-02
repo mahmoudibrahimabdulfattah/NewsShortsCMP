@@ -1,4 +1,4 @@
-package com.mk.newsshorts.presentation.viewmodel
+package com.mk.newsshorts.feature.feed
 
 import com.mk.newsshorts.domain.model.ArticleAuthor
 import com.mk.newsshorts.domain.model.ArticleContent
@@ -13,13 +13,12 @@ import com.mk.newsshorts.domain.model.PublishedTimestamp
 import com.mk.newsshorts.domain.model.SourceId
 import com.mk.newsshorts.domain.model.SourceName
 import com.mk.newsshorts.presentation.mvi.LanguageOption
-import com.mk.newsshorts.presentation.mvi.NewsUiState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-class NewsViewModelFeedMemoryTest {
+class FeedViewModelFeedMemoryTest {
 
     @Test
     fun `returning to a category restores article five without replacing the feed`() {
@@ -211,7 +210,7 @@ class NewsViewModelFeedMemoryTest {
         revision: Int,
         nextPageFile: String? = null,
         language: LanguageOption = LanguageOption.ENGLISH,
-    ) = NewsUiState(
+    ) = FeedUiState(
         isLoading = false,
         articles = articles,
         selectedCategory = category,

@@ -1,5 +1,7 @@
 package com.mk.newsshorts.presentation.ui.components
 
+import com.mk.newsshorts.feature.saved.SavedArticlesUiEvent
+import com.mk.newsshorts.presentation.viewmodel.AppShellUiEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -50,7 +52,7 @@ import com.mk.newsshorts.feature.saved.SavedArticlesUiState
 import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
-import com.mk.newsshorts.presentation.mvi.NewsUiEvent
+import com.mk.newsshorts.feature.feed.FeedUiEvent
 import com.mk.newsshorts.presentation.mvi.Overlay
 
 /**
@@ -65,7 +67,8 @@ import com.mk.newsshorts.presentation.mvi.Overlay
 fun ProfileScreen(
     authUser: AuthUser?,
     savedArticlesUiState: SavedArticlesUiState,
-    onEvent: (NewsUiEvent) -> Unit,
+    onShellEvent: (AppShellUiEvent) -> Unit,
+    onSavedEvent: (SavedArticlesUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -91,7 +94,7 @@ fun ProfileScreen(
                 ProfileHeader(
                     strings = strings,
                     authUser = authUser,
-                    onSignInClick = { onEvent(NewsUiEvent.OpenOverlay(Overlay.SignIn)) },
+                    onSignInClick = { onShellEvent(AppShellUiEvent.OpenOverlay(Overlay.SignIn)) },
                 )
             }
             item {
@@ -99,10 +102,10 @@ fun ProfileScreen(
                 SavedArticlesPreviewSection(
                     savedArticles = savedArticlesUiState.articles,
                     onArticleClick = { article ->
-                        onEvent(NewsUiEvent.OpenArticleDetails(article, ArticleOpenOrigin.SAVED))
+                        onShellEvent(AppShellUiEvent.OpenArticleDetails(article, ArticleOpenOrigin.SAVED))
                     },
-                    onRemoveArticle = { article -> onEvent(NewsUiEvent.RemoveSavedArticle(article)) },
-                    onSeeAll = { onEvent(NewsUiEvent.OpenOverlay(Overlay.SavedArticles)) },
+                    onRemoveArticle = { article -> onSavedEvent(SavedArticlesUiEvent.Remove(article)) },
+                    onSeeAll = { onShellEvent(AppShellUiEvent.OpenOverlay(Overlay.SavedArticles)) },
                     strings = strings
                 )
             }
@@ -110,12 +113,12 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(28.dp))
                 SettingsEntryRow(
                     strings = strings,
-                    onClick = { onEvent(NewsUiEvent.OpenOverlay(Overlay.Settings)) },
+                    onClick = { onShellEvent(AppShellUiEvent.OpenOverlay(Overlay.Settings)) },
                 )
             }
             item {
                 Spacer(modifier = Modifier.height(28.dp))
-                AppInfoSection(strings = strings, onEvent = onEvent)
+                AppInfoSection(strings = strings, onShellEvent = onShellEvent)
             }
         }
     }
@@ -341,7 +344,7 @@ private fun SettingsEntryRow(
 @Composable
 private fun AppInfoSection(
     strings: AppStrings,
-    onEvent: (NewsUiEvent) -> Unit,
+    onShellEvent: (AppShellUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -387,7 +390,7 @@ private fun AppInfoSection(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onEvent(NewsUiEvent.OpenPrivacyPolicy) }
+                        .clickable { onShellEvent(AppShellUiEvent.OpenPrivacyPolicy) }
                         .padding(vertical = 4.dp),
                 )
                 Text(
@@ -396,7 +399,7 @@ private fun AppInfoSection(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onEvent(NewsUiEvent.OpenOverlay(Overlay.Licenses)) }
+                        .clickable { onShellEvent(AppShellUiEvent.OpenOverlay(Overlay.Licenses)) }
                         .padding(vertical = 4.dp),
                 )
             }

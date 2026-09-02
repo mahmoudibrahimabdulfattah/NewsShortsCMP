@@ -11,7 +11,8 @@ import com.mk.newsshorts.feature.search.SearchViewModel
 import com.mk.newsshorts.feature.settings.SettingsViewModel
 import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.localization.getStrings
-import com.mk.newsshorts.presentation.viewmodel.NewsViewModel
+import com.mk.newsshorts.feature.feed.FeedViewModel
+import com.mk.newsshorts.presentation.viewmodel.AppShellViewModel
 import org.koin.dsl.module
 
 val presentationModule = module {
@@ -75,22 +76,29 @@ val presentationModule = module {
         )
     }
     single(createdAtStart = false) {
-        NewsViewModel(
+        FeedViewModel(
             getTopHeadlinesUseCase = get(),
             settingsManager = get(),
             analytics = get(),
+            savedArticles = get(),
+            syncPublisher = get(),
+            feedInvalidator = get(),
+            seenArticlesStore = get(),
+        )
+    }
+    single(createdAtStart = false) {
+        AppShellViewModel(
+            settingsManager = get(),
+            analytics = get(),
             deepLinkBus = get(),
-            sharePageResolver = get(),
-            inboxReadMarker = get(),
             savedArticles = get(),
             accountSync = get(),
             authSession = get(),
             syncPublisher = get(),
             feedInvalidator = get(),
             articleLookup = get(),
-            seenArticlesStore = get(),
-            remoteConfigClient = get(),
-            deviceIntegrityInspector = get(),
+            sharePageResolver = get(),
+            inboxReadMarker = get(),
         )
     }
 }

@@ -26,7 +26,7 @@ interface SavedArticles {
 /**
  * The one owner of the bookmark list.
  *
- * It used to live in `NewsUiState` and be mutated in place by three handlers,
+ * It used to live in `FeedUiState` and be mutated in place by three handlers,
  * each of which had to remember to persist and to push. Collecting that here
  * means the rules — match by URL, newest first, write through to disk — are
  * stated once, and can be tested without a ViewModel.

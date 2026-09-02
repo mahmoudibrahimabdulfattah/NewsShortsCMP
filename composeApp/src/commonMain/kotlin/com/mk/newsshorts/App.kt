@@ -1,5 +1,6 @@
 package com.mk.newsshorts
 
+import com.mk.newsshorts.presentation.viewmodel.AppShellUiEvent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -21,9 +22,10 @@ import androidx.compose.ui.graphics.painter.Painter
 import newsshorts.composeapp.generated.resources.Res
 import newsshorts.composeapp.generated.resources.logo
 import com.mk.newsshorts.di.provideAppGateViewModel
+import com.mk.newsshorts.di.provideAppShellViewModel
 import com.mk.newsshorts.di.provideAuthViewModel
 import com.mk.newsshorts.di.provideInboxViewModel
-import com.mk.newsshorts.di.provideNewsViewModel
+import com.mk.newsshorts.di.provideFeedViewModel
 import com.mk.newsshorts.di.provideOnboardingViewModel
 import com.mk.newsshorts.di.provideSavedArticlesViewModel
 import com.mk.newsshorts.di.provideSearchViewModel
@@ -33,8 +35,8 @@ import com.mk.newsshorts.feature.settings.SettingsUiState
 import com.mk.newsshorts.presentation.localization.LocaleProvider
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.mvi.NavigationTab
-import com.mk.newsshorts.presentation.mvi.NewsUiEvent
-import com.mk.newsshorts.presentation.mvi.NewsUiState
+import com.mk.newsshorts.feature.feed.FeedUiEvent
+import com.mk.newsshorts.feature.feed.FeedUiState
 import com.mk.newsshorts.presentation.mvi.Overlay
 import com.mk.newsshorts.feature.appgate.AppGateUiEvent
 import com.mk.newsshorts.feature.appgate.BlockingNoticeScreen
@@ -72,7 +74,7 @@ fun App(
     val logoPainter: Painter = painterResource(Res.drawable.logo)
     // The ViewModel is read here rather than inside MainContent so the splash
     // is inside LocaleProvider too — otherwise it always renders in English.
-    val viewModel = provideNewsViewModel()
+    val viewModel = provideFeedViewModel()
     val authViewModel = provideAuthViewModel()
     val inboxViewModel = provideInboxViewModel()
     val searchViewModel = provideSearchViewModel()
@@ -80,10 +82,12 @@ fun App(
     val settingsViewModel = provideSettingsViewModel()
     val appGateViewModel = provideAppGateViewModel()
     val onboardingViewModel = provideOnboardingViewModel()
-    val uiState: NewsUiState by viewModel.uiState.collectAsState()
+    val shellViewModel = provideAppShellViewModel()
+    val uiState: FeedUiState by viewModel.uiState.collectAsState()
     val settingsUiState: SettingsUiState by settingsViewModel.uiState.collectAsState()
     val gateUiState by appGateViewModel.uiState.collectAsState()
     val onboardingUiState by onboardingViewModel.uiState.collectAsState()
+    val shellUiState by shellViewModel.uiState.collectAsState()
     // Onboarding asks for the notification permission only when the reader
     // pressed through the last step with notifications on. Collected here
     // rather than in NewsScreen because onboarding is drawn above it, and by
@@ -102,10 +106,10 @@ fun App(
             authViewModel.uiEffect.collect { effect ->
                 when (effect) {
                     AuthUiEffect.CloseOverlay -> {
-                        viewModel.processEvent(NewsUiEvent.CloseOverlay)
+                        shellViewModel.processEvent(AppShellUiEvent.CloseOverlay)
                     }
                     AuthUiEffect.OpenSignInOverlay -> {
-                        viewModel.processEvent(NewsUiEvent.OpenOverlay(Overlay.SignIn))
+                        shellViewModel.processEvent(AppShellUiEvent.OpenOverlay(Overlay.SignIn))
                     }
                 }
             }
@@ -126,7 +130,7 @@ fun App(
         gateUiState.requiredUpdate != null -> false
         gateUiState.securityNotice == SecurityNotice.BLOCKED -> false
         // Details, Settings, Saved and Search all paint colorScheme.background.
-        uiState.overlays.isNotEmpty() -> !isDarkTheme
+        shellUiState.overlays.isNotEmpty() -> !isDarkTheme
         uiState.currentTab == NavigationTab.PROFILE -> !isDarkTheme
         // What is left is the feed, which is forced dark whatever the setting.
         else -> false
@@ -216,6 +220,7 @@ fun App(
                 } else {
                     NewsScreen(
                         viewModel = viewModel,
+                        shellViewModel = shellViewModel,
                         authViewModel = authViewModel,
                         inboxViewModel = inboxViewModel,
                         searchViewModel = searchViewModel,

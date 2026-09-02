@@ -51,7 +51,7 @@ import com.mk.newsshorts.presentation.ui.components.FilterPill
  * Skippable throughout. What a reader who skips gets is not a broken app but
  * the defaults: their device language, every category in declared order, and
  * the notification permission question left for later — see
- * `NewsViewModel.handleOnboardingSkip`.
+ * `FeedViewModel.handleOnboardingSkip`.
  */
 @Composable
 fun OnboardingScreen(

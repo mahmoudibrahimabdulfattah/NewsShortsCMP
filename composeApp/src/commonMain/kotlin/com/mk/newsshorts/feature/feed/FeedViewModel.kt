@@ -1,4 +1,4 @@
-package com.mk.newsshorts.presentation.viewmodel
+package com.mk.newsshorts.feature.feed
 
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
 import com.mk.newsshorts.auth.AuthSession
 import com.mk.newsshorts.data.repository.SavedArticles
 import com.mk.newsshorts.data.local.SeenArticlesStore
@@ -61,11 +62,12 @@ import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
 import com.mk.newsshorts.presentation.mvi.CountryOption
 import com.mk.newsshorts.presentation.mvi.LanguageOption
 import com.mk.newsshorts.presentation.mvi.NavigationTab
-import com.mk.newsshorts.presentation.mvi.NewsUiEffect
-import com.mk.newsshorts.presentation.mvi.NewsUiEvent
-import com.mk.newsshorts.presentation.mvi.NewsUiState
+import com.mk.newsshorts.feature.feed.FeedUiEffect
+import com.mk.newsshorts.feature.feed.FeedUiEvent
+import com.mk.newsshorts.feature.feed.FeedUiState
 import com.mk.newsshorts.presentation.mvi.OnboardingStep
 import com.mk.newsshorts.presentation.mvi.Overlay
+import com.mk.newsshorts.presentation.viewmodel.BaseViewModel
 
 internal data class RememberedCategoryFeed(
     val articles: List<NewsArticle>,
@@ -93,7 +95,7 @@ internal class CategoryFeedMemory(
     }
 
     fun rememberAndFind(
-        currentState: NewsUiState,
+        currentState: FeedUiState,
         selectedCategory: NewsCategory,
     ): RememberedCategoryFeed? {
         remember(currentState)
@@ -104,7 +106,7 @@ internal class CategoryFeedMemory(
         feeds.clear()
     }
 
-    private fun remember(state: NewsUiState) {
+    private fun remember(state: FeedUiState) {
         if (state.currentTab != NavigationTab.FOR_YOU || state.articles.isEmpty()) return
         val key = CategoryFeedKey(state.selectedCategory, state.selectedLanguage.code)
         feeds.remove(key)
@@ -131,10 +133,10 @@ internal class CategoryFeedMemory(
     }
 }
 
-internal fun NewsUiState.withSelectedCategory(
+internal fun FeedUiState.withSelectedCategory(
     category: NewsCategory,
     remembered: RememberedCategoryFeed?,
-): NewsUiState {
+): FeedUiState {
     if (remembered == null) {
         return copy(
             selectedCategory = category,
@@ -161,11 +163,11 @@ internal fun NewsUiState.withSelectedCategory(
     )
 }
 
-internal fun NewsUiState.withLoadedFeed(
+internal fun FeedUiState.withLoadedFeed(
     articles: List<NewsArticle>,
     nextPageFile: String?,
     preserveReaderPosition: Boolean,
-): NewsUiState {
+): FeedUiState {
     val fallbackIndex = currentArticleIndex.coerceIn(
         minimumValue = 0,
         maximumValue = articles.lastIndex.coerceAtLeast(0),
@@ -198,29 +200,25 @@ internal fun NewsUiState.withLoadedFeed(
     )
 }
 
-class NewsViewModel(
+class FeedViewModel(
     private val getTopHeadlinesUseCase: GetTopHeadlinesUseCase,
     private val settingsManager: SettingsManager,
     private val analytics: AnalyticsReporter,
-    private val deepLinkBus: DeepLinkBus,
     private val savedArticles: SavedArticles,
-    private val accountSync: AccountSyncUseCase,
-    private val authSession: AuthSession,
     private val syncPublisher: SyncPublisher,
     private val feedInvalidator: FeedInvalidator,
-    private val articleLookup: ArticleLookup,
     private val seenArticlesStore: SeenArticlesStore,
-    private val remoteConfigClient: RemoteConfigClient,
-    private val deviceIntegrityInspector: DeviceIntegrityInspector,
-    private val sharePageResolver: SharePageResolver,
-    private val inboxReadMarker: InboxReadMarker,
+    private val scopeOverride: CoroutineScope? = null,
 ) : BaseViewModel() {
 
-    private val mutableState: MutableStateFlow<NewsUiState> = MutableStateFlow(NewsUiState())
-    val uiState: StateFlow<NewsUiState> = mutableState.asStateFlow()
+    private val feedScope: CoroutineScope
+        get() = scopeOverride ?: viewModelScope
 
-    private val mutableEffect: MutableSharedFlow<NewsUiEffect> = MutableSharedFlow()
-    val uiEffect: SharedFlow<NewsUiEffect> = mutableEffect.asSharedFlow()
+    private val mutableState: MutableStateFlow<FeedUiState> = MutableStateFlow(FeedUiState())
+    val uiState: StateFlow<FeedUiState> = mutableState.asStateFlow()
+
+    private val mutableEffect: MutableSharedFlow<FeedUiEffect> = MutableSharedFlow()
+    val uiEffect: SharedFlow<FeedUiEffect> = mutableEffect.asSharedFlow()
 
     private val categoryFeedMemory = CategoryFeedMemory()
 
@@ -230,90 +228,12 @@ class NewsViewModel(
 
     init {
         loadSavedSettings()
-        observeDeepLinks()
         observeFeedInvalidations()
-        observeAuthState()
     }
 
-    private var accountSyncJob: Job? = null
-    private var activeAccountSyncUid: String? = null
-
-    private fun observeAuthState() {
-        viewModelScope.launch {
-            authSession.user.collect { user ->
-                val uid = user?.uid
-                if (uid != null && uid == activeAccountSyncUid) return@collect
-                accountSyncJob?.cancel()
-                // Anything still queued or in the air belongs to the account
-                // that just went away. A write that was legitimately current
-                // when it left can still land minutes later, under whoever is
-                // signed in by then.
-                syncPublisher.discardQueued()
-                activeAccountSyncUid = uid
-                accountSyncJob = if (uid == null) {
-                    null
-                } else {
-                    launch {
-                        val outcome = accountSync()
-                        if (authSession.user.value?.uid == uid) applySyncOutcome(outcome)
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Read from the store, never from [mutableState]. The UI state starts on
-     * hardcoded defaults and is filled in by `loadSavedSettings` in its own
-     * coroutine, so a sign-in that lands first would have pushed English, US
-     * and "system" over whatever the reader had actually chosen. The store has
-     * the real values from the moment it is constructed.
-     */
-    private fun currentSyncedSettings(): SyncedSettings =
-        settingsManager.preferences.value.toSyncedSettings()
-
-    private suspend fun applySyncOutcome(outcome: SyncOutcome) {
-        if (outcome.settings == null) {
-            replaceSavedArticlesFromSync(outcome.saved)
-            return
-        }
-        applySyncedSettings(settings = outcome.settings, saved = outcome.saved)
-    }
-
-    /** The remote copy becomes the local one — this is the "remote wins" side of sync. */
-    private suspend fun applySyncedSettings(settings: SyncedSettings, saved: List<NewsArticle>) {
-        settingsManager.apply(settings)
-        savedArticles.replaceAll(saved)
-        feedInvalidator.invalidate(InvalidationReason.SyncApplied)
-    }
-
-    private fun replaceSavedArticlesFromSync(articles: List<NewsArticle>) {
-        if (articles != savedArticles.saved.value) {
-            savedArticles.replaceAll(articles)
-        }
-    }
-
-    private fun publishSettingsIfSignedIn() {
-        syncPublisher.publishSettings(currentSyncedSettings())
-    }
-
-    private fun observeDeepLinks() {
-        viewModelScope.launch {
-            deepLinkBus.pending.collect { pending ->
-                when (pending) {
-                    null -> return@collect
-                    is PendingLink.Article -> processEvent(NewsUiEvent.OpenDeepLink(pending.link))
-                    is PendingLink.SharePage -> processEvent(NewsUiEvent.OpenSharePage(pending.url))
-                }
-                // Both this and the ViewModel outlive the Activity, so an
-                // unconsumed link would reopen the screen on every resume.
-                deepLinkBus.consume()
-            }
-        }
-    }
 
     private fun observeFeedInvalidations() {
-        viewModelScope.launch {
+        feedScope.launch {
             feedInvalidator.signals.collect { reason ->
                 handleFeedInvalidation(reason)
             }
@@ -366,7 +286,7 @@ class NewsViewModel(
     }
 
     private fun loadSavedSettings() {
-        viewModelScope.launch {
+        feedScope.launch {
             // One snapshot: reading nine separate flows left a window where
             // half of them had been answered and half had not.
             val stored = settingsManager.preferences.value
@@ -391,7 +311,7 @@ class NewsViewModel(
     /**
      * Read-then-newest-first is not enough on its own — a returning reader
      * would just see yesterday's top story again. Applied at every site that
-     * assigns [NewsUiState.articles], never to the list already on screen: a
+     * assigns [FeedUiState.articles], never to the list already on screen: a
      * reorder under a reader's thumb would move the card they are mid-swipe on.
      *
      * A later page is ranked the same way, but only within itself — see
@@ -414,32 +334,18 @@ class NewsViewModel(
     /** Marks the start of a new feed and returns the generation to check against. */
     private fun startNewFeed(): Int = ++feedGeneration
 
-    fun processEvent(event: NewsUiEvent) {
+    fun processEvent(event: FeedUiEvent) {
         when (event) {
-            is NewsUiEvent.SelectCategory -> handleSelectCategory(event.category)
-            is NewsUiEvent.SelectCountry -> handleSelectCountry(event.country)
-            is NewsUiEvent.SelectLanguage -> handleSelectLanguage(event.language)
-            is NewsUiEvent.SelectTab -> handleSelectTab(event.tab)
-            is NewsUiEvent.ScrollToArticle -> handleScrollToArticle(event.index)
-            is NewsUiEvent.OpenArticleDetails -> handleOpenArticleDetails(event.article, event.origin)
-            NewsUiEvent.CloseArticleDetails -> handleCloseOverlay()
-            is NewsUiEvent.OpenOverlay -> handleOpenOverlay(event.overlay)
-            NewsUiEvent.CloseOverlay -> handleCloseOverlay()
-            NewsUiEvent.OpenArticleSource -> handleOpenArticleSource()
-            NewsUiEvent.OpenPrivacyPolicy -> viewModelScope.launch {
-                mutableEffect.emit(NewsUiEffect.OpenUrl(privacyPolicyUrl()))
-            }
-            is NewsUiEvent.OpenDeepLink -> handleOpenDeepLink(event.link)
-            is NewsUiEvent.OpenSharePage -> handleOpenSharePage(event.url)
-            is NewsUiEvent.ShareArticle -> handleShareArticle(event.article)
-            is NewsUiEvent.SaveArticle -> Unit
-            is NewsUiEvent.RemoveSavedArticle -> Unit
-            NewsUiEvent.OpenSearch -> handleOpenSearch()
-            NewsUiEvent.RefreshNews -> handleRefreshNews()
-            NewsUiEvent.RetryLoading -> handleRetryLoading()
-            NewsUiEvent.RetryNextPage -> handleRetryNextPage()
-            NewsUiEvent.DismissError -> handleDismissError()
-            NewsUiEvent.RequestNotificationPermissionIfDue -> handleRequestNotificationPermissionIfDue()
+            is FeedUiEvent.SelectCategory -> handleSelectCategory(event.category)
+            is FeedUiEvent.SelectCountry -> handleSelectCountry(event.country)
+            is FeedUiEvent.SelectLanguage -> handleSelectLanguage(event.language)
+            is FeedUiEvent.SelectTab -> handleSelectTab(event.tab)
+            is FeedUiEvent.ScrollToArticle -> handleScrollToArticle(event.index)
+            FeedUiEvent.RefreshNews -> handleRefreshNews()
+            FeedUiEvent.RetryLoading -> handleRetryLoading()
+            FeedUiEvent.RetryNextPage -> handleRetryNextPage()
+            FeedUiEvent.DismissError -> handleDismissError()
+            FeedUiEvent.RequestNotificationPermissionIfDue -> handleRequestNotificationPermissionIfDue()
         }
     }
 
@@ -459,7 +365,7 @@ class NewsViewModel(
             loadNewsWithCache()
         } else {
             val request = currentRequest()
-            viewModelScope.launch {
+            feedScope.launch {
                 fetchNewsInBackground(
                     request = request,
                     generation = restoreGeneration,
@@ -469,11 +375,15 @@ class NewsViewModel(
         }
     }
 
+    private fun publishSettingsIfSignedIn() {
+        syncPublisher.publishSettings(settingsManager.preferences.value.toSyncedSettings())
+    }
+
     private fun handleSelectCountry(country: CountryOption) {
         if (country == mutableState.value.selectedCountry) return
         analytics.logEvent(AnalyticsEvent.CountrySelected(country.code))
         resetArticleTracking()
-        viewModelScope.launch {
+        feedScope.launch {
             settingsManager.saveSelectedCountry(country.code)
             publishSettingsIfSignedIn()
             feedInvalidator.invalidate(InvalidationReason.CountryChanged)
@@ -481,7 +391,7 @@ class NewsViewModel(
     }
 
     private fun loadNewsForCountryWithCache(country: CountryOption) {
-        val currentState: NewsUiState = mutableState.value
+        val currentState: FeedUiState = mutableState.value
         val request = GetTopHeadlinesRequest(
             category = currentState.selectedCategory,
             country = country.code,
@@ -491,20 +401,20 @@ class NewsViewModel(
         )
         val generation = startNewFeed()
         showCachedFeed(request)
-        viewModelScope.launch {
+        feedScope.launch {
             fetchNewsInBackground(request, generation)
         }
     }
 
     private fun handleSelectLanguage(language: LanguageOption) {
         if (language == mutableState.value.selectedLanguage) return
-        viewModelScope.launch {
+        feedScope.launch {
             analytics.logEvent(AnalyticsEvent.NewsLanguageChanged(language.code))
             analytics.setProperty("news_language", language.code)
             settingsManager.saveNewsLanguage(language.code)
             publishSettingsIfSignedIn()
             feedInvalidator.invalidate(InvalidationReason.LanguageChanged)
-            mutableEffect.emit(NewsUiEffect.ShowToast(strings().languageNames[language.code] ?: language.displayName))
+            mutableEffect.emit(FeedUiEffect.ShowToast(strings().languageNames[language.code] ?: language.displayName))
         }
     }
 
@@ -515,7 +425,7 @@ class NewsViewModel(
             // forty swipes. Refreshing rather than only scrolling, because a
             // reader who has come all the way back up is asking what is new —
             // and the scroll falls out of it, since a refresh replaces the feed
-            // and the pager follows [NewsUiState.feedRevision] to the top.
+            // and the pager follows [FeedUiState.feedRevision] to the top.
             if (tab != NavigationTab.PROFILE) handleRefreshNews()
             return
         }
@@ -603,7 +513,7 @@ class NewsViewModel(
         // screen. Independent of the analytics milestone below, and it fires
         // at most once, guarded inside the handler itself.
         if (index == PERMISSION_PROMPT_DEPTH) {
-            processEvent(NewsUiEvent.RequestNotificationPermissionIfDue)
+            processEvent(FeedUiEvent.RequestNotificationPermissionIfDue)
         }
         if (index % DEPTH_MILESTONE != 0) return
         analytics.logEvent(
@@ -614,141 +524,16 @@ class NewsViewModel(
         )
     }
 
-    private fun handleOpenArticleDetails(article: NewsArticle, origin: ArticleOpenOrigin) {
-        handleOpenOverlay(Overlay.Details(article, origin))
-        analytics.logEvent(
-            AnalyticsEvent.ArticleDetailsOpened(
-                category = article.category.apiValue,
-                source = article.source.name.value,
-                origin = origin.analyticsValue,
-            )
-        )
-    }
-
-    private fun handleOpenOverlay(overlay: Overlay) {
-        mutableState.update { state ->
-            if (overlay == Overlay.SignIn && Overlay.SignIn in state.overlays) {
-                state
-            } else {
-                state.copy(overlays = state.overlays + overlay)
-            }
-        }
-    }
-
-    /** Pops whatever is on top — the details screen, Settings, Saved, or Search. */
-    private fun handleCloseOverlay() {
-        mutableState.update { state ->
-            state.copy(overlays = state.overlays.dropLast(1))
-        }
-    }
-
-    private fun handleOpenSearch() {
-        handleOpenOverlay(Overlay.Search)
-    }
-
-    /** The policy page picks its language from this, not from the browser. */
-    private fun privacyPolicyUrl(): String =
-        urlInLanguage(BuildConfig.PRIVACY_POLICY_URL, settingsManager.preferences.value.appLocale)
-
-    private fun handleOpenArticleSource() {
-        val article = mutableState.value.articleDetails?.article ?: return
-        analytics.logEvent(
-            AnalyticsEvent.ArticleSourceOpened(article.category.apiValue, article.source.name.value)
-        )
-        viewModelScope.launch {
-            mutableEffect.emit(NewsUiEffect.OpenUrl(article.articleUrl.value))
-        }
-    }
-
-    /**
-     * Turns a shared landing page into the article it names, and opens it.
-     *
-     * Falls back to opening the page itself, which is not a failure state so
-     * much as the experience everyone without the app already gets: it renders
-     * the story, offers the source, and offers the app. That covers a reader
-     * who is offline, a link older than the published archive, and a site
-     * mid-deploy — none of which should end at a blank feed.
-     */
-    private fun handleOpenSharePage(pageUrl: String) {
-        viewModelScope.launch {
-            val link = sharePageResolver.resolve(pageUrl)
-            if (link != null) processEvent(NewsUiEvent.OpenDeepLink(link))
-            else mutableEffect.emit(NewsUiEffect.OpenUrl(pageUrl))
-        }
-    }
-
-    /**
-     * Prefers a copy already in the feed, saved list, or cached feed — those carry
-     * the real image and timestamp — and falls back to rebuilding the article from
-     * the link, which is all a cold start has.
-     */
-    private fun handleOpenDeepLink(link: ArticleDeepLink) {
-        viewModelScope.launch {
-            val state = mutableState.value
-            val article = state.articles.firstOrNull { it.articleUrl.value == link.url }
-                ?: savedArticles.saved.value.firstOrNull { it.articleUrl.value == link.url }
-                ?: articleLookup.find(link.url)
-                ?: link.toNewsArticle()
-                ?: return@launch
-            // A shared link marks itself, so notification_opened stays a count of
-            // notifications rather than of every way into the details screen.
-            val fromShare = link.referrer == ArticleDeepLinks.SHARE_REFERRER
-            if (!fromShare) {
-                analytics.logEvent(
-                    AnalyticsEvent.NotificationOpened(article.category.apiValue, article.source.name.value)
-                )
-            }
-            // The reader has gone into the story, so the inbox row for it is read —
-            // whether they came from a row, from the notification still sitting in
-            // the tray, or from a shared link that happened to also be pushed.
-            //
-            // Marked before the screen opens rather than after it closes: a mark
-            // that waited for them to come back would still be there if they left
-            // from the details screen instead. And written to the store first, so a
-            // cold start from a tray tap records it even though the published list
-            // has not arrived yet — when it does, the row is already read.
-            inboxReadMarker.markRead(article.articleUrl.value)
-
-            handleOpenArticleDetails(
-                article,
-                if (fromShare) ArticleOpenOrigin.SHARE else ArticleOpenOrigin.PUSH,
-            )
-        }
-    }
-
-    private fun handleShareArticle(article: NewsArticle) {
-        analytics.logEvent(AnalyticsEvent.ArticleShared(article.category.apiValue))
-        viewModelScope.launch {
-            mutableEffect.emit(
-                NewsUiEffect.ShareContent(
-                    title = article.title.value,
-                    // The share link opens the app rather than the publisher,
-                    // so a shared story brings the reader back here.
-                    url = ArticleDeepLinks.shareUrl(
-                        article = article,
-                        baseUrl = BuildConfig.SHARE_BASE_URL,
-                        // The article's language, so the landing page matches it
-                        // rather than defaulting to Arabic.
-                        language = FeedLanguage.resolve(
-                            mutableState.value.selectedLanguage.code
-                        ),
-                    ),
-                    chooserTitle = strings().shareArticle,
-                )
-            )
-        }
-    }
-
     /**
      * Fired from [reportDepth] once a reader has read enough to make an
      * informed choice — asking before a single headline is on screen is where
      * opt-in rates go to die. Fires at most once, ever.
      */
     private fun handleRequestNotificationPermissionIfDue() {
-        viewModelScope.launch {
+        feedScope.launch {
             if (settingsManager.notificationPromptSeen()) return@launch
             settingsManager.markNotificationPromptSeen()
-            mutableEffect.emit(NewsUiEffect.RequestNotificationPermission)
+            mutableEffect.emit(FeedUiEffect.RequestNotificationPermission)
         }
     }
 
@@ -787,13 +572,13 @@ class NewsViewModel(
         val request = currentRequest()
         val generation = startNewFeed()
         showCachedFeed(request)
-        viewModelScope.launch {
+        feedScope.launch {
             fetchNewsInBackground(request, generation)
         }
     }
 
     private fun currentRequest(): GetTopHeadlinesRequest {
-        val currentState: NewsUiState = mutableState.value
+        val currentState: FeedUiState = mutableState.value
         return GetTopHeadlinesRequest(
             category = currentState.selectedCategory,
             country = currentState.selectedCountry.code,
@@ -874,7 +659,7 @@ class NewsViewModel(
     private fun loadNews() {
         val request = currentRequest()
         val generation = startNewFeed()
-        viewModelScope.launch {
+        feedScope.launch {
             val result = getTopHeadlinesUseCase.execute(request)
             // A refresh that landed after the reader had already moved on
             // belongs to a feed that no longer exists, whether it succeeded or
@@ -920,7 +705,7 @@ class NewsViewModel(
     private fun loadNextPage(pageFile: String) {
         val generation = feedGeneration
         mutableState.update { it.copy(isLoadingNextPage = true, nextPageFailed = false) }
-        viewModelScope.launch {
+        feedScope.launch {
             when (val result = getTopHeadlinesUseCase.nextPage(pageFile)) {
                 is NewsResult.Success -> handleNextPageLoaded(result.data, pageFile, generation)
                 is NewsResult.Error -> {

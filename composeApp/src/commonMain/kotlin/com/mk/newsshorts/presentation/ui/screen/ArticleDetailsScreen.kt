@@ -1,5 +1,7 @@
 package com.mk.newsshorts.presentation.ui.screen
 
+import com.mk.newsshorts.feature.saved.SavedArticlesUiEvent
+import com.mk.newsshorts.presentation.viewmodel.AppShellUiEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,7 +47,7 @@ import coil3.compose.AsyncImage
 import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.localization.categoryName
-import com.mk.newsshorts.presentation.mvi.NewsUiEvent
+import com.mk.newsshorts.feature.feed.FeedUiEvent
 import com.mk.newsshorts.presentation.ui.components.formatPublishedTime
 import com.mk.newsshorts.presentation.ui.components.isolateBidi
 import com.mk.newsshorts.presentation.ui.components.AppButton
@@ -66,7 +68,8 @@ import com.mk.newsshorts.presentation.ui.theme.PillShape
 fun ArticleDetailsScreen(
     article: NewsArticle,
     isSaved: Boolean,
-    onEvent: (NewsUiEvent) -> Unit,
+    onShellEvent: (AppShellUiEvent) -> Unit,
+    onSavedEvent: (SavedArticlesUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -79,9 +82,9 @@ fun ArticleDetailsScreen(
     ) {
         DetailsTopBar(
             isSaved = isSaved,
-            onBack = { onEvent(NewsUiEvent.CloseArticleDetails) },
-            onShare = { onEvent(NewsUiEvent.ShareArticle(article)) },
-            onSave = { onEvent(NewsUiEvent.SaveArticle(article)) },
+            onBack = { onShellEvent(AppShellUiEvent.CloseOverlay) },
+            onShare = { onShellEvent(AppShellUiEvent.ShareArticle(article)) },
+            onSave = { onSavedEvent(SavedArticlesUiEvent.Toggle(article)) },
         )
         DetailsHeroImage(imageUrl = article.imageUrl?.value)
 
@@ -125,7 +128,7 @@ fun ArticleDetailsScreen(
             Spacer(modifier = Modifier.height(28.dp))
             AppButton(
                 text = strings.readAtSource,
-                onClick = { onEvent(NewsUiEvent.OpenArticleSource) },
+                onClick = { onShellEvent(AppShellUiEvent.OpenArticleSource) },
                 icon = Icons.AutoMirrored.Filled.OpenInNew,
                 modifier = Modifier.fillMaxWidth(),
             )

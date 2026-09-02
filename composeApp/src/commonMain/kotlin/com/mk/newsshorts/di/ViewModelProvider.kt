@@ -8,10 +8,11 @@ import com.mk.newsshorts.feature.onboarding.OnboardingViewModel
 import com.mk.newsshorts.feature.saved.SavedArticlesViewModel
 import com.mk.newsshorts.feature.search.SearchViewModel
 import com.mk.newsshorts.feature.settings.SettingsViewModel
-import com.mk.newsshorts.presentation.viewmodel.NewsViewModel
+import com.mk.newsshorts.feature.feed.FeedViewModel
+import com.mk.newsshorts.presentation.viewmodel.AppShellViewModel
 
 @Composable
-expect fun provideNewsViewModel(): NewsViewModel
+expect fun provideFeedViewModel(): FeedViewModel
 
 @Composable
 expect fun provideAuthViewModel(): AuthViewModel
@@ -33,3 +34,6 @@ expect fun provideAppGateViewModel(): AppGateViewModel
 
 @Composable
 expect fun provideOnboardingViewModel(): OnboardingViewModel
+
+@Composable
+expect fun provideAppShellViewModel(): AppShellViewModel

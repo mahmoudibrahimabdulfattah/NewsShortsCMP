@@ -1,5 +1,6 @@
 package com.mk.newsshorts.feature.settings
 
+import com.mk.newsshorts.presentation.viewmodel.AppShellUiEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -58,9 +59,8 @@ import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.localization.languageName
 import com.mk.newsshorts.presentation.mvi.LanguageOption
-import com.mk.newsshorts.presentation.mvi.NewsUiEvent
-import com.mk.newsshorts.presentation.mvi.NewsUiState
-import com.mk.newsshorts.presentation.mvi.NotificationTier
+import com.mk.newsshorts.feature.feed.FeedUiEvent
+import com.mk.newsshorts.feature.feed.FeedUiState
 import com.mk.newsshorts.presentation.mvi.TextScale
 import com.mk.newsshorts.presentation.mvi.ThemeMode
 import com.mk.newsshorts.presentation.ui.components.FilterPill
@@ -76,12 +76,13 @@ private const val ANIMATION_DURATION_MILLIS: Int = 200
  */
 @Composable
 fun SettingsScreen(
-    newsUiState: NewsUiState,
+    newsUiState: FeedUiState,
     settingsUiState: SettingsUiState,
     authUser: AuthUser?,
     authInProgress: Boolean,
     authError: AuthFailure?,
-    onNewsEvent: (NewsUiEvent) -> Unit,
+    onFeedEvent: (FeedUiEvent) -> Unit,
+    onShellEvent: (AppShellUiEvent) -> Unit,
     onSettingsEvent: (SettingsUiEvent) -> Unit,
     onOpenSignIn: () -> Unit,
     onSignOut: () -> Unit,
@@ -96,7 +97,7 @@ fun SettingsScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            OverlayTopBar(title = strings.settings, onBack = { onNewsEvent(NewsUiEvent.CloseOverlay) })
+            OverlayTopBar(title = strings.settings, onBack = { onShellEvent(AppShellUiEvent.CloseOverlay) })
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 // The app draws behind the system navigation bar, so the last
@@ -116,7 +117,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(28.dp))
                     NewsLanguageSection(
                         selectedLanguage = newsUiState.selectedLanguage,
-                        onLanguageSelected = { onNewsEvent(NewsUiEvent.SelectLanguage(it)) },
+                        onLanguageSelected = { onFeedEvent(FeedUiEvent.SelectLanguage(it)) },
                     )
                 }
                 item {
