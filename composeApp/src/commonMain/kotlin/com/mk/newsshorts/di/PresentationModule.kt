@@ -2,6 +2,7 @@ package com.mk.newsshorts.di
 
 import com.mk.newsshorts.data.local.SettingsManager
 import com.mk.newsshorts.data.repository.SavedArticles
+import com.mk.newsshorts.feature.auth.AuthViewModel
 import com.mk.newsshorts.feature.saved.SavedArticlesViewModel
 import com.mk.newsshorts.feature.search.SearchViewModel
 import com.mk.newsshorts.feature.settings.SettingsViewModel
@@ -11,6 +12,17 @@ import com.mk.newsshorts.presentation.viewmodel.NewsViewModel
 import org.koin.dsl.module
 
 val presentationModule = module {
+    single(createdAtStart = false) {
+        val settingsManager = get<SettingsManager>()
+        AuthViewModel(
+            authClient = get(),
+            authSession = get(),
+            pendingSignInEmailStore = get(),
+            signInLinkBus = get(),
+            deleteAccountUseCase = get(),
+            appLocaleCode = { settingsManager.preferences.value.appLocale },
+        )
+    }
     single(createdAtStart = false) {
         val settingsManager = get<SettingsManager>()
         SavedArticlesViewModel(
@@ -47,7 +59,6 @@ val presentationModule = module {
             notificationInboxStore = get(),
             inboxReadMarker = get(),
             notificationBus = get(),
-            signInLinkBus = get(),
             savedArticles = get(),
             accountSync = get(),
             authSession = get(),
@@ -55,11 +66,8 @@ val presentationModule = module {
             feedInvalidator = get(),
             articleLookup = get(),
             seenArticlesStore = get(),
-            pendingSignInEmailStore = get(),
             remoteConfigClient = get(),
             deviceIntegrityInspector = get(),
-            authClient = get(),
-            remoteSyncClient = get()
         )
     }
 }

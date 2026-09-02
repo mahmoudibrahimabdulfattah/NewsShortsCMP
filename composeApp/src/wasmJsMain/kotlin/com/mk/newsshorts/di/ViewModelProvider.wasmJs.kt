@@ -2,6 +2,7 @@ package com.mk.newsshorts.di
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import com.mk.newsshorts.feature.auth.AuthViewModel
 import com.mk.newsshorts.feature.saved.SavedArticlesViewModel
 import com.mk.newsshorts.feature.search.SearchViewModel
 import com.mk.newsshorts.feature.settings.SettingsViewModel
@@ -11,6 +12,11 @@ import org.koin.mp.KoinPlatform
 @Composable
 actual fun provideNewsViewModel(): NewsViewModel {
     return remember { KoinPlatform.getKoin().get<NewsViewModel>() }
+}
+
+@Composable
+actual fun provideAuthViewModel(): AuthViewModel {
+    return remember { KoinPlatform.getKoin().get<AuthViewModel>() }
 }
 
 @Composable

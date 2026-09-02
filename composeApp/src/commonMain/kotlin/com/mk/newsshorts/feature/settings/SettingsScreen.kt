@@ -61,7 +61,6 @@ import com.mk.newsshorts.presentation.mvi.LanguageOption
 import com.mk.newsshorts.presentation.mvi.NewsUiEvent
 import com.mk.newsshorts.presentation.mvi.NewsUiState
 import com.mk.newsshorts.presentation.mvi.NotificationTier
-import com.mk.newsshorts.presentation.mvi.Overlay
 import com.mk.newsshorts.presentation.mvi.TextScale
 import com.mk.newsshorts.presentation.mvi.ThemeMode
 import com.mk.newsshorts.presentation.ui.components.FilterPill
@@ -79,8 +78,15 @@ private const val ANIMATION_DURATION_MILLIS: Int = 200
 fun SettingsScreen(
     newsUiState: NewsUiState,
     settingsUiState: SettingsUiState,
+    authUser: AuthUser?,
+    authInProgress: Boolean,
+    authError: AuthFailure?,
     onNewsEvent: (NewsUiEvent) -> Unit,
     onSettingsEvent: (SettingsUiEvent) -> Unit,
+    onOpenSignIn: () -> Unit,
+    onSignOut: () -> Unit,
+    onDeleteAccount: () -> Unit,
+    onDismissAuthError: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -137,10 +143,13 @@ fun SettingsScreen(
                 item {
                     Spacer(modifier = Modifier.height(28.dp))
                     AccountSection(
-                        authUser = newsUiState.authUser,
-                        isLoading = newsUiState.authInProgress,
-                        authError = newsUiState.authError,
-                        onEvent = onNewsEvent,
+                        authUser = authUser,
+                        isLoading = authInProgress,
+                        authError = authError,
+                        onOpenSignIn = onOpenSignIn,
+                        onSignOut = onSignOut,
+                        onDeleteAccount = onDeleteAccount,
+                        onDismissAuthError = onDismissAuthError,
                     )
                 }
             }
@@ -364,17 +373,20 @@ private fun NotificationsSection(
 }
 
 /**
- * Signed out: one row into [Overlay.SignIn], same shape as every other entry
- * on this screen. Signed in: sign out and delete, with delete needing an
- * explicit confirmation — it is the one action here that cannot be undone
- * from inside the app.
+ * Signed out: one row into sign-in, same shape as every other entry on this
+ * screen. Signed in: sign out and delete, with delete needing an explicit
+ * confirmation — it is the one action here that cannot be undone from inside
+ * the app.
  */
 @Composable
 private fun AccountSection(
     authUser: AuthUser?,
     isLoading: Boolean,
     authError: AuthFailure?,
-    onEvent: (NewsUiEvent) -> Unit,
+    onOpenSignIn: () -> Unit,
+    onSignOut: () -> Unit,
+    onDeleteAccount: () -> Unit,
+    onDismissAuthError: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -401,13 +413,13 @@ private fun AccountSection(
                     AccountActionRow(
                         icon = Icons.Filled.Person,
                         label = strings.signIn,
-                        onClick = { onEvent(NewsUiEvent.OpenOverlay(Overlay.SignIn)) },
+                        onClick = onOpenSignIn,
                     )
                 } else {
                     AccountActionRow(
                         icon = Icons.Filled.Logout,
                         label = strings.signOutLabel,
-                        onClick = { onEvent(NewsUiEvent.SignOut) },
+                        onClick = onSignOut,
                     )
                     AccountActionRow(
                         icon = Icons.Filled.DeleteForever,
@@ -434,7 +446,7 @@ private fun AccountSection(
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.weight(1f),
                 )
-                IconButton(onClick = { onEvent(NewsUiEvent.DismissAuthError) }) {
+                IconButton(onClick = onDismissAuthError) {
                     Icon(imageVector = Icons.Filled.Close, contentDescription = strings.cancelLabel)
                 }
             }
@@ -449,7 +461,7 @@ private fun AccountSection(
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirmation = false
-                    onEvent(NewsUiEvent.DeleteAccount)
+                    onDeleteAccount()
                 }) {
                     Text(text = strings.deleteAccountConfirmButton, color = MaterialTheme.colorScheme.error)
                 }

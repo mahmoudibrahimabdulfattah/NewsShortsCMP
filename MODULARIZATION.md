@@ -74,14 +74,22 @@ so it is worth stating plainly for the phases that still have ViewModels to
 decompose.
 
 `runTest` will not finish while a coroutine started in the test's own scope is
-still running, and a collector or a `SupervisorJob` never finishes. The obvious
-escape is `backgroundScope`, and it is a trap: **`advanceUntilIdle()` does not
-run work in `backgroundScope`**. Verified directly — `backgroundScope.launch {
-println(...) }` followed by `advanceUntilIdle()` prints nothing. So moving a
-class's work there does not fix the test, it hides it: the writes stop happening
-and no assertion says so.
+still running, and a collector or a `SupervisorJob` never finishes.
+`backgroundScope` is usable for work the test deliberately leaves running, but
+it has to be driven precisely. Verified directly:
 
-The way out is not to pick a scope but to remove the endless coroutine:
+- `backgroundScope.launch { ... }` followed by `runCurrent()` runs the body.
+- The same launch followed by `advanceUntilIdle()` does not run the body.
+- A `delay` inside `backgroundScope` never advances, even after `runCurrent()`
+  then `advanceUntilIdle()`.
+
+So a long-lived collector can use `backgroundScope` when the test only needs
+current-time work and calls `runCurrent()`. If the class under test needs a fake
+delay to elapse, that coroutine cannot be in `backgroundScope`; pass the test
+scope itself and ensure no endless coroutine is left running at the end.
+
+For the phase 1 sync/settings cases, the way out was not to pick a scope but to
+remove the endless coroutine:
 
 - `SyncPublisher` has no auth collector. The observer that already reacts to
   sign-in calls `discardQueued()` instead.

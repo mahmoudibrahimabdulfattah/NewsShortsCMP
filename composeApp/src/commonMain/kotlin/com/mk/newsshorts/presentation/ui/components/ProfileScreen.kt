@@ -51,7 +51,6 @@ import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
 import com.mk.newsshorts.presentation.mvi.NewsUiEvent
-import com.mk.newsshorts.presentation.mvi.NewsUiState
 import com.mk.newsshorts.presentation.mvi.Overlay
 
 /**
@@ -64,7 +63,7 @@ import com.mk.newsshorts.presentation.mvi.Overlay
  */
 @Composable
 fun ProfileScreen(
-    uiState: NewsUiState,
+    authUser: AuthUser?,
     savedArticlesUiState: SavedArticlesUiState,
     onEvent: (NewsUiEvent) -> Unit,
     modifier: Modifier = Modifier
@@ -91,7 +90,7 @@ fun ProfileScreen(
             item {
                 ProfileHeader(
                     strings = strings,
-                    authUser = uiState.authUser,
+                    authUser = authUser,
                     onSignInClick = { onEvent(NewsUiEvent.OpenOverlay(Overlay.SignIn)) },
                 )
             }

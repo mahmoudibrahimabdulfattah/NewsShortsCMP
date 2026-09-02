@@ -5,6 +5,7 @@ import com.mk.newsshorts.auth.DefaultAuthSession
 import com.mk.newsshorts.data.local.NewsLocalDataSource
 import com.mk.newsshorts.data.local.NotificationInboxStore
 import com.mk.newsshorts.data.local.SavedArticlesStore
+import com.mk.newsshorts.data.local.PendingSignInEmailPersistence
 import com.mk.newsshorts.data.local.PendingSignInEmailStore
 import com.mk.newsshorts.feature.search.RecentSearchesStore
 import com.mk.newsshorts.feature.search.RecentSearches
@@ -63,6 +64,9 @@ val dataModule = module {
         RecentSearchesStore(settingsStorage = get())
     }
     single(createdAtStart = false) { PendingSignInEmailStore(settingsStorage = get()) }
+    single<PendingSignInEmailPersistence>(createdAtStart = false) {
+        get<PendingSignInEmailStore>()
+    }
     single<AuthSession>(createdAtStart = true) { DefaultAuthSession(authClient = get()) }
     single<FeedInvalidator>(createdAtStart = false) { DefaultFeedInvalidator() }
     single<NewsRepository>(createdAtStart = false) {

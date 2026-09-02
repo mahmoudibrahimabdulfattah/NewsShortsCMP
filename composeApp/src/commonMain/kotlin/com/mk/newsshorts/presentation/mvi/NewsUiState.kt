@@ -3,9 +3,6 @@ package com.mk.newsshorts.presentation.mvi
 import com.mk.newsshorts.data.local.InboxReadState
 import com.mk.newsshorts.data.local.articleKey
 
-import com.mk.newsshorts.auth.AuthFailure
-import com.mk.newsshorts.auth.AuthResult
-import com.mk.newsshorts.auth.AuthUser
 import com.mk.newsshorts.data.remote.RequiredUpdate
 import com.mk.newsshorts.security.SecurityNotice
 import com.mk.newsshorts.security.SecurityReason
@@ -103,28 +100,6 @@ data class NewsUiState(
     val securityNotice: SecurityNotice = SecurityNotice.NONE,
     /** Which signals produced [securityNotice]; decides the wording shown. */
     val securityReason: SecurityReason = SecurityReason.INTEGRITY,
-    /** Null for a guest. Every screen already works without one. */
-    val authUser: AuthUser? = null,
-    /** True while a sign-in/up/delete call is in flight — drives a spinner. */
-    val authInProgress: Boolean = false,
-    /**
-     * The last auth failure, shown once then dismissed. A value rather than
-     * a message so the screen can render it in the reader's language — the
-     * SDKs' own text is English-only.
-     */
-    val authError: AuthFailure? = null,
-    /**
-     * The address a sign-in link was just sent to. Non-null means the reader is
-     * waiting on their inbox, which is a state the screen has to show plainly:
-     * nothing else happens in the app until they leave it for their mail.
-     */
-    val pendingSignInEmail: String? = null,
-    /**
-     * A followed link that arrived with no stored address to redeem it — the
-     * link was opened on a different device than asked for it. Held so the
-     * screen can ask who it belongs to instead of discarding it.
-     */
-    val unclaimedSignInLink: String? = null,
 ) {
     val hasArticles: Boolean
         get() = articles.isNotEmpty()
@@ -197,16 +172,6 @@ data class InboxNotification(
      */
     val articleUrl: String,
 )
-
-/**
- * Success closes the overlay elsewhere; this helper is only the state left by
- * an auth attempt that did not finish successfully.
- */
-fun NewsUiState.afterUnsuccessfulAuth(result: AuthResult): NewsUiState = when (result) {
-    AuthResult.Success -> this
-    AuthResult.Cancelled -> copy(authInProgress = false)
-    is AuthResult.Error -> copy(authInProgress = false, authError = result.failure)
-}
 
 /** One screen pushed above the tabs. See [NewsUiState.overlays]. */
 sealed interface Overlay {

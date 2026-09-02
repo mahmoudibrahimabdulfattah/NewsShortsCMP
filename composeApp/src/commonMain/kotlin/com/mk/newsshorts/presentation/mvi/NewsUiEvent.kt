@@ -91,22 +91,6 @@ sealed interface NewsUiEvent {
     /** Fired once, after the reader has read enough to make an informed choice. */
     data object RequestNotificationPermissionIfDue : NewsUiEvent
 
-    data object SignInWithGoogle : NewsUiEvent
-    /** Emails a sign-in link. Signing in only happens once it is followed. */
-    data class SendSignInLink(val email: String) : NewsUiEvent
-    /** A followed link arrived from the OS, carrying no address of its own. */
-    data class SignInLinkOpened(val link: String) : NewsUiEvent
-    /**
-     * The address for a link opened on a device that never requested one, so
-     * nothing was stored to match it against.
-     */
-    data class SupplyLinkEmail(val email: String) : NewsUiEvent
-    /** Back out of the "check your inbox" state to send to a different address. */
-    data object CancelPendingSignInLink : NewsUiEvent
-    data object SignOut : NewsUiEvent
-    data object DeleteAccount : NewsUiEvent
-    data object DismissAuthError : NewsUiEvent
-
     /** Ticks a category on or off during onboarding; nothing is saved yet. */
     data class OnboardingToggleCategory(val category: NewsCategory) : NewsUiEvent
 

@@ -1,7 +1,6 @@
-package com.mk.newsshorts.presentation.ui.screen
+package com.mk.newsshorts.feature.auth
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -42,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import com.mk.newsshorts.auth.AuthFailure
 import com.mk.newsshorts.data.local.isPlausibleEmail
 import com.mk.newsshorts.presentation.localization.appStrings
-import com.mk.newsshorts.presentation.mvi.NewsUiEvent
 import com.mk.newsshorts.presentation.ui.components.OverlayTopBar
 
 /**
@@ -58,13 +55,8 @@ import com.mk.newsshorts.presentation.ui.components.OverlayTopBar
  */
 @Composable
 fun SignInScreen(
-    isLoading: Boolean,
-    errorFailure: AuthFailure?,
-    pendingEmail: String?,
-    hasUnclaimedLink: Boolean,
-    onGoogleClick: () -> Unit,
-    onDismissError: () -> Unit,
-    onEvent: (NewsUiEvent) -> Unit,
+    uiState: AuthUiState,
+    onEvent: (AuthUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -75,7 +67,7 @@ fun SignInScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            OverlayTopBar(title = strings.signIn, onBack = { onEvent(NewsUiEvent.CloseOverlay) })
+            OverlayTopBar(title = strings.signIn, onBack = { onEvent(AuthUiEvent.Closed) })
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -86,28 +78,25 @@ fun SignInScreen(
                     // The order matters: a link waiting to be claimed is the
                     // only state the reader cannot leave by waiting, so it wins
                     // over the "we sent you mail" screen behind it.
-                    hasUnclaimedLink -> UnclaimedLinkPrompt(
-                        isLoading = isLoading,
-                        errorFailure = errorFailure,
-                        onDismissError = onDismissError,
+                    uiState.hasUnclaimedLink -> UnclaimedLinkPrompt(
+                        isLoading = uiState.authInProgress,
+                        errorFailure = uiState.authError,
                         onEvent = onEvent,
                     )
-                    pendingEmail != null -> CheckInboxPrompt(
-                        email = pendingEmail,
-                        errorFailure = errorFailure,
+                    uiState.pendingSignInEmail != null -> CheckInboxPrompt(
+                        email = uiState.pendingSignInEmail,
+                        errorFailure = uiState.authError,
                         onEvent = onEvent,
                     )
                     else -> SignInOptions(
-                        isLoading = isLoading,
-                        errorFailure = errorFailure,
-                        onGoogleClick = onGoogleClick,
-                        onDismissError = onDismissError,
+                        isLoading = uiState.authInProgress,
+                        errorFailure = uiState.authError,
                         onEvent = onEvent,
                     )
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
-                TextButton(onClick = { onEvent(NewsUiEvent.CloseOverlay) }) {
+                TextButton(onClick = { onEvent(AuthUiEvent.Closed) }) {
                     Text(
                         text = strings.continueAsGuest,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
@@ -123,9 +112,7 @@ fun SignInScreen(
 private fun SignInOptions(
     isLoading: Boolean,
     errorFailure: AuthFailure?,
-    onGoogleClick: () -> Unit,
-    onDismissError: () -> Unit,
-    onEvent: (NewsUiEvent) -> Unit,
+    onEvent: (AuthUiEvent) -> Unit,
 ) {
     val strings = appStrings()
     var email: String by remember { mutableStateOf("") }
@@ -142,7 +129,7 @@ private fun SignInOptions(
     Spacer(modifier = Modifier.height(28.dp))
 
     OutlinedButton(
-        onClick = onGoogleClick,
+        onClick = { onEvent(AuthUiEvent.SignInWithGoogle) },
         enabled = !isLoading,
         shape = MaterialTheme.shapes.small,
         modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -168,7 +155,7 @@ private fun SignInOptions(
         value = email,
         onValueChange = {
             email = it
-            onDismissError()
+            onEvent(AuthUiEvent.DismissAuthError)
         },
         label = strings.emailLabel,
     )
@@ -187,7 +174,7 @@ private fun SignInOptions(
         text = strings.sendSignInLinkButton,
         isLoading = isLoading,
         enabled = !isLoading && isPlausibleEmail(email),
-        onClick = { onEvent(NewsUiEvent.SendSignInLink(email)) },
+        onClick = { onEvent(AuthUiEvent.SendSignInLink(email)) },
     )
 }
 
@@ -195,7 +182,7 @@ private fun SignInOptions(
 private fun CheckInboxPrompt(
     email: String,
     errorFailure: AuthFailure?,
-    onEvent: (NewsUiEvent) -> Unit,
+    onEvent: (AuthUiEvent) -> Unit,
 ) {
     val strings = appStrings()
 
@@ -219,7 +206,7 @@ private fun CheckInboxPrompt(
 
     FailureText(errorFailure)
 
-    TextButton(onClick = { onEvent(NewsUiEvent.CancelPendingSignInLink) }) {
+    TextButton(onClick = { onEvent(AuthUiEvent.CancelPendingSignInLink) }) {
         Text(text = strings.useDifferentEmail, color = MaterialTheme.colorScheme.primary)
     }
 }
@@ -232,8 +219,7 @@ private fun CheckInboxPrompt(
 private fun UnclaimedLinkPrompt(
     isLoading: Boolean,
     errorFailure: AuthFailure?,
-    onDismissError: () -> Unit,
-    onEvent: (NewsUiEvent) -> Unit,
+    onEvent: (AuthUiEvent) -> Unit,
 ) {
     val strings = appStrings()
     var email: String by remember { mutableStateOf("") }
@@ -260,7 +246,7 @@ private fun UnclaimedLinkPrompt(
         value = email,
         onValueChange = {
             email = it
-            onDismissError()
+            onEvent(AuthUiEvent.DismissAuthError)
         },
         label = strings.emailLabel,
     )
@@ -272,7 +258,7 @@ private fun UnclaimedLinkPrompt(
         text = strings.confirmLinkEmailButton,
         isLoading = isLoading,
         enabled = !isLoading && isPlausibleEmail(email),
-        onClick = { onEvent(NewsUiEvent.SupplyLinkEmail(email)) },
+        onClick = { onEvent(AuthUiEvent.SupplyLinkEmail(email)) },
     )
 }
 

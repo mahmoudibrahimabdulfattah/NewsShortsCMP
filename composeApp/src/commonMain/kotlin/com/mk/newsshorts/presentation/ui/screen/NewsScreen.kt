@@ -51,6 +51,10 @@ import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.mk.newsshorts.feature.auth.AuthUiEvent
+import com.mk.newsshorts.feature.auth.AuthUiState
+import com.mk.newsshorts.feature.auth.AuthViewModel
+import com.mk.newsshorts.feature.auth.SignInScreen
 import com.mk.newsshorts.feature.saved.SavedArticlesUiEffect
 import com.mk.newsshorts.feature.saved.SavedArticlesUiEvent
 import com.mk.newsshorts.feature.saved.SavedArticlesUiState
@@ -89,6 +93,7 @@ import com.mk.newsshorts.presentation.viewmodel.NewsViewModel
 @Composable
 fun NewsScreen(
     viewModel: NewsViewModel,
+    authViewModel: AuthViewModel,
     searchViewModel: SearchViewModel,
     savedArticlesViewModel: SavedArticlesViewModel,
     settingsViewModel: SettingsViewModel,
@@ -99,6 +104,7 @@ fun NewsScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState: NewsUiState by viewModel.uiState.collectAsState()
+    val authUiState: AuthUiState by authViewModel.uiState.collectAsState()
     val searchUiState: SearchUiState by searchViewModel.uiState.collectAsState()
     val savedArticlesUiState: SavedArticlesUiState by savedArticlesViewModel.uiState.collectAsState()
     val settingsUiState: SettingsUiState by settingsViewModel.uiState.collectAsState()
@@ -164,6 +170,12 @@ fun NewsScreen(
     val onSettingsEvent: (SettingsUiEvent) -> Unit = { event ->
         settingsViewModel.processEvent(event)
     }
+    val onAuthEvent: (AuthUiEvent) -> Unit = { event ->
+        authViewModel.processEvent(event)
+        if (event == AuthUiEvent.Closed) {
+            viewModel.processEvent(NewsUiEvent.CloseOverlay)
+        }
+    }
     val onSearchEvent: (SearchUiEvent) -> Unit = { event ->
         searchViewModel.processEvent(event)
         when (event) {
@@ -176,10 +188,12 @@ fun NewsScreen(
     }
     NewsScreenContent(
         uiState = uiState,
+        authUiState = authUiState,
         searchUiState = searchUiState,
         savedArticlesUiState = savedArticlesUiState,
         settingsUiState = settingsUiState,
         onEvent = onNewsEvent,
+        onAuthEvent = onAuthEvent,
         onSettingsEvent = onSettingsEvent,
         onSearchEvent = onSearchEvent,
         modifier = modifier
@@ -190,10 +204,12 @@ fun NewsScreen(
 @Composable
 private fun NewsScreenContent(
     uiState: NewsUiState,
+    authUiState: AuthUiState,
     searchUiState: SearchUiState,
     savedArticlesUiState: SavedArticlesUiState,
     settingsUiState: SettingsUiState,
     onEvent: (NewsUiEvent) -> Unit,
+    onAuthEvent: (AuthUiEvent) -> Unit,
     onSettingsEvent: (SettingsUiEvent) -> Unit,
     onSearchEvent: (SearchUiEvent) -> Unit,
     modifier: Modifier = Modifier
@@ -223,7 +239,7 @@ private fun NewsScreenContent(
         when (uiState.currentTab) {
             NavigationTab.PROFILE -> {
                 ProfileScreen(
-                    uiState = uiState,
+                    authUser = authUiState.authUser,
                     savedArticlesUiState = savedArticlesUiState,
                     onEvent = onEvent,
                 )
@@ -313,8 +329,15 @@ private fun NewsScreenContent(
                 SettingsScreen(
                     newsUiState = uiState,
                     settingsUiState = settingsUiState,
+                    authUser = authUiState.authUser,
+                    authInProgress = authUiState.authInProgress,
+                    authError = authUiState.authError,
                     onNewsEvent = onEvent,
                     onSettingsEvent = onSettingsEvent,
+                    onOpenSignIn = { onEvent(NewsUiEvent.OpenOverlay(Overlay.SignIn)) },
+                    onSignOut = { onAuthEvent(AuthUiEvent.SignOut) },
+                    onDeleteAccount = { onAuthEvent(AuthUiEvent.DeleteAccount) },
+                    onDismissAuthError = { onAuthEvent(AuthUiEvent.DismissAuthError) },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -349,13 +372,8 @@ private fun NewsScreenContent(
             }
             Overlay.SignIn -> {
                 SignInScreen(
-                    isLoading = uiState.authInProgress,
-                    errorFailure = uiState.authError,
-                    pendingEmail = uiState.pendingSignInEmail,
-                    hasUnclaimedLink = uiState.unclaimedSignInLink != null,
-                    onGoogleClick = { onEvent(NewsUiEvent.SignInWithGoogle) },
-                    onDismissError = { onEvent(NewsUiEvent.DismissAuthError) },
-                    onEvent = onEvent,
+                    uiState = authUiState,
+                    onEvent = onAuthEvent,
                     modifier = Modifier.fillMaxSize()
                 )
             }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,16 +19,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
 import newsshorts.composeapp.generated.resources.Res
 import newsshorts.composeapp.generated.resources.logo
+import com.mk.newsshorts.di.provideAuthViewModel
 import com.mk.newsshorts.di.provideNewsViewModel
 import com.mk.newsshorts.di.provideSavedArticlesViewModel
 import com.mk.newsshorts.di.provideSearchViewModel
 import com.mk.newsshorts.di.provideSettingsViewModel
+import com.mk.newsshorts.feature.auth.AuthUiEffect
 import com.mk.newsshorts.feature.settings.SettingsUiState
 import com.mk.newsshorts.presentation.localization.LocaleProvider
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.mvi.NavigationTab
 import com.mk.newsshorts.presentation.mvi.NewsUiEvent
 import com.mk.newsshorts.presentation.mvi.NewsUiState
+import com.mk.newsshorts.presentation.mvi.Overlay
 import com.mk.newsshorts.presentation.ui.screen.BlockingNoticeScreen
 import com.mk.newsshorts.presentation.ui.screen.SecurityWarningDialog
 import com.mk.newsshorts.security.SecurityNotice
@@ -41,6 +45,8 @@ import com.mk.newsshorts.presentation.ui.theme.NewsShortsTheme
 import com.mk.newsshorts.presentation.ui.theme.SystemBarAppearance
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.launch
 
 private const val CROSSFADE_DURATION_MS: Int = 150
 
@@ -61,11 +67,27 @@ fun App(
     // The ViewModel is read here rather than inside MainContent so the splash
     // is inside LocaleProvider too — otherwise it always renders in English.
     val viewModel = provideNewsViewModel()
+    val authViewModel = provideAuthViewModel()
     val searchViewModel = provideSearchViewModel()
     val savedArticlesViewModel = provideSavedArticlesViewModel()
     val settingsViewModel = provideSettingsViewModel()
     val uiState: NewsUiState by viewModel.uiState.collectAsState()
     val settingsUiState: SettingsUiState by settingsViewModel.uiState.collectAsState()
+    LaunchedEffect(Unit) {
+        launch(start = CoroutineStart.UNDISPATCHED) {
+            authViewModel.uiEffect.collect { effect ->
+                when (effect) {
+                    AuthUiEffect.CloseOverlay -> {
+                        viewModel.processEvent(NewsUiEvent.CloseOverlay)
+                    }
+                    AuthUiEffect.OpenSignInOverlay -> {
+                        viewModel.processEvent(NewsUiEvent.OpenOverlay(Overlay.SignIn))
+                    }
+                }
+            }
+        }
+        authViewModel.consumePendingSignInLink()
+    }
     // Resolved once here rather than inside NewsShortsTheme's own default: the
     // feed branch inside NewsScreen overrides this with a forced-dark theme of
     // its own, so the resolution has to be visible at this level to differ
@@ -170,6 +192,7 @@ fun App(
                 } else {
                     NewsScreen(
                         viewModel = viewModel,
+                        authViewModel = authViewModel,
                         searchViewModel = searchViewModel,
                         savedArticlesViewModel = savedArticlesViewModel,
                         settingsViewModel = settingsViewModel,
