@@ -5,6 +5,9 @@ import android.os.Bundle
 import com.google.firebase.FirebaseApp
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
+import com.mk.newsshorts.core.domain.analytics.AnalyticsReporter
+import com.mk.newsshorts.core.domain.analytics.NoOpAnalyticsReporter
+import com.mk.newsshorts.core.model.analytics.AnalyticsEvent
 
 /**
  * Reports to Firebase Analytics and Crashlytics.

@@ -1,6 +1,7 @@
 import com.mk.newsshorts.buildlogic.configureNewsshortsAppDependencies
 import com.mk.newsshorts.buildlogic.configureNewsshortsComposeDependencies
 import com.mk.newsshorts.buildlogic.configureNewsshortsKmpTargets
+import com.mk.newsshorts.buildlogic.registerPackageLayeringCheck
 
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
@@ -12,3 +13,4 @@ plugins {
 configureNewsshortsKmpTargets()
 configureNewsshortsComposeDependencies()
 configureNewsshortsAppDependencies()
+registerPackageLayeringCheck()

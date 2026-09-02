@@ -45,9 +45,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.mk.newsshorts.auth.AuthUser
+import com.mk.newsshorts.core.model.auth.AuthUser
 import com.mk.newsshorts.config.BuildConfig
-import com.mk.newsshorts.domain.model.NewsArticle
+import com.mk.newsshorts.core.model.NewsArticle
 import com.mk.newsshorts.feature.saved.SavedArticlesUiState
 import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.appStrings

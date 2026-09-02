@@ -2,7 +2,7 @@ package com.mk.newsshorts.presentation.ui.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.mk.newsshorts.domain.model.NewsCategory
+import com.mk.newsshorts.core.model.NewsCategory
 import com.mk.newsshorts.presentation.localization.categoryName
 
 @Composable

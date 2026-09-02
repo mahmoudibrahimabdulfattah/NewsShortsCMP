@@ -19,6 +19,11 @@ import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.mk.newsshorts.config.BuildConfig
+import com.mk.newsshorts.core.domain.auth.AuthClient
+import com.mk.newsshorts.core.domain.auth.NoOpAuthClient
+import com.mk.newsshorts.core.model.auth.AuthFailure
+import com.mk.newsshorts.core.model.auth.AuthResult
+import com.mk.newsshorts.core.model.auth.AuthUser
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

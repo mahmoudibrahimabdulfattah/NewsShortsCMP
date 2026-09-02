@@ -1,16 +1,16 @@
 package com.mk.newsshorts.feature.settings
 
-import com.mk.newsshorts.analytics.AnalyticsEvent
-import com.mk.newsshorts.analytics.AnalyticsReporter
-import com.mk.newsshorts.data.local.AppPreferences
-import com.mk.newsshorts.data.local.SettingsPersistence
-import com.mk.newsshorts.domain.model.NewsArticle
+import com.mk.newsshorts.core.model.analytics.AnalyticsEvent
+import com.mk.newsshorts.core.domain.analytics.AnalyticsReporter
+import com.mk.newsshorts.core.model.settings.AppPreferences
+import com.mk.newsshorts.core.domain.settings.SettingsPersistence
+import com.mk.newsshorts.core.model.NewsArticle
 import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.mvi.TextScale
 import com.mk.newsshorts.presentation.mvi.ThemeMode
-import com.mk.newsshorts.sync.SyncPublisher
-import com.mk.newsshorts.sync.SyncedSettings
-import com.mk.newsshorts.sync.toSyncedSettings
+import com.mk.newsshorts.core.domain.sync.SyncPublisher
+import com.mk.newsshorts.core.model.sync.SyncedSettings
+import com.mk.newsshorts.core.model.sync.toSyncedSettings
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

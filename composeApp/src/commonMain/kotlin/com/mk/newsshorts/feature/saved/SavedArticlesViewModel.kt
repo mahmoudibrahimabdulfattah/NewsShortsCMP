@@ -1,13 +1,13 @@
 package com.mk.newsshorts.feature.saved
 
-import com.mk.newsshorts.analytics.AnalyticsEvent
-import com.mk.newsshorts.analytics.AnalyticsReporter
-import com.mk.newsshorts.data.repository.SavedArticles
-import com.mk.newsshorts.data.repository.ToggleResult
-import com.mk.newsshorts.domain.model.NewsArticle
+import com.mk.newsshorts.core.model.analytics.AnalyticsEvent
+import com.mk.newsshorts.core.domain.analytics.AnalyticsReporter
+import com.mk.newsshorts.core.domain.saved.SavedArticles
+import com.mk.newsshorts.core.model.ToggleResult
+import com.mk.newsshorts.core.model.NewsArticle
 import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.viewmodel.BaseViewModel
-import com.mk.newsshorts.sync.SyncPublisher
+import com.mk.newsshorts.core.domain.sync.SyncPublisher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow

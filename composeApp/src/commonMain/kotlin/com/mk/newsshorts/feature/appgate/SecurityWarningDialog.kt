@@ -7,7 +7,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import com.mk.newsshorts.presentation.localization.appStrings
-import com.mk.newsshorts.security.SecurityReason
+import com.mk.newsshorts.core.model.security.SecurityReason
 
 /**
  * Shown once when the device looks rooted or the app looks repackaged, under

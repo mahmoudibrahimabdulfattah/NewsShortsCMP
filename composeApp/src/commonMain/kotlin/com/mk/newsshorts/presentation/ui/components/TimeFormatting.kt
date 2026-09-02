@@ -1,6 +1,6 @@
 package com.mk.newsshorts.presentation.ui.components
 
-import com.mk.newsshorts.domain.model.PublishedTimestamp
+import com.mk.newsshorts.core.model.PublishedTimestamp
 
 /**
  * Formats a publish date as "10 August 2026" using localized month names.

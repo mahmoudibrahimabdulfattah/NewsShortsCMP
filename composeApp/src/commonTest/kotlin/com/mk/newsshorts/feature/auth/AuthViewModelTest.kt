@@ -1,13 +1,13 @@
 package com.mk.newsshorts.feature.auth
 
-import com.mk.newsshorts.auth.AuthFailure
-import com.mk.newsshorts.auth.AuthResult
-import com.mk.newsshorts.auth.AuthUser
-import com.mk.newsshorts.auth.DefaultAuthSession
-import com.mk.newsshorts.data.local.PendingSignInEmailPersistence
-import com.mk.newsshorts.domain.use_case.DeleteAccountUseCase
+import com.mk.newsshorts.core.model.auth.AuthFailure
+import com.mk.newsshorts.core.model.auth.AuthResult
+import com.mk.newsshorts.core.model.auth.AuthUser
+import com.mk.newsshorts.core.domain.auth.DefaultAuthSession
+import com.mk.newsshorts.core.data.local.PendingSignInEmailPersistence
+import com.mk.newsshorts.core.domain.use_case.DeleteAccountUseCase
 import com.mk.newsshorts.navigation.SignInLinkBus
-import com.mk.newsshorts.sync.SyncDelete
+import com.mk.newsshorts.core.model.sync.SyncDelete
 import com.mk.newsshorts.testing.AuthCall
 import com.mk.newsshorts.testing.FakeAuthClient
 import com.mk.newsshorts.testing.FakeRemoteSyncClient

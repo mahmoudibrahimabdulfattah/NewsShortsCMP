@@ -1,6 +1,6 @@
 package com.mk.newsshorts.presentation.localization
 
-import com.mk.newsshorts.auth.AuthFailure
+import com.mk.newsshorts.core.model.auth.AuthFailure
 
 interface AppStrings {
     val appName: String
@@ -157,7 +157,7 @@ interface AppStrings {
     val clearRecentSearches: String
     val removeRecentSearch: String
 
-    /** Keyed by [com.mk.newsshorts.domain.model.NewsCategory.apiValue]. */
+    /** Keyed by [com.mk.newsshorts.core.model.NewsCategory.apiValue]. */
     val categoryNames: Map<String, String>
 
     /** Keyed by [com.mk.newsshorts.presentation.mvi.CountryOption.code]. */
@@ -171,7 +171,7 @@ interface AppStrings {
 
     /**
      * Reader-facing text for a sign-in failure. A function over the enum, so
-     * adding an [com.mk.newsshorts.auth.AuthFailure] case without translating
+     * adding an [com.mk.newsshorts.core.model.auth.AuthFailure] case without translating
      * it is a compile error rather than an English sentence leaking into the
      * Arabic UI.
      */

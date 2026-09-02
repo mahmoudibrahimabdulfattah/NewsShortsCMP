@@ -1,0 +1,56 @@
+package com.mk.newsshorts.core.data.remote
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class NewsApiResponse(
+    @SerialName("status")
+    val status: String,
+    @SerialName("totalResults")
+    val totalResults: Int,
+    @SerialName("articles")
+    val articles: List<ArticleDto>,
+    /** The next page's file name, carried through the cache and the mapper. */
+    @SerialName("nextPage")
+    val nextPage: String? = null
+)
+
+@Serializable
+data class ArticleDto(
+    @SerialName("source")
+    val source: SourceDto,
+    @SerialName("author")
+    val author: String?,
+    @SerialName("title")
+    val title: String,
+    @SerialName("description")
+    val description: String?,
+    @SerialName("url")
+    val url: String,
+    @SerialName("urlToImage")
+    val urlToImage: String?,
+    @SerialName("publishedAt")
+    val publishedAt: String,
+    @SerialName("content")
+    val content: String?,
+    /**
+     * The article's own category, when the response carries one.
+     *
+     * A category feed can label its articles from the feed it came from, but
+     * the all-categories feed and the search corpus both mix them, and there
+     * the article has to say so itself. Null for the cache, which predates
+     * this and stores one category per cached feed.
+     */
+    @SerialName("category")
+    val category: String? = null
+)
+
+@Serializable
+data class SourceDto(
+    @SerialName("id")
+    val id: String?,
+    @SerialName("name")
+    val name: String
+)
+

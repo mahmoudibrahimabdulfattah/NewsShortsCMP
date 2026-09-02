@@ -1,5 +1,6 @@
 package com.mk.newsshorts.navigation
 
+import com.mk.newsshorts.core.model.deeplink.ArticleDeepLink
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,7 +14,7 @@ sealed interface PendingLink {
     /**
      * A per-article landing page, which names a story rather than describing
      * one. Someone has to fetch it before there is anything to open — see
-     * [com.mk.newsshorts.data.remote.SharePageResolver].
+     * [com.mk.newsshorts.core.data.remote.SharePageResolver].
      */
     data class SharePage(val url: String) : PendingLink
 }

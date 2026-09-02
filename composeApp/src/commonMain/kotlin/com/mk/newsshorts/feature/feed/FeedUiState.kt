@@ -4,11 +4,11 @@ import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
 import com.mk.newsshorts.presentation.mvi.CountryOption
 import com.mk.newsshorts.presentation.mvi.LanguageOption
 import com.mk.newsshorts.presentation.mvi.NavigationTab
-import com.mk.newsshorts.data.remote.RequiredUpdate
-import com.mk.newsshorts.security.SecurityNotice
-import com.mk.newsshorts.security.SecurityReason
-import com.mk.newsshorts.domain.model.NewsArticle
-import com.mk.newsshorts.domain.model.NewsCategory
+import com.mk.newsshorts.core.model.config.RequiredUpdate
+import com.mk.newsshorts.core.model.security.SecurityNotice
+import com.mk.newsshorts.core.model.security.SecurityReason
+import com.mk.newsshorts.core.model.NewsArticle
+import com.mk.newsshorts.core.model.NewsCategory
 
 data class FeedUiState(
     val isLoading: Boolean = true,

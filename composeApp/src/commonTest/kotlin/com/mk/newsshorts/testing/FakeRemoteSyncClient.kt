@@ -1,10 +1,10 @@
 package com.mk.newsshorts.testing
 
-import com.mk.newsshorts.domain.model.NewsArticle
-import com.mk.newsshorts.sync.RemoteSyncClient
-import com.mk.newsshorts.sync.SyncDelete
-import com.mk.newsshorts.sync.SyncFetch
-import com.mk.newsshorts.sync.SyncedSettings
+import com.mk.newsshorts.core.model.NewsArticle
+import com.mk.newsshorts.core.domain.sync.RemoteSyncClient
+import com.mk.newsshorts.core.model.sync.SyncDelete
+import com.mk.newsshorts.core.model.sync.SyncFetch
+import com.mk.newsshorts.core.model.sync.SyncedSettings
 import kotlinx.coroutines.delay
 
 class FakeRemoteSyncClient : RemoteSyncClient {

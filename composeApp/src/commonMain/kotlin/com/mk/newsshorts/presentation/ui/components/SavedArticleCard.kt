@@ -27,7 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.mk.newsshorts.domain.model.NewsArticle
+import com.mk.newsshorts.core.model.NewsArticle
 import com.mk.newsshorts.presentation.localization.appStrings
 
 /**

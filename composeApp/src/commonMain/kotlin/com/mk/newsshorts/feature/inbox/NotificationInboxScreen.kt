@@ -1,6 +1,7 @@
 package com.mk.newsshorts.feature.inbox
 
 import androidx.compose.foundation.background
+import com.mk.newsshorts.core.model.inbox.InboxNotification
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -54,7 +55,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.mk.newsshorts.domain.model.PublishedTimestamp
+import com.mk.newsshorts.core.model.PublishedTimestamp
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.ui.components.OverlayTopBar
 import com.mk.newsshorts.presentation.ui.components.formatPublishedTime

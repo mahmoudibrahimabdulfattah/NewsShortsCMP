@@ -45,8 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.mk.newsshorts.domain.model.NewsArticle
-import com.mk.newsshorts.domain.model.PublishedTimestamp
+import com.mk.newsshorts.core.model.NewsArticle
+import com.mk.newsshorts.core.model.PublishedTimestamp
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.localization.categoryName
 import com.mk.newsshorts.presentation.ui.theme.LocalTextScale
