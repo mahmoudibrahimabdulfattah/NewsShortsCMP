@@ -35,7 +35,7 @@ packages are already acyclic, so they carry build risk but no design risk.
 |---|---|---|
 | 0 | build-logic, convention plugins, catalog, cache-correct BuildConfig | **done** |
 | 1 | Shared services; delete VM-in-VM injection (in place) | **done** |
-| 2 | Decompose `NewsViewModel` and `NewsUiState` (in place) | not started |
+| 2 | Decompose `NewsViewModel` and `NewsUiState` (in place) | **done** |
 | 3 | Break the package cycles (package moves only) | not started |
 | 4 | `:core:contract` + `:core:testing` + server de-duplication | not started |
 | 5 | `:core:config`, `:core:model`, `:core:domain` | not started |
@@ -96,6 +96,13 @@ remove the endless coroutine:
 - `SettingsViewModel` seeds its state from the store instead of collecting it.
 - The writer's `SupervisorJob` is deliberately *not* a child of the caller's
   scope, because as a child it is itself a coroutine that never completes.
+
+**Phase 2 — the tab did not move.** `NewsUiState.currentTab` stayed with
+`FeedViewModel` rather than going to `AppShellViewModel` with the overlay stack.
+Switching tabs both moves the reader and decides which feed loads; splitting
+those two halves before phase 8 gives both sides a `Navigator` to read would
+only replace the coupling with an event bus, or with the screen dispatching one
+tap twice. Phase 8 is where it moves.
 
 **Phase 2 — Kotlin/Native rejects commas in backtick test names.** A name like
 ``fun `ticked, and saved at the end`()`` compiles for Android and JVM and fails
