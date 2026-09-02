@@ -1,4 +1,4 @@
-package com.mk.newsshorts.presentation.ui.screen
+package com.mk.newsshorts.feature.inbox
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -56,8 +56,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.mk.newsshorts.domain.model.PublishedTimestamp
 import com.mk.newsshorts.presentation.localization.appStrings
-import com.mk.newsshorts.presentation.mvi.InboxNotification
-import com.mk.newsshorts.presentation.mvi.NewsUiEvent
 import com.mk.newsshorts.presentation.ui.components.OverlayTopBar
 import com.mk.newsshorts.presentation.ui.components.formatPublishedTime
 
@@ -68,17 +66,16 @@ import com.mk.newsshorts.presentation.ui.components.formatPublishedTime
  * happened to receive — see `NotificationInboxClient` for why that difference
  * decides whether the screen is any use.
  *
- * [unreadIds] is passed in rather than derived here: opening this screen does
- * not clear a mark, so the set has to be the one the ViewModel holds, changed
- * only by opening a notification or by the action in the bar.
+ * The unread mark is passed in rather than derived here: opening this screen
+ * does not clear a mark, so the set has to be the one the ViewModel holds,
+ * changed only by opening a notification or by the action in the bar.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationInboxScreen(
-    notifications: List<InboxNotification>,
-    unreadIds: Set<Long>,
-    isRefreshing: Boolean,
-    onEvent: (NewsUiEvent) -> Unit,
+    uiState: InboxUiState,
+    onEvent: (InboxUiEvent) -> Unit,
+    onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val strings = appStrings()
@@ -95,13 +92,13 @@ fun NotificationInboxScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             OverlayTopBar(
                 title = strings.notificationInbox,
-                onBack = { onEvent(NewsUiEvent.CloseOverlay) },
+                onBack = onClose,
                 action = {
                     // Offered only when it would do something. A control that is
                     // always there and usually inert teaches the reader to stop
                     // looking at it.
-                    if (unreadIds.isNotEmpty()) {
-                        TextButton(onClick = { onEvent(NewsUiEvent.MarkAllNotificationsRead) }) {
+                    if (uiState.unreadIds.isNotEmpty()) {
+                        TextButton(onClick = { onEvent(InboxUiEvent.MarkAllRead) }) {
                             Text(
                                 text = strings.markAllNotificationsRead,
                                 style = MaterialTheme.typography.labelLarge,
@@ -114,11 +111,11 @@ fun NotificationInboxScreen(
             // Wraps the empty state too. A reader who opens an inbox that says
             // nothing is here is exactly the one who will pull to check.
             PullToRefreshBox(
-                isRefreshing = isRefreshing,
-                onRefresh = { onEvent(NewsUiEvent.RefreshNotificationInbox) },
+                isRefreshing = uiState.isRefreshing,
+                onRefresh = { onEvent(InboxUiEvent.Refresh) },
                 modifier = Modifier.fillMaxSize(),
             ) {
-                if (notifications.isEmpty()) {
+                if (uiState.visibleNotifications.isEmpty()) {
                     // Scrollable even when it holds one card, or there is no
                     // gesture for the pull to attach to.
                     LazyColumn(
@@ -143,15 +140,15 @@ fun NotificationInboxScreen(
                             .asPaddingValues(),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        items(notifications, key = { it.sentAt }) { notification ->
+                        items(uiState.visibleNotifications, key = { it.sentAt }) { notification ->
                             SwipeableNotificationRow(
                                 notification = notification,
-                                isUnread = notification.sentAt in unreadIds,
+                                isUnread = notification.sentAt in uiState.unreadIds,
                                 onOpen = {
-                                    onEvent(NewsUiEvent.OpenInboxNotification(notification.deepLink))
+                                    onEvent(InboxUiEvent.OpenNotification(notification.deepLink))
                                 },
                                 onDismiss = {
-                                    onEvent(NewsUiEvent.DismissInboxNotification(notification.articleUrl))
+                                    onEvent(InboxUiEvent.DismissNotification(notification.articleUrl))
                                     scope.launch {
                                         // Only one at a time: a reader clearing
                                         // several in a row wants the last one
@@ -164,7 +161,7 @@ fun NotificationInboxScreen(
                                         )
                                         if (result == SnackbarResult.ActionPerformed) {
                                             onEvent(
-                                                NewsUiEvent.RestoreInboxNotification(
+                                                InboxUiEvent.RestoreNotification(
                                                     notification.articleUrl
                                                 )
                                             )

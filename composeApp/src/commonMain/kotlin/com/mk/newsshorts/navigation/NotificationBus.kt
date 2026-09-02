@@ -1,6 +1,6 @@
 package com.mk.newsshorts.navigation
 
-import com.mk.newsshorts.presentation.mvi.InboxNotification
+import com.mk.newsshorts.feature.inbox.InboxNotification
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

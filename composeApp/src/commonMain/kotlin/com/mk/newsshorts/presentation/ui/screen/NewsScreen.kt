@@ -55,6 +55,11 @@ import com.mk.newsshorts.feature.auth.AuthUiEvent
 import com.mk.newsshorts.feature.auth.AuthUiState
 import com.mk.newsshorts.feature.auth.AuthViewModel
 import com.mk.newsshorts.feature.auth.SignInScreen
+import com.mk.newsshorts.feature.inbox.InboxUiEffect
+import com.mk.newsshorts.feature.inbox.InboxUiEvent
+import com.mk.newsshorts.feature.inbox.InboxUiState
+import com.mk.newsshorts.feature.inbox.InboxViewModel
+import com.mk.newsshorts.feature.inbox.NotificationInboxScreen
 import com.mk.newsshorts.feature.saved.SavedArticlesUiEffect
 import com.mk.newsshorts.feature.saved.SavedArticlesUiEvent
 import com.mk.newsshorts.feature.saved.SavedArticlesUiState
@@ -94,6 +99,7 @@ import com.mk.newsshorts.presentation.viewmodel.NewsViewModel
 fun NewsScreen(
     viewModel: NewsViewModel,
     authViewModel: AuthViewModel,
+    inboxViewModel: InboxViewModel,
     searchViewModel: SearchViewModel,
     savedArticlesViewModel: SavedArticlesViewModel,
     settingsViewModel: SettingsViewModel,
@@ -105,6 +111,7 @@ fun NewsScreen(
 ) {
     val uiState: NewsUiState by viewModel.uiState.collectAsState()
     val authUiState: AuthUiState by authViewModel.uiState.collectAsState()
+    val inboxUiState: InboxUiState by inboxViewModel.uiState.collectAsState()
     val searchUiState: SearchUiState by searchViewModel.uiState.collectAsState()
     val savedArticlesUiState: SavedArticlesUiState by savedArticlesViewModel.uiState.collectAsState()
     val settingsUiState: SettingsUiState by settingsViewModel.uiState.collectAsState()
@@ -143,6 +150,18 @@ fun NewsScreen(
         savedArticlesViewModel.uiEffect.collect { effect ->
             when (effect) {
                 is SavedArticlesUiEffect.ShowToast -> showToast(effect.message)
+            }
+        }
+    }
+    LaunchedEffect(Unit) {
+        inboxViewModel.uiEffect.collect { effect ->
+            when (effect) {
+                InboxUiEffect.OpenInboxOverlay -> {
+                    viewModel.processEvent(NewsUiEvent.OpenOverlay(Overlay.NotificationInbox))
+                }
+                is InboxUiEffect.OpenNotification -> {
+                    viewModel.processEvent(NewsUiEvent.OpenDeepLink(effect.link))
+                }
             }
         }
     }
@@ -186,14 +205,19 @@ fun NewsScreen(
             else -> Unit
         }
     }
+    val onInboxEvent: (InboxUiEvent) -> Unit = { event ->
+        inboxViewModel.processEvent(event)
+    }
     NewsScreenContent(
         uiState = uiState,
         authUiState = authUiState,
+        inboxUiState = inboxUiState,
         searchUiState = searchUiState,
         savedArticlesUiState = savedArticlesUiState,
         settingsUiState = settingsUiState,
         onEvent = onNewsEvent,
         onAuthEvent = onAuthEvent,
+        onInboxEvent = onInboxEvent,
         onSettingsEvent = onSettingsEvent,
         onSearchEvent = onSearchEvent,
         modifier = modifier
@@ -205,11 +229,13 @@ fun NewsScreen(
 private fun NewsScreenContent(
     uiState: NewsUiState,
     authUiState: AuthUiState,
+    inboxUiState: InboxUiState,
     searchUiState: SearchUiState,
     savedArticlesUiState: SavedArticlesUiState,
     settingsUiState: SettingsUiState,
     onEvent: (NewsUiEvent) -> Unit,
     onAuthEvent: (AuthUiEvent) -> Unit,
+    onInboxEvent: (InboxUiEvent) -> Unit,
     onSettingsEvent: (SettingsUiEvent) -> Unit,
     onSearchEvent: (SearchUiEvent) -> Unit,
     modifier: Modifier = Modifier
@@ -272,7 +298,9 @@ private fun NewsScreenContent(
                         TopGradientOverlay()
                         NewsScreenHeader(
                             uiState = uiState,
+                            inboxUiState = inboxUiState,
                             onEvent = onEvent,
+                            onInboxEvent = onInboxEvent,
                             modifier = Modifier.align(Alignment.TopCenter)
                         )
                         NextPageStatus(
@@ -356,10 +384,9 @@ private fun NewsScreenContent(
             }
             Overlay.NotificationInbox -> {
                 NotificationInboxScreen(
-                    notifications = uiState.visibleInboxNotifications,
-                    unreadIds = uiState.unreadInboxIds,
-                    isRefreshing = uiState.isRefreshingInbox,
-                    onEvent = onEvent,
+                    uiState = inboxUiState,
+                    onEvent = onInboxEvent,
+                    onClose = { onEvent(NewsUiEvent.CloseOverlay) },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -443,7 +470,9 @@ private fun TopGradientOverlay(
 @Composable
 private fun NewsScreenHeader(
     uiState: NewsUiState,
+    inboxUiState: InboxUiState,
     onEvent: (NewsUiEvent) -> Unit,
+    onInboxEvent: (InboxUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -470,7 +499,7 @@ private fun NewsScreenHeader(
             // things you do to the news, not further places the news lives.
             // The bell is here and not in Profile because it carries the
             // unread mark, and a mark nobody passes is not a mark.
-            IconButton(onClick = { onEvent(NewsUiEvent.OpenNotificationInbox) }) {
+            IconButton(onClick = { onInboxEvent(InboxUiEvent.Opened) }) {
                 // Wider than the glyph so the badge has a corner of its own to
                 // sit in. It used to be nudged out with an offset, which put it
                 // past the icon button's bounds — and that clips, so the circle
@@ -482,7 +511,7 @@ private fun NewsScreenHeader(
                         tint = OnImagery.content,
                         modifier = Modifier.align(Alignment.BottomStart).size(24.dp),
                     )
-                    val unread = uiState.unreadInboxCount
+                    val unread = inboxUiState.unreadCount
                     if (unread > 0) {
                         // A minimum size rather than a fixed one: at one digit
                         // this is a circle, and "9+" widens it into a capsule

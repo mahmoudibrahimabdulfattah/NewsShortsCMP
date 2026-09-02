@@ -2,6 +2,7 @@ package com.mk.newsshorts.di
 
 import androidx.compose.runtime.Composable
 import com.mk.newsshorts.feature.auth.AuthViewModel
+import com.mk.newsshorts.feature.inbox.InboxViewModel
 import com.mk.newsshorts.feature.saved.SavedArticlesViewModel
 import com.mk.newsshorts.feature.search.SearchViewModel
 import com.mk.newsshorts.feature.settings.SettingsViewModel
@@ -17,6 +18,9 @@ actual fun provideNewsViewModel(): NewsViewModel {
 actual fun provideAuthViewModel(): AuthViewModel {
     return koinViewModel()
 }
+
+@Composable
+actual fun provideInboxViewModel(): InboxViewModel = koinViewModel()
 
 @Composable
 actual fun provideSearchViewModel(): SearchViewModel {

@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import com.mk.newsshorts.auth.AuthSession
-import com.mk.newsshorts.data.local.NotificationInboxStore
 import com.mk.newsshorts.data.repository.SavedArticles
 import com.mk.newsshorts.data.local.SeenArticlesStore
 import com.mk.newsshorts.data.local.SettingsManager
@@ -50,10 +49,8 @@ import com.mk.newsshorts.analytics.AnalyticsReporter
 import com.mk.newsshorts.config.BuildConfig
 import com.mk.newsshorts.navigation.ArticleDeepLink
 import com.mk.newsshorts.navigation.ArticleDeepLinks
-import com.mk.newsshorts.data.remote.NotificationInboxClient
 import com.mk.newsshorts.data.remote.SharePageResolver
 import com.mk.newsshorts.navigation.DeepLinkBus
-import com.mk.newsshorts.navigation.NotificationBus
 import com.mk.newsshorts.navigation.PendingLink
 import com.mk.newsshorts.navigation.toNewsArticle
 import com.mk.newsshorts.presentation.localization.AppLocale
@@ -68,7 +65,6 @@ import com.mk.newsshorts.presentation.mvi.NewsUiEffect
 import com.mk.newsshorts.presentation.mvi.NewsUiEvent
 import com.mk.newsshorts.presentation.mvi.NewsUiState
 import com.mk.newsshorts.presentation.mvi.OnboardingStep
-import com.mk.newsshorts.presentation.mvi.InboxNotification
 import com.mk.newsshorts.presentation.mvi.Overlay
 
 internal data class RememberedCategoryFeed(
@@ -217,10 +213,7 @@ class NewsViewModel(
     private val remoteConfigClient: RemoteConfigClient,
     private val deviceIntegrityInspector: DeviceIntegrityInspector,
     private val sharePageResolver: SharePageResolver,
-    private val notificationInboxClient: NotificationInboxClient,
-    private val notificationInboxStore: NotificationInboxStore,
     private val inboxReadMarker: InboxReadMarker,
-    private val notificationBus: NotificationBus,
 ) : BaseViewModel() {
 
     private val mutableState: MutableStateFlow<NewsUiState> = MutableStateFlow(NewsUiState())
@@ -238,7 +231,6 @@ class NewsViewModel(
     init {
         loadSavedSettings()
         observeDeepLinks()
-        observeArrivingNotifications()
         observeFeedInvalidations()
         checkForRequiredUpdate()
         observeAuthState()
@@ -389,33 +381,6 @@ class NewsViewModel(
         }
     }
 
-    /**
-     * Merges a notification into the inbox the moment it arrives, without
-     * waiting for the backend to republish.
-     *
-     * The published file is written in the same run that sends the push, but it
-     * reaches a reader through a static deploy that takes minutes — long enough
-     * for someone who taps straight into the app to look for the notification
-     * they were just shown and not find it.
-     *
-     * Merged rather than prepended blindly: the published list arrives too, and
-     * both describe the same send.
-     */
-    private fun observeArrivingNotifications() {
-        viewModelScope.launch {
-            notificationBus.latest.collect { arrived ->
-                if (arrived == null) return@collect
-                mutableState.update { state ->
-                    if (state.inboxNotifications.any { it.sentAt == arrived.sentAt }) state
-                    else state.copy(
-                        inboxNotifications = (listOf(arrived) + state.inboxNotifications)
-                            .sortedByDescending { it.sentAt },
-                    )
-                }
-            }
-        }
-    }
-
     private fun observeFeedInvalidations() {
         viewModelScope.launch {
             feedInvalidator.signals.collect { reason ->
@@ -442,9 +407,6 @@ class NewsViewModel(
             )
         }
         resetArticleTracking()
-        if (languageChanged || reason == InvalidationReason.SyncApplied) {
-            refreshNotificationInbox()
-        }
         when (reason) {
             InvalidationReason.CountryChanged -> loadNewsForCountryWithCache(country)
             InvalidationReason.LanguageChanged,
@@ -476,10 +438,6 @@ class NewsViewModel(
                 )
             }
             savedArticles.load()
-            // After the language is in state and not from init: the inbox is
-            // published per language, and asking before settings load would
-            // fetch the default one and mark its notifications unread.
-            refreshNotificationInbox()
             loadNewsWithCache()
         }
     }
@@ -532,12 +490,6 @@ class NewsViewModel(
             is NewsUiEvent.SaveArticle -> Unit
             is NewsUiEvent.RemoveSavedArticle -> Unit
             NewsUiEvent.OpenSearch -> handleOpenSearch()
-            NewsUiEvent.OpenNotificationInbox -> handleOpenNotificationInbox()
-            is NewsUiEvent.OpenInboxNotification -> handleOpenInboxNotification(event.deepLink)
-            NewsUiEvent.MarkAllNotificationsRead -> handleMarkAllNotificationsRead()
-            NewsUiEvent.RefreshNotificationInbox -> refreshNotificationInbox(pulled = true)
-            is NewsUiEvent.DismissInboxNotification -> handleDismissInboxNotification(event.articleUrl)
-            is NewsUiEvent.RestoreInboxNotification -> handleRestoreInboxNotification(event.articleUrl)
             NewsUiEvent.RefreshNews -> handleRefreshNews()
             NewsUiEvent.RetryLoading -> handleRetryLoading()
             NewsUiEvent.RetryNextPage -> handleRetryNextPage()
@@ -831,100 +783,6 @@ class NewsViewModel(
         }
     }
 
-    /**
-     * Loads what has been pushed in the reader's language.
-     *
-     * Called on launch and not only when the inbox is opened, because the bell
-     * carries the unread mark and a mark that only appears after you look is
-     * not a mark. One small file, and a failure leaves the previous list in
-     * place rather than emptying the screen.
-     */
-    private fun refreshNotificationInbox(pulled: Boolean = false) {
-        if (pulled) mutableState.update { it.copy(isRefreshingInbox = true) }
-        viewModelScope.launch {
-            val language = FeedLanguage.resolve(mutableState.value.selectedLanguage.code)
-            val sent = notificationInboxClient.fetch(language)
-            // An empty answer is a failure as often as it is an empty inbox —
-            // the client cannot tell them apart — so the list stands rather
-            // than being wiped by a bad connection. The spinner still stops.
-            if (sent.isEmpty()) {
-                mutableState.update { it.copy(isRefreshingInbox = false) }
-                return@launch
-            }
-            mutableState.update { state ->
-                state.copy(
-                    inboxNotifications = sent.map {
-                        InboxNotification(
-                            sentAt = it.sentAt,
-                            title = it.title,
-                            body = it.body,
-                            deepLink = it.deepLink,
-                            articleUrl = ArticleDeepLinks.parse(it.deepLink)?.url.orEmpty(),
-                        )
-                    },
-                    inboxRead = notificationInboxStore.read(),
-                    inboxDismissed = notificationInboxStore.dismissed(),
-                    isRefreshingInbox = false,
-                )
-            }
-        }
-    }
-
-    /**
-     * Opens the inbox and marks nothing.
-     *
-     * Looking at a list is not the same as having read what is in it. A reader
-     * opens this to find the story they were told about and have not been into
-     * yet, so the marks have to survive the act of looking — they come off when
-     * a notification is opened, or when the reader says so for all of them.
-     */
-    private fun handleOpenNotificationInbox() {
-        handleOpenOverlay(Overlay.NotificationInbox)
-        // The list on screen may be a session old. Refreshing behind the open
-        // screen costs one small file and cannot reorder anything the reader is
-        // looking at, because the sort is by time.
-        refreshNotificationInbox()
-    }
-
-    /**
-     * Hides one row on this device.
-     *
-     * There is nothing else it could do: the list is a single file published
-     * for every reader, so a dismissal is local by construction. Written
-     * through the store rather than held in state so it survives the next
-     * refresh, which replaces the published list wholesale.
-     */
-    private fun handleDismissInboxNotification(articleUrl: String) {
-        notificationInboxStore.dismiss(articleUrl)
-        mutableState.update { it.copy(inboxDismissed = notificationInboxStore.dismissed()) }
-    }
-
-    /**
-     * Undo. A swipe is one gesture away from a story the reader wanted, and
-     * the row cannot be recovered from anywhere else once it is hidden.
-     */
-    private fun handleRestoreInboxNotification(articleUrl: String) {
-        notificationInboxStore.restore(articleUrl)
-        mutableState.update { it.copy(inboxDismissed = notificationInboxStore.dismissed()) }
-    }
-
-    /** One of the two things that clears a mark; see [handleOpenInboxNotification]. */
-    private fun handleMarkAllNotificationsRead() {
-        val newest = mutableState.value.visibleInboxNotifications.maxOfOrNull { it.sentAt } ?: return
-        notificationInboxStore.markAllRead(newest)
-        mutableState.update { it.copy(inboxRead = notificationInboxStore.read()) }
-    }
-
-    /**
-     * A row carries the notification's own link, so this is the same path a
-     * notification tap takes — including the details screen it lands on and the
-     * origin it is reported under.
-     */
-    private fun handleOpenInboxNotification(deepLink: String) {
-        val link = ArticleDeepLinks.parse(deepLink) ?: return
-        handleOpenDeepLink(link)
-    }
-
     private fun handleOpenSearch() {
         handleOpenOverlay(Overlay.Search)
     }
@@ -991,7 +849,6 @@ class NewsViewModel(
             // cold start from a tray tap records it even though the published list
             // has not arrived yet — when it does, the row is already read.
             inboxReadMarker.markRead(article.articleUrl.value)
-            mutableState.update { it.copy(inboxRead = notificationInboxStore.read()) }
 
             handleOpenArticleDetails(
                 article,

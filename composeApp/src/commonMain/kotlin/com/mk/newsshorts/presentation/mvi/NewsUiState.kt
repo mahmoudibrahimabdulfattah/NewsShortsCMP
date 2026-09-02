@@ -1,8 +1,5 @@
 package com.mk.newsshorts.presentation.mvi
 
-import com.mk.newsshorts.data.local.InboxReadState
-import com.mk.newsshorts.data.local.articleKey
-
 import com.mk.newsshorts.data.remote.RequiredUpdate
 import com.mk.newsshorts.security.SecurityNotice
 import com.mk.newsshorts.security.SecurityReason
@@ -80,20 +77,6 @@ data class NewsUiState(
      * stack — they switch, they do not push.
      */
     val overlays: List<Overlay> = emptyList(),
-    /** What the backend has pushed in the reader's language, newest first. */
-    val inboxNotifications: List<InboxNotification> = emptyList(),
-    /**
-     * Which notifications the reader has dealt with. Mirrored into state rather
-     * than read from the store per frame, so the marks hold still while the
-     * screen is up instead of flickering off row by row.
-     */
-    val inboxRead: InboxReadState = InboxReadState(),
-    /**
-     * Articles swiped away on this device. The list is one file published for
-     * every reader, so a dismissal can only ever hide a row here.
-     */
-    val inboxDismissed: Set<Int> = emptySet(),
-    val isRefreshingInbox: Boolean = false,
     /** Non-null when the backend no longer supports this build; blocks the UI. */
     val requiredUpdate: RequiredUpdate? = null,
     /** Result of the device-integrity check under the backend's policy. */
@@ -118,31 +101,6 @@ data class NewsUiState(
         get() = hasArticles && !hasMorePages && currentArticleIndex >= articles.lastIndex
 
     /**
-     * The notifications the reader has not dealt with.
-     *
-     * Two things take one off this list and nothing else does: opening the
-     * story — from here or from the notification in the tray — or marking
-     * everything read. Opening the inbox itself deliberately does not —
-     * the marks are how a reader tells which stories they have already been
-     * into, and clearing them on sight would answer the question by erasing it.
-     */
-    /**
-     * The list as the reader sees it: published order, minus what they have
-     * swiped away. Kept separate from [inboxNotifications] so a refresh can
-     * replace the published list without having to remember what was hidden.
-     */
-    val visibleInboxNotifications: List<InboxNotification>
-        get() = inboxNotifications.filterNot { articleKey(it.articleUrl) in inboxDismissed }
-
-    val unreadInboxIds: Set<Long>
-        get() = visibleInboxNotifications
-            .filterNot { inboxRead.isRead(it.sentAt, it.articleUrl) }
-            .map { it.sentAt }
-            .toSet()
-
-    val unreadInboxCount: Int get() = unreadInboxIds.size
-
-    /**
      * The details overlay, if that is what is on top. Kept as a derived
      * property under the old name so every existing read site — the pager,
      * the save-state lookup, the details composable itself — keeps compiling
@@ -153,25 +111,6 @@ data class NewsUiState(
             ArticleDetails(article = it.article, origin = it.origin)
         }
 }
-
-/**
- * One notification the backend has sent, as the inbox lists it.
- *
- * [deepLink] is the same `newsshorts://article` link the notification carried,
- * so opening a row and tapping the notification itself go through one parser.
- */
-data class InboxNotification(
-    val sentAt: Long,
-    val title: String,
-    val body: String,
-    val deepLink: String,
-    /**
-     * Pulled out of [deepLink] once, when the list is built, because it is the
-     * key the read marks hang on — and re-parsing the link for every row on
-     * every recomposition to find it would be work for nothing.
-     */
-    val articleUrl: String,
-)
 
 /** One screen pushed above the tabs. See [NewsUiState.overlays]. */
 sealed interface Overlay {

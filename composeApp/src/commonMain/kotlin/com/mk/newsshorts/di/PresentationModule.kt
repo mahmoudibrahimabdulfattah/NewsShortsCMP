@@ -3,6 +3,7 @@ package com.mk.newsshorts.di
 import com.mk.newsshorts.data.local.SettingsManager
 import com.mk.newsshorts.data.repository.SavedArticles
 import com.mk.newsshorts.feature.auth.AuthViewModel
+import com.mk.newsshorts.feature.inbox.InboxViewModel
 import com.mk.newsshorts.feature.saved.SavedArticlesViewModel
 import com.mk.newsshorts.feature.search.SearchViewModel
 import com.mk.newsshorts.feature.settings.SettingsViewModel
@@ -49,16 +50,21 @@ val presentationModule = module {
         )
     }
     single(createdAtStart = false) {
+        InboxViewModel(
+            notificationInboxClient = get(),
+            notificationInboxStore = get(),
+            notificationBus = get(),
+            settingsManager = get<SettingsManager>(),
+        )
+    }
+    single(createdAtStart = false) {
         NewsViewModel(
             getTopHeadlinesUseCase = get(),
             settingsManager = get(),
             analytics = get(),
             deepLinkBus = get(),
             sharePageResolver = get(),
-            notificationInboxClient = get(),
-            notificationInboxStore = get(),
             inboxReadMarker = get(),
-            notificationBus = get(),
             savedArticles = get(),
             accountSync = get(),
             authSession = get(),

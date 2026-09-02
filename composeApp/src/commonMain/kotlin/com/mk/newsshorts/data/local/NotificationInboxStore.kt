@@ -1,6 +1,9 @@
 package com.mk.newsshorts.data.local
 
 import com.mk.newsshorts.domain.repository.InboxReadMarker
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -33,8 +36,12 @@ class NotificationInboxStore(
 ) : InboxReadMarker {
 
     private val json = Json { ignoreUnknownKeys = true }
+    private val mutableReadState = MutableStateFlow(readStoredState())
+    val readState: StateFlow<InboxReadState> = mutableReadState.asStateFlow()
+    private val mutableDismissedState = MutableStateFlow(readStoredDismissed())
+    val dismissedState: StateFlow<Set<Int>> = mutableDismissedState.asStateFlow()
 
-    fun read(): InboxReadState = decodeInboxReadState(settingsStorage.getString(KEY_READ, ""), json)
+    fun read(): InboxReadState = readState.value
 
     /**
      * The notifications this reader has swiped away.
@@ -46,8 +53,7 @@ class NotificationInboxStore(
      * Keyed by article for the same reason the read marks are: it is the one
      * identity every route to a notification carries.
      */
-    fun dismissed(): Set<Int> =
-        decodeDismissed(settingsStorage.getString(KEY_DISMISSED, ""), json)
+    fun dismissed(): Set<Int> = dismissedState.value
 
     fun dismiss(articleUrl: String) {
         if (articleUrl.isBlank()) return
@@ -69,6 +75,7 @@ class NotificationInboxStore(
     private fun saveDismissed(keys: Set<Int>) {
         runCatching {
             settingsStorage.putString(KEY_DISMISSED, json.encodeToString(DismissedArticles(keys)))
+            mutableDismissedState.value = keys
         }
     }
 
@@ -102,8 +109,17 @@ class NotificationInboxStore(
     }
 
     private fun save(state: InboxReadState) {
-        runCatching { settingsStorage.putString(KEY_READ, json.encodeToString(state)) }
+        runCatching {
+            settingsStorage.putString(KEY_READ, json.encodeToString(state))
+            mutableReadState.value = state
+        }
     }
+
+    private fun readStoredState(): InboxReadState =
+        decodeInboxReadState(settingsStorage.getString(KEY_READ, ""), json)
+
+    private fun readStoredDismissed(): Set<Int> =
+        decodeDismissed(settingsStorage.getString(KEY_DISMISSED, ""), json)
 
     private companion object {
         const val KEY_READ: String = "notification_inbox_read"

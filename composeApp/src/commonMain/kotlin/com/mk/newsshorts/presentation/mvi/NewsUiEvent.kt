@@ -42,31 +42,6 @@ sealed interface NewsUiEvent {
      */
     data class OpenSharePage(val url: String) : NewsUiEvent
 
-    /** Opens the inbox. Deliberately does not mark anything read. */
-    data object OpenNotificationInbox : NewsUiEvent
-
-    /**
-     * A row in the inbox. It carries the link and nothing else: the same
-     * handler serves a tap here and a tap on the notification in the tray, so
-     * both clear the mark by the same route.
-     */
-    data class OpenInboxNotification(val deepLink: String) : NewsUiEvent
-
-    /** The other one. Clears every mark currently in the list. */
-    data object MarkAllNotificationsRead : NewsUiEvent
-
-    /** Pull-to-refresh on the inbox. */
-    data object RefreshNotificationInbox : NewsUiEvent
-
-    /**
-     * Swiped away. Local only — the list is published for every reader, so this
-     * hides the row on this device and nothing more.
-     */
-    data class DismissInboxNotification(val articleUrl: String) : NewsUiEvent
-
-    /** What the snackbar's undo does. */
-    data class RestoreInboxNotification(val articleUrl: String) : NewsUiEvent
-
     /** Pushes a screen above the tabs. See [com.mk.newsshorts.presentation.mvi.Overlay]. */
     data class OpenOverlay(val overlay: Overlay) : NewsUiEvent
 

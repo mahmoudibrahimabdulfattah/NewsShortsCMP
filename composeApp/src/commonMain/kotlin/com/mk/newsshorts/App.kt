@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.painter.Painter
 import newsshorts.composeapp.generated.resources.Res
 import newsshorts.composeapp.generated.resources.logo
 import com.mk.newsshorts.di.provideAuthViewModel
+import com.mk.newsshorts.di.provideInboxViewModel
 import com.mk.newsshorts.di.provideNewsViewModel
 import com.mk.newsshorts.di.provideSavedArticlesViewModel
 import com.mk.newsshorts.di.provideSearchViewModel
@@ -68,6 +69,7 @@ fun App(
     // is inside LocaleProvider too — otherwise it always renders in English.
     val viewModel = provideNewsViewModel()
     val authViewModel = provideAuthViewModel()
+    val inboxViewModel = provideInboxViewModel()
     val searchViewModel = provideSearchViewModel()
     val savedArticlesViewModel = provideSavedArticlesViewModel()
     val settingsViewModel = provideSettingsViewModel()
@@ -193,6 +195,7 @@ fun App(
                     NewsScreen(
                         viewModel = viewModel,
                         authViewModel = authViewModel,
+                        inboxViewModel = inboxViewModel,
                         searchViewModel = searchViewModel,
                         savedArticlesViewModel = savedArticlesViewModel,
                         settingsViewModel = settingsViewModel,
