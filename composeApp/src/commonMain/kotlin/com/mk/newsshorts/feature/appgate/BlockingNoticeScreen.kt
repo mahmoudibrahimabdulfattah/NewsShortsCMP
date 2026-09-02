@@ -1,4 +1,4 @@
-package com.mk.newsshorts.presentation.ui.screen
+package com.mk.newsshorts.feature.appgate
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement

@@ -1,4 +1,4 @@
-package com.mk.newsshorts.presentation.ui.screen
+package com.mk.newsshorts.feature.onboarding
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -35,8 +35,6 @@ import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.feature.settings.SettingsUiEvent
 import com.mk.newsshorts.feature.settings.SettingsUiState
 import com.mk.newsshorts.presentation.localization.categoryName
-import com.mk.newsshorts.presentation.mvi.NewsUiEvent
-import com.mk.newsshorts.presentation.mvi.NewsUiState
 import com.mk.newsshorts.presentation.mvi.OnboardingStep
 import com.mk.newsshorts.presentation.ui.components.AppButton
 import com.mk.newsshorts.presentation.ui.components.AppButtonTone
@@ -57,14 +55,14 @@ import com.mk.newsshorts.presentation.ui.components.FilterPill
  */
 @Composable
 fun OnboardingScreen(
-    uiState: NewsUiState,
+    uiState: OnboardingUiState,
     settingsUiState: SettingsUiState,
-    onEvent: (NewsUiEvent) -> Unit,
+    onEvent: (OnboardingUiEvent) -> Unit,
     onSettingsEvent: (SettingsUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
-    val step: OnboardingStep = uiState.onboarding ?: return
+    val step: OnboardingStep = uiState.step ?: return
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -104,13 +102,13 @@ fun OnboardingScreen(
             Spacer(Modifier.height(16.dp))
             AppButton(
                 text = if (step.next == null) strings.onboardingStart else strings.onboardingContinue,
-                onClick = { onEvent(NewsUiEvent.OnboardingNext) },
+                onClick = { onEvent(OnboardingUiEvent.Next) },
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(8.dp))
             AppButton(
                 text = strings.onboardingSkip,
-                onClick = { onEvent(NewsUiEvent.OnboardingSkip) },
+                onClick = { onEvent(OnboardingUiEvent.Skip) },
                 tone = AppButtonTone.Secondary,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -155,7 +153,7 @@ private fun LanguageStep(settingsUiState: SettingsUiState, onEvent: (SettingsUiE
 }
 
 @Composable
-private fun CategoriesStep(uiState: NewsUiState, onEvent: (NewsUiEvent) -> Unit) {
+private fun CategoriesStep(uiState: OnboardingUiState, onEvent: (OnboardingUiEvent) -> Unit) {
     val strings = appStrings()
     StepHeading(strings.onboardingCategoriesTitle, strings.onboardingCategoriesSubtitle)
     // Two per row rather than a wrapping flow: the labels are one word in both
@@ -170,8 +168,8 @@ private fun CategoriesStep(uiState: NewsUiState, onEvent: (NewsUiEvent) -> Unit)
                 FilterPill(
                     label = categoryName(category.apiValue, category.displayName),
                     leading = category.emoji,
-                    isSelected = category in uiState.onboardingCategories,
-                    onClick = { onEvent(NewsUiEvent.OnboardingToggleCategory(category)) },
+                    isSelected = category in uiState.chosenCategories,
+                    onClick = { onEvent(OnboardingUiEvent.ToggleCategory(category)) },
                     modifier = Modifier.weight(1f),
                 )
             }

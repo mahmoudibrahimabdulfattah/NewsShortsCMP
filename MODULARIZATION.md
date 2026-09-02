@@ -97,6 +97,12 @@ remove the endless coroutine:
 - The writer's `SupervisorJob` is deliberately *not* a child of the caller's
   scope, because as a child it is itself a coroutine that never completes.
 
+**Phase 2 — Kotlin/Native rejects commas in backtick test names.** A name like
+``fun `ticked, and saved at the end`()`` compiles for Android and JVM and fails
+`compileTestKotlinIosSimulatorArm64` with "Name contains illegal characters".
+This is what `check → iosSimulatorArm64Test` is for; without it the break would
+have reached `master` and only surfaced on someone's iOS build.
+
 **Phase 1 — a failing test can point at the wrong thing.** Two account-switch
 tests failed with `UncompletedCoroutinesError` naming a coroutine, while their
 assertions passed. The real cause was that routing them through the real caller

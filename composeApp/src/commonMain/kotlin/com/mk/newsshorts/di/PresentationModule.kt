@@ -2,8 +2,10 @@ package com.mk.newsshorts.di
 
 import com.mk.newsshorts.data.local.SettingsManager
 import com.mk.newsshorts.data.repository.SavedArticles
+import com.mk.newsshorts.feature.appgate.AppGateViewModel
 import com.mk.newsshorts.feature.auth.AuthViewModel
 import com.mk.newsshorts.feature.inbox.InboxViewModel
+import com.mk.newsshorts.feature.onboarding.OnboardingViewModel
 import com.mk.newsshorts.feature.saved.SavedArticlesViewModel
 import com.mk.newsshorts.feature.search.SearchViewModel
 import com.mk.newsshorts.feature.settings.SettingsViewModel
@@ -47,6 +49,21 @@ val presentationModule = module {
             searchNews = get(),
             recentSearches = get(),
             analytics = get(),
+        )
+    }
+    single(createdAtStart = false) {
+        AppGateViewModel(
+            remoteConfigClient = get(),
+            deviceIntegrityInspector = get(),
+            securityFlags = get<SettingsManager>(),
+            analytics = get(),
+        )
+    }
+    single(createdAtStart = false) {
+        OnboardingViewModel(
+            onboardingStore = get<SettingsManager>(),
+            settings = get<SettingsManager>(),
+            feedInvalidator = get(),
         )
     }
     single(createdAtStart = false) {

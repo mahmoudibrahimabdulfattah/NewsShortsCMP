@@ -1,4 +1,4 @@
-package com.mk.newsshorts.presentation.ui.screen
+package com.mk.newsshorts.feature.appgate
 
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text

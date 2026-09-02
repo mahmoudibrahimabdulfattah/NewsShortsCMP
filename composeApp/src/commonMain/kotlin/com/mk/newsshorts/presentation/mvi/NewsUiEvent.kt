@@ -60,23 +60,9 @@ sealed interface NewsUiEvent {
      */
     data object RetryNextPage : NewsUiEvent
     data object DismissError : NewsUiEvent
-    /** Acknowledges the device-integrity warning, which then stays dismissed. */
-    data object DismissSecurityWarning : NewsUiEvent
 
     /** Fired once, after the reader has read enough to make an informed choice. */
     data object RequestNotificationPermissionIfDue : NewsUiEvent
-
-    /** Ticks a category on or off during onboarding; nothing is saved yet. */
-    data class OnboardingToggleCategory(val category: NewsCategory) : NewsUiEvent
-
-    /** Advances a step, or finishes and keeps whatever was chosen. */
-    data object OnboardingNext : NewsUiEvent
-
-    /**
-     * Leaves onboarding early. Not a cancel — the defaults are real settings
-     * and the reader gets a working app, they just did not pick.
-     */
-    data object OnboardingSkip : NewsUiEvent
 }
 
 /**

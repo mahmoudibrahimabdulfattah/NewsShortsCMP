@@ -2,8 +2,10 @@ package com.mk.newsshorts.di
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import com.mk.newsshorts.feature.appgate.AppGateViewModel
 import com.mk.newsshorts.feature.auth.AuthViewModel
 import com.mk.newsshorts.feature.inbox.InboxViewModel
+import com.mk.newsshorts.feature.onboarding.OnboardingViewModel
 import com.mk.newsshorts.feature.saved.SavedArticlesViewModel
 import com.mk.newsshorts.feature.search.SearchViewModel
 import com.mk.newsshorts.feature.settings.SettingsViewModel
@@ -36,3 +38,11 @@ actual fun provideSavedArticlesViewModel(): SavedArticlesViewModel =
 @Composable
 actual fun provideSettingsViewModel(): SettingsViewModel =
     remember { KoinPlatform.getKoin().get<SettingsViewModel>() }
+
+@Composable
+actual fun provideAppGateViewModel(): AppGateViewModel =
+    remember { KoinPlatform.getKoin().get<AppGateViewModel>() }
+
+@Composable
+actual fun provideOnboardingViewModel(): OnboardingViewModel =
+    remember { KoinPlatform.getKoin().get<OnboardingViewModel>() }

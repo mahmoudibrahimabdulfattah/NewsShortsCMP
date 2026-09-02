@@ -19,14 +19,6 @@ data class NewsUiState(
     val currentTab: NavigationTab = NavigationTab.FOR_YOU,
     val isOfflineMode: Boolean = false,
     /**
-     * Which onboarding step is showing, or null once it is done or was never
-     * needed. Null rather than a boolean plus an index, so "not onboarding" is
-     * one state instead of two that can disagree.
-     */
-    val onboarding: OnboardingStep? = null,
-    /** Ticked during onboarding; written to settings only when it finishes. */
-    val onboardingCategories: List<NewsCategory> = emptyList(),
-    /**
      * The category row's order — the reader's picks first. Held in state rather
      * than read from settings at each call site, so the row and the feed can
      * never disagree about which category comes first.
@@ -77,12 +69,6 @@ data class NewsUiState(
      * stack — they switch, they do not push.
      */
     val overlays: List<Overlay> = emptyList(),
-    /** Non-null when the backend no longer supports this build; blocks the UI. */
-    val requiredUpdate: RequiredUpdate? = null,
-    /** Result of the device-integrity check under the backend's policy. */
-    val securityNotice: SecurityNotice = SecurityNotice.NONE,
-    /** Which signals produced [securityNotice]; decides the wording shown. */
-    val securityReason: SecurityReason = SecurityReason.INTEGRITY,
 ) {
     val hasArticles: Boolean
         get() = articles.isNotEmpty()

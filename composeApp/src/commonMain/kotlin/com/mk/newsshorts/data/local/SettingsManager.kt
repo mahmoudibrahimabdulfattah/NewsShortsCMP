@@ -5,6 +5,29 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+/**
+ * The one-time flag the security gate reads. Separate from the reader's own
+ * preferences: nobody chose it, and only the gate has any business with it.
+ */
+interface SecurityFlagPersistence {
+    fun securityWarningSeen(): Boolean
+    suspend fun markSecurityWarningSeen()
+}
+
+/**
+ * What onboarding needs to remember once and then stop asking about. The
+ * category list belongs here rather than with the preferences flow because
+ * onboarding writes it only when it finishes.
+ */
+interface OnboardingPersistence {
+    fun onboardingComplete(): Boolean
+    suspend fun markOnboardingComplete()
+    fun notificationPromptSeen(): Boolean
+    suspend fun markNotificationPromptSeen()
+    fun preferredCategories(): List<String>
+    suspend fun savePreferredCategories(apiValues: List<String>)
+}
+
 interface SettingsPersistence {
     val preferences: StateFlow<AppPreferences>
 
@@ -19,7 +42,7 @@ interface SettingsPersistence {
 
 class SettingsManager(
     private val settingsStorage: SettingsStorage
-) : SettingsPersistence {
+) : SettingsPersistence, SecurityFlagPersistence, OnboardingPersistence {
     private val preferencesState: MutableStateFlow<AppPreferences> =
         MutableStateFlow(readAppPreferences(settingsStorage::getString))
 
@@ -93,10 +116,10 @@ class SettingsManager(
      * reader on a rooted device is told once and then left alone — a warning on
      * every launch is a warning nobody reads.
      */
-    fun securityWarningSeen(): Boolean =
+    override fun securityWarningSeen(): Boolean =
         settingsStorage.getString(KEY_SECURITY_WARNING_SEEN, "") == "true"
 
-    suspend fun markSecurityWarningSeen() {
+    override suspend fun markSecurityWarningSeen() {
         settingsStorage.putString(KEY_SECURITY_WARNING_SEEN, "true")
     }
 
@@ -105,10 +128,10 @@ class SettingsManager(
      * Once, ever — asked again on a later launch would be the cold-start
      * request this was built to replace.
      */
-    fun notificationPromptSeen(): Boolean =
+    override fun notificationPromptSeen(): Boolean =
         settingsStorage.getString(KEY_NOTIFICATION_PROMPT_SEEN, "") == "true"
 
-    suspend fun markNotificationPromptSeen() {
+    override suspend fun markNotificationPromptSeen() {
         settingsStorage.putString(KEY_NOTIFICATION_PROMPT_SEEN, "true")
     }
 
@@ -118,10 +141,10 @@ class SettingsManager(
      * would let the finished flow re-open itself the moment it wrote its own
      * completion.
      */
-    fun onboardingComplete(): Boolean =
+    override fun onboardingComplete(): Boolean =
         settingsStorage.getString(KEY_ONBOARDING_COMPLETE, "") == "true"
 
-    suspend fun markOnboardingComplete() {
+    override suspend fun markOnboardingComplete() {
         settingsStorage.putString(KEY_ONBOARDING_COMPLETE, "true")
     }
 
@@ -130,12 +153,12 @@ class SettingsManager(
      * Empty means they skipped or picked none, which is not the same as
      * wanting nothing — see `orderedCategories`.
      */
-    fun preferredCategories(): List<String> =
+    override fun preferredCategories(): List<String> =
         settingsStorage.getString(KEY_PREFERRED_CATEGORIES, "")
             .split(',')
             .filter { it.isNotBlank() }
 
-    suspend fun savePreferredCategories(apiValues: List<String>) {
+    override suspend fun savePreferredCategories(apiValues: List<String>) {
         settingsStorage.putString(KEY_PREFERRED_CATEGORIES, apiValues.joinToString(","))
     }
 

@@ -232,7 +232,6 @@ class NewsViewModel(
         loadSavedSettings()
         observeDeepLinks()
         observeFeedInvalidations()
-        checkForRequiredUpdate()
         observeAuthState()
     }
 
@@ -298,74 +297,6 @@ class NewsViewModel(
         syncPublisher.publishSettings(currentSyncedSettings())
     }
 
-    /**
-     * Runs alongside the feed load rather than before it: these checks are
-     * safeguards for rare cases, and making every launch wait on a network call
-     * to find out everything is fine would be a cost paid by everyone.
-     *
-     * The device is inspected regardless of whether the config arrives — a
-     * blocked network is exactly the state an attacker would arrange if the
-     * response decided whether the check ran. What the config decides is only
-     * the response to it, and the default is the mildest one.
-     */
-    private fun checkForRequiredUpdate() {
-        viewModelScope.launch {
-            val config = remoteConfigClient.fetch()
-
-            val update = config?.let { requiredUpdateFor(it, BuildConfig.VERSION_CODE) }
-            if (update != null) {
-                analytics.logEvent(AnalyticsEvent.UpdateRequired(BuildConfig.VERSION_CODE))
-                mutableState.update { state -> state.copy(requiredUpdate = update) }
-                // An unsupported build is the more urgent of the two screens,
-                // and it is the one the reader can act on.
-                return@launch
-            }
-
-            // A debug build never enforces any of this, so it does not run the
-            // checks either — the whole feature is invisible while developing.
-            if (isDebugBuild()) return@launch
-
-            val integrity = deviceIntegrityInspector.inspect()
-            if (!integrity.isCompromised && !integrity.isDeveloperEnvironment) return@launch
-
-            analytics.logEvent(
-                AnalyticsEvent.DeviceIntegrityFailed(
-                    rooted = integrity.isRooted,
-                    debugger = integrity.isDebuggerAttached,
-                    tampered = integrity.isTampered,
-                    emulator = integrity.isEmulator,
-                    developerOptions = integrity.isDeveloperOptionsEnabled,
-                )
-            )
-            val notice = securityNoticeFor(
-                integrity = integrity,
-                policy = IntegrityPolicy.fromWire(config?.rootPolicy),
-                environmentPolicy = IntegrityPolicy.fromWire(
-                    config?.emulatorPolicy,
-                    default = IntegrityPolicy.BLOCK,
-                ),
-                warningAlreadySeen = settingsManager.securityWarningSeen(),
-                enforce = true,
-            )
-            if (notice != SecurityNotice.NONE) {
-                mutableState.update { state ->
-                    state.copy(
-                        securityNotice = notice,
-                        securityReason = securityReasonFor(integrity),
-                    )
-                }
-            }
-        }
-    }
-
-    /** The warning is shown once; dismissing it records that it was seen. */
-    private fun handleDismissSecurityWarning() {
-        viewModelScope.launch {
-            settingsManager.markSecurityWarningSeen()
-            mutableState.update { state -> state.copy(securityNotice = SecurityNotice.NONE) }
-        }
-    }
-
     private fun observeDeepLinks() {
         viewModelScope.launch {
             deepLinkBus.pending.collect { pending ->
@@ -410,8 +341,27 @@ class NewsViewModel(
         when (reason) {
             InvalidationReason.CountryChanged -> loadNewsForCountryWithCache(country)
             InvalidationReason.LanguageChanged,
-            InvalidationReason.SyncApplied,
-            InvalidationReason.OnboardingFinished -> loadNewsWithCache()
+            InvalidationReason.SyncApplied -> loadNewsWithCache()
+            InvalidationReason.OnboardingFinished -> {
+                // The reader has just chosen their categories, so the order and
+                // the opening category are re-read rather than pushed here.
+                // Onboarding writes the choice to settings and says only that
+                // the feed is stale; what that means for the feed is the feed's
+                // own business.
+                applyPreferredCategories()
+                loadNewsWithCache()
+            }
+        }
+    }
+
+    /** The reader's category choice, as the feed reads it from the store. */
+    private fun applyPreferredCategories() {
+        val preferred: List<String> = settingsManager.preferredCategories()
+        mutableState.update { state ->
+            state.copy(
+                categoryOrder = orderedCategories(preferred),
+                selectedCategory = openingCategory(preferred),
+            )
         }
     }
 
@@ -425,12 +375,8 @@ class NewsViewModel(
             val country: CountryOption = CountryOption.entries.find { it.code == stored.selectedCountry }
                 ?: CountryOption.UNITED_STATES
             val preferred: List<String> = settingsManager.preferredCategories()
-            // Read once, at the only moment it can be true. Asked again later
-            // it would re-open the flow the reader has just finished.
-            val needsOnboarding: Boolean = !settingsManager.onboardingComplete()
             mutableState.update { state ->
                 state.copy(
-                    onboarding = if (needsOnboarding) OnboardingStep.LANGUAGE else null,
                     selectedCategory = openingCategory(preferred),
                     categoryOrder = orderedCategories(preferred),
                     selectedLanguage = newsLanguage,
@@ -479,7 +425,6 @@ class NewsViewModel(
             NewsUiEvent.CloseArticleDetails -> handleCloseOverlay()
             is NewsUiEvent.OpenOverlay -> handleOpenOverlay(event.overlay)
             NewsUiEvent.CloseOverlay -> handleCloseOverlay()
-            NewsUiEvent.DismissSecurityWarning -> handleDismissSecurityWarning()
             NewsUiEvent.OpenArticleSource -> handleOpenArticleSource()
             NewsUiEvent.OpenPrivacyPolicy -> viewModelScope.launch {
                 mutableEffect.emit(NewsUiEffect.OpenUrl(privacyPolicyUrl()))
@@ -495,9 +440,6 @@ class NewsViewModel(
             NewsUiEvent.RetryNextPage -> handleRetryNextPage()
             NewsUiEvent.DismissError -> handleDismissError()
             NewsUiEvent.RequestNotificationPermissionIfDue -> handleRequestNotificationPermissionIfDue()
-            is NewsUiEvent.OnboardingToggleCategory -> handleOnboardingToggleCategory(event.category)
-            NewsUiEvent.OnboardingNext -> handleOnboardingNext()
-            NewsUiEvent.OnboardingSkip -> handleOnboardingSkip()
         }
     }
 
@@ -597,89 +539,6 @@ class NewsViewModel(
                     // No loading needed
                 }
             }
-        }
-    }
-
-    /**
-     * Advances onboarding, or finishes it on the last step.
-     *
-     * Finishing writes what was chosen; there is no separate confirm, because
-     * every step already applied its own answer the moment it was tapped —
-     * language rewrites the screen under the reader's hand, and a category is
-     * ticked, not submitted.
-     */
-    private fun handleOnboardingNext() {
-        val current: OnboardingStep = mutableState.value.onboarding ?: return
-        val next: OnboardingStep? = current.next
-        if (next != null) {
-            mutableState.update { it.copy(onboarding = next) }
-            return
-        }
-        finishOnboarding(answeredNotifications = true)
-    }
-
-    /**
-     * Leaves early, keeping anything already ticked. The notification
-     * permission is deliberately *not* requested here: a reader who skipped
-     * past the question has not answered it, so the contextual prompt after a
-     * few articles stays armed, which is the whole point of having it.
-     */
-    private fun handleOnboardingSkip() {
-        finishOnboarding(answeredNotifications = false)
-    }
-
-    /**
-     * [answeredNotifications] is whether the reader reached the last step and
-     * pressed through it — which is an answer either way, including "no".
-     *
-     * Only that closes the question. A "no" here used to leave the contextual
-     * prompt armed, so the reader who had just declined got the system dialog
-     * anyway a few articles later; declining that is what permanently blocks
-     * the app from ever asking again, so the reask was not merely rude, it
-     * spent the one thing it was trying to win. Skipping leaves it armed on
-     * purpose: a reader who skipped past the question has not answered it.
-     */
-    private fun finishOnboarding(answeredNotifications: Boolean) {
-        val chosen: List<NewsCategory> = mutableState.value.onboardingCategories
-        val preferred: List<String> = chosen.map { it.apiValue }
-        mutableState.update { state ->
-            state.copy(
-                onboarding = null,
-                categoryOrder = orderedCategories(preferred),
-                selectedCategory = openingCategory(preferred),
-                currentArticleIndex = 0,
-            )
-        }
-        viewModelScope.launch {
-            settingsManager.savePreferredCategories(preferred)
-            settingsManager.markOnboardingComplete()
-            if (answeredNotifications) {
-                // Marked seen on either answer, so the after-a-few-articles
-                // prompt never asks a question the reader has already answered.
-                settingsManager.markNotificationPromptSeen()
-                // The system dialog only for a yes. Showing it to someone who
-                // just said no would collect the denial that locks the
-                // permission for good.
-                if (settingsManager.preferences.value.notificationsEnabled) {
-                    mutableEffect.emit(NewsUiEffect.RequestNotificationPermission)
-                }
-            }
-        }
-        // The category may have changed, so the feed is reloaded rather than
-        // left showing whatever the default had already fetched behind us.
-        feedInvalidator.invalidate(InvalidationReason.OnboardingFinished)
-    }
-
-    private fun handleOnboardingToggleCategory(category: NewsCategory) {
-        mutableState.update { state ->
-            val chosen = state.onboardingCategories
-            state.copy(
-                onboardingCategories = if (category in chosen) {
-                    chosen - category
-                } else {
-                    chosen + category
-                }
-            )
         }
     }
 
