@@ -4,14 +4,13 @@ import com.mk.newsshorts.analytics.AnalyticsEvent
 import com.mk.newsshorts.analytics.AnalyticsReporter
 import com.mk.newsshorts.data.local.AppPreferences
 import com.mk.newsshorts.data.local.SettingsPersistence
-import com.mk.newsshorts.domain.model.FeedLanguage
-import com.mk.newsshorts.notifications.PushSubscriber
 import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.localization.getStrings
 import com.mk.newsshorts.presentation.mvi.NotificationTier
 import com.mk.newsshorts.presentation.mvi.TextScale
 import com.mk.newsshorts.presentation.mvi.ThemeMode
 import com.mk.newsshorts.presentation.viewmodel.BaseViewModel
+import com.mk.newsshorts.sync.SyncPublisher
 import com.mk.newsshorts.sync.SyncedSettings
 import com.mk.newsshorts.sync.toSyncedSettings
 import kotlinx.coroutines.CoroutineScope
@@ -38,7 +37,7 @@ sealed interface SettingsUiEvent {
     data class SelectAppLocale(val locale: AppLocale) : SettingsUiEvent
     data class SelectThemeMode(val mode: ThemeMode) : SettingsUiEvent
     data class SelectTextScale(val scale: TextScale) : SettingsUiEvent
-    data class ToggleNotifications(val newsLanguage: String) : SettingsUiEvent
+    data object ToggleNotifications : SettingsUiEvent
     data class ToggleNotificationTier(val tier: NotificationTier) : SettingsUiEvent
 }
 
@@ -50,7 +49,7 @@ sealed interface SettingsUiEffect {
 class SettingsViewModel(
     private val settingsManager: SettingsPersistence,
     private val analytics: AnalyticsReporter,
-    private val pushSubscriber: PushSubscriber,
+    private val syncPublisher: SyncPublisher,
     private val scopeOverride: CoroutineScope? = null,
 ) : BaseViewModel() {
     private val mutableState = MutableStateFlow(SettingsUiState())
@@ -62,47 +61,26 @@ class SettingsViewModel(
     private val settingsScope: CoroutineScope
         get() = scopeOverride ?: viewModelScope
 
-    fun applyStored(preferences: AppPreferences) {
-        mutableState.value = preferences.toUiState()
+    init {
+        // Seeded from the store rather than collected from it. Every path that
+        // changes a setting goes through this class — a handler, or applySynced
+        // for the remote-wins case — and each already updates the state as it
+        // writes, so a collector would only be re-deriving what is about to be
+        // set anyway. It would also be a coroutine that never completes, which
+        // forces every caller to hand over a scope it is willing to leave
+        // running forever, tests included.
+        mutableState.value = settingsManager.preferences.value.toUiState()
     }
 
     internal fun currentSyncedSettings(): SyncedSettings =
         settingsManager.preferences.value.toSyncedSettings()
-
-    suspend fun applySynced(settings: SyncedSettings) {
-        val locale = AppLocale.fromCode(settings.appLocale)
-        val theme = ThemeMode.entries.find {
-            it.name.equals(settings.themeMode, ignoreCase = true)
-        } ?: mutableState.value.themeMode
-        settingsManager.saveAppLocale(locale.code)
-        settingsManager.saveThemeMode(theme.name.lowercase())
-        settingsManager.setNotificationsEnabled(settings.notificationsEnabled)
-        settingsManager.setNotifyBreaking(settings.notifyBreaking)
-        settingsManager.setNotifyTopStory(settings.notifyTopStory)
-        settingsManager.setNotifyReminder(settings.notifyReminder)
-        mutableState.update {
-            it.copy(
-                appLocale = locale,
-                themeMode = theme,
-                notificationsEnabled = settings.notificationsEnabled,
-                notifyBreaking = settings.notifyBreaking,
-                notifyTopStory = settings.notifyTopStory,
-                notifyReminder = settings.notifyReminder,
-            )
-        }
-        if (settings.notificationsEnabled) {
-            pushSubscriber.subscribeToLanguage(FeedLanguage.resolve(settings.newsLanguage))
-        } else {
-            pushSubscriber.unsubscribeAll()
-        }
-    }
 
     /** True only when the event changed a synced preference. */
     fun processEvent(event: SettingsUiEvent): Boolean = when (event) {
         is SettingsUiEvent.SelectAppLocale -> selectAppLocale(event.locale)
         is SettingsUiEvent.SelectThemeMode -> selectThemeMode(event.mode)
         is SettingsUiEvent.SelectTextScale -> selectTextScale(event.scale)
-        is SettingsUiEvent.ToggleNotifications -> toggleNotifications(event.newsLanguage)
+        SettingsUiEvent.ToggleNotifications -> toggleNotifications()
         is SettingsUiEvent.ToggleNotificationTier -> toggleNotificationTier(event.tier)
     }
 
@@ -113,6 +91,7 @@ class SettingsViewModel(
             analytics.logEvent(AnalyticsEvent.AppLanguageChanged(locale.code))
             analytics.setProperty("app_language", locale.code)
             settingsManager.saveAppLocale(locale.code)
+            publishSettings()
             val strings = getStrings(locale)
             val languageName = strings.languageNames[locale.code] ?: locale.displayName
             mutableEffect.emit(SettingsUiEffect.ShowToast("${strings.languageChangedTo} $languageName"))
@@ -123,27 +102,31 @@ class SettingsViewModel(
     private fun selectThemeMode(mode: ThemeMode): Boolean {
         if (mode == mutableState.value.themeMode) return false
         mutableState.update { it.copy(themeMode = mode) }
-        settingsScope.launch { settingsManager.saveThemeMode(mode.name.lowercase()) }
+        settingsScope.launch {
+            settingsManager.saveThemeMode(mode.name.lowercase())
+            publishSettings()
+        }
         return true
     }
 
     private fun selectTextScale(scale: TextScale): Boolean {
         if (scale == mutableState.value.textScale) return false
         mutableState.update { it.copy(textScale = scale) }
-        settingsScope.launch { settingsManager.saveTextScale(scale.stored) }
+        settingsScope.launch {
+            settingsManager.saveTextScale(scale.stored)
+            publishSettings()
+        }
         return true
     }
 
-    private fun toggleNotifications(newsLanguage: String): Boolean {
+    private fun toggleNotifications(): Boolean {
         val enabling = !mutableState.value.notificationsEnabled
         mutableState.update { it.copy(notificationsEnabled = enabling) }
         settingsScope.launch {
             settingsManager.setNotificationsEnabled(enabling)
+            publishSettings()
             if (enabling) {
-                pushSubscriber.subscribeToLanguage(FeedLanguage.resolve(newsLanguage))
                 mutableEffect.emit(SettingsUiEffect.RequestNotificationPermission)
-            } else {
-                pushSubscriber.unsubscribeAll()
             }
         }
         return true
@@ -155,20 +138,33 @@ class SettingsViewModel(
             NotificationTier.BREAKING -> {
                 val enabling = !state.notifyBreaking
                 mutableState.update { it.copy(notifyBreaking = enabling) }
-                settingsScope.launch { settingsManager.setNotifyBreaking(enabling) }
+                settingsScope.launch {
+                    settingsManager.setNotifyBreaking(enabling)
+                    publishSettings()
+                }
             }
             NotificationTier.TOP_STORY -> {
                 val enabling = !state.notifyTopStory
                 mutableState.update { it.copy(notifyTopStory = enabling) }
-                settingsScope.launch { settingsManager.setNotifyTopStory(enabling) }
+                settingsScope.launch {
+                    settingsManager.setNotifyTopStory(enabling)
+                    publishSettings()
+                }
             }
             NotificationTier.REMINDER -> {
                 val enabling = !state.notifyReminder
                 mutableState.update { it.copy(notifyReminder = enabling) }
-                settingsScope.launch { settingsManager.setNotifyReminder(enabling) }
+                settingsScope.launch {
+                    settingsManager.setNotifyReminder(enabling)
+                    publishSettings()
+                }
             }
         }
         return true
+    }
+
+    private fun publishSettings() {
+        syncPublisher.publishSettings(currentSyncedSettings())
     }
 }
 

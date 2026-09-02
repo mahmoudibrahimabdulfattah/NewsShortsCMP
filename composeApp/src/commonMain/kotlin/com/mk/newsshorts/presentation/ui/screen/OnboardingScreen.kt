@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.mk.newsshorts.domain.model.NewsCategory
 import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.localization.appStrings
+import com.mk.newsshorts.feature.settings.SettingsUiEvent
 import com.mk.newsshorts.feature.settings.SettingsUiState
 import com.mk.newsshorts.presentation.localization.categoryName
 import com.mk.newsshorts.presentation.mvi.NewsUiEvent
@@ -59,6 +60,7 @@ fun OnboardingScreen(
     uiState: NewsUiState,
     settingsUiState: SettingsUiState,
     onEvent: (NewsUiEvent) -> Unit,
+    onSettingsEvent: (SettingsUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -91,9 +93,11 @@ fun OnboardingScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     when (current) {
-                        OnboardingStep.LANGUAGE -> LanguageStep(settingsUiState, onEvent)
+                        OnboardingStep.LANGUAGE -> LanguageStep(settingsUiState, onSettingsEvent)
                         OnboardingStep.CATEGORIES -> CategoriesStep(uiState, onEvent)
-                        OnboardingStep.NOTIFICATIONS -> NotificationsStep(settingsUiState, onEvent)
+                        OnboardingStep.NOTIFICATIONS -> {
+                            NotificationsStep(settingsUiState, onSettingsEvent)
+                        }
                     }
                 }
             }
@@ -133,7 +137,7 @@ private fun StepHeading(title: String, subtitle: String) {
 }
 
 @Composable
-private fun LanguageStep(settingsUiState: SettingsUiState, onEvent: (NewsUiEvent) -> Unit) {
+private fun LanguageStep(settingsUiState: SettingsUiState, onEvent: (SettingsUiEvent) -> Unit) {
     val strings = appStrings()
     StepHeading(strings.onboardingLanguageTitle, strings.onboardingLanguageSubtitle)
     // Applied on tap, not on continue: the whole screen flips to the chosen
@@ -142,7 +146,7 @@ private fun LanguageStep(settingsUiState: SettingsUiState, onEvent: (NewsUiEvent
         FilterPill(
             label = locale.nativeName,
             isSelected = locale == settingsUiState.appLocale,
-            onClick = { onEvent(NewsUiEvent.SelectAppLocale(locale)) },
+            onClick = { onEvent(SettingsUiEvent.SelectAppLocale(locale)) },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp),
@@ -179,7 +183,7 @@ private fun CategoriesStep(uiState: NewsUiState, onEvent: (NewsUiEvent) -> Unit)
 }
 
 @Composable
-private fun NotificationsStep(settingsUiState: SettingsUiState, onEvent: (NewsUiEvent) -> Unit) {
+private fun NotificationsStep(settingsUiState: SettingsUiState, onEvent: (SettingsUiEvent) -> Unit) {
     val strings = appStrings()
     StepHeading(strings.onboardingNotificationsTitle, strings.onboardingNotificationsSubtitle)
     // The in-app preference, not the OS permission. The permission itself is
@@ -189,7 +193,7 @@ private fun NotificationsStep(settingsUiState: SettingsUiState, onEvent: (NewsUi
         label = strings.onboardingNotificationsOn,
         isSelected = settingsUiState.notificationsEnabled,
         onClick = {
-            if (!settingsUiState.notificationsEnabled) onEvent(NewsUiEvent.ToggleNotificationsEnabled)
+            if (!settingsUiState.notificationsEnabled) onEvent(SettingsUiEvent.ToggleNotifications)
         },
         modifier = Modifier
             .fillMaxWidth()
@@ -199,7 +203,7 @@ private fun NotificationsStep(settingsUiState: SettingsUiState, onEvent: (NewsUi
         label = strings.onboardingNotificationsOff,
         isSelected = !settingsUiState.notificationsEnabled,
         onClick = {
-            if (settingsUiState.notificationsEnabled) onEvent(NewsUiEvent.ToggleNotificationsEnabled)
+            if (settingsUiState.notificationsEnabled) onEvent(SettingsUiEvent.ToggleNotifications)
         },
         modifier = Modifier
             .fillMaxWidth()

@@ -48,7 +48,7 @@ class SavedArticlesRepositoryTest {
     @Test
     fun `load publishes what the store already held`() = runTest {
         val store = FakeSavedArticlesLocalStore(listOf(a, b))
-        val repository = SavedArticlesRepository(store)
+        val repository = DefaultSavedArticlesRepository(store)
 
         repository.load()
 
@@ -58,7 +58,7 @@ class SavedArticlesRepositoryTest {
     @Test
     fun `readiness only turns true once the store has actually been read`() = runTest {
         val store = FakeSavedArticlesLocalStore(listOf(a))
-        val repository = SavedArticlesRepository(store)
+        val repository = DefaultSavedArticlesRepository(store)
         assertFalse(repository.isLoaded.value)
 
         var resumed = false
@@ -78,7 +78,7 @@ class SavedArticlesRepositoryTest {
 
     @Test
     fun `an empty store still counts as loaded`() = runTest {
-        val repository = SavedArticlesRepository(FakeSavedArticlesLocalStore())
+        val repository = DefaultSavedArticlesRepository(FakeSavedArticlesLocalStore())
 
         repository.load()
 
@@ -89,7 +89,7 @@ class SavedArticlesRepositoryTest {
     @Test
     fun `a new bookmark goes to the front and is written through`() = runTest {
         val store = FakeSavedArticlesLocalStore(listOf(a))
-        val repository = SavedArticlesRepository(store)
+        val repository = DefaultSavedArticlesRepository(store)
         repository.load()
 
         val result = repository.toggle(b)
@@ -102,7 +102,7 @@ class SavedArticlesRepositoryTest {
     @Test
     fun `toggling the same url again removes it`() = runTest {
         val store = FakeSavedArticlesLocalStore(listOf(a, b))
-        val repository = SavedArticlesRepository(store)
+        val repository = DefaultSavedArticlesRepository(store)
         repository.load()
 
         val result = repository.toggle(a)
@@ -115,7 +115,7 @@ class SavedArticlesRepositoryTest {
     @Test
     fun `a different article object with the same url is the same bookmark`() = runTest {
         val store = FakeSavedArticlesLocalStore(listOf(a))
-        val repository = SavedArticlesRepository(store)
+        val repository = DefaultSavedArticlesRepository(store)
         repository.load()
 
         // Same URL, everything else different — the feed hands out fresh
@@ -129,7 +129,7 @@ class SavedArticlesRepositoryTest {
     @Test
     fun `removing a bookmark that is not there changes nothing`() = runTest {
         val store = FakeSavedArticlesLocalStore(listOf(a))
-        val repository = SavedArticlesRepository(store)
+        val repository = DefaultSavedArticlesRepository(store)
         repository.load()
         val savesAfterLoad = store.saveCount
 
@@ -141,7 +141,7 @@ class SavedArticlesRepositoryTest {
     @Test
     fun `removing a bookmark that is there reports true and persists`() = runTest {
         val store = FakeSavedArticlesLocalStore(listOf(a, b))
-        val repository = SavedArticlesRepository(store)
+        val repository = DefaultSavedArticlesRepository(store)
         repository.load()
 
         assertTrue(repository.remove(a))
@@ -151,7 +151,7 @@ class SavedArticlesRepositoryTest {
     @Test
     fun `merging with remote keeps both sides and persists the union`() = runTest {
         val store = FakeSavedArticlesLocalStore(listOf(a))
-        val repository = SavedArticlesRepository(store)
+        val repository = DefaultSavedArticlesRepository(store)
         repository.load()
 
         val merged = repository.mergeWithRemote(listOf(b))
@@ -164,7 +164,7 @@ class SavedArticlesRepositoryTest {
     @Test
     fun `a url on both sides is not duplicated by the merge`() = runTest {
         val store = FakeSavedArticlesLocalStore(listOf(a))
-        val repository = SavedArticlesRepository(store)
+        val repository = DefaultSavedArticlesRepository(store)
         repository.load()
 
         val merged = repository.mergeWithRemote(listOf(article("remote-copy", a.articleUrl.value), b))
@@ -175,7 +175,7 @@ class SavedArticlesRepositoryTest {
     @Test
     fun `the store's cap survives the repository`() = runTest {
         val store = FakeSavedArticlesLocalStore()
-        val repository = SavedArticlesRepository(store)
+        val repository = DefaultSavedArticlesRepository(store)
         repository.load()
 
         repeat(250) { repository.toggle(article("a$it", "https://example.com/$it")) }

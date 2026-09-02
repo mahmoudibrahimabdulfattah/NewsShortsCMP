@@ -1,21 +1,32 @@
 package com.mk.newsshorts.di
 
 import com.mk.newsshorts.data.local.SettingsManager
+import com.mk.newsshorts.data.repository.SavedArticles
 import com.mk.newsshorts.feature.saved.SavedArticlesViewModel
 import com.mk.newsshorts.feature.search.SearchViewModel
 import com.mk.newsshorts.feature.settings.SettingsViewModel
+import com.mk.newsshorts.presentation.localization.AppLocale
+import com.mk.newsshorts.presentation.localization.getStrings
 import com.mk.newsshorts.presentation.viewmodel.NewsViewModel
 import org.koin.dsl.module
 
 val presentationModule = module {
     single(createdAtStart = false) {
-        SavedArticlesViewModel(repository = get(), analytics = get())
+        val settingsManager = get<SettingsManager>()
+        SavedArticlesViewModel(
+            repository = get<SavedArticles>(),
+            analytics = get(),
+            syncPublisher = get(),
+            strings = {
+                getStrings(AppLocale.fromCode(settingsManager.preferences.value.appLocale))
+            },
+        )
     }
     single(createdAtStart = false) {
         SettingsViewModel(
             settingsManager = get<SettingsManager>(),
             analytics = get(),
-            pushSubscriber = get(),
+            syncPublisher = get(),
         )
     }
     single(createdAtStart = false) {
@@ -28,18 +39,21 @@ val presentationModule = module {
     single(createdAtStart = false) {
         NewsViewModel(
             getTopHeadlinesUseCase = get(),
-            savedArticlesViewModel = get(),
-            settingsViewModel = get(),
             settingsManager = get(),
             analytics = get(),
-            pushSubscriber = get(),
             deepLinkBus = get(),
             sharePageResolver = get(),
             notificationInboxClient = get(),
             notificationInboxStore = get(),
+            inboxReadMarker = get(),
             notificationBus = get(),
             signInLinkBus = get(),
-            savedArticlesRepository = get(),
+            savedArticles = get(),
+            accountSync = get(),
+            authSession = get(),
+            syncPublisher = get(),
+            feedInvalidator = get(),
+            articleLookup = get(),
             seenArticlesStore = get(),
             pendingSignInEmailStore = get(),
             remoteConfigClient = get(),

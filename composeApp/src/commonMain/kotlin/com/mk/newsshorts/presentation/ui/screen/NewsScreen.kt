@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
@@ -49,10 +48,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.BackHandler
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.mk.newsshorts.feature.saved.SavedArticlesUiEffect
+import com.mk.newsshorts.feature.saved.SavedArticlesUiEvent
 import com.mk.newsshorts.feature.saved.SavedArticlesUiState
 import com.mk.newsshorts.feature.saved.SavedArticlesViewModel
 import com.mk.newsshorts.feature.saved.SavedArticlesScreen
@@ -61,6 +61,7 @@ import com.mk.newsshorts.feature.search.SearchUiEvent
 import com.mk.newsshorts.feature.search.SearchUiState
 import com.mk.newsshorts.feature.search.SearchViewModel
 import com.mk.newsshorts.feature.settings.SettingsUiEffect
+import com.mk.newsshorts.feature.settings.SettingsUiEvent
 import com.mk.newsshorts.feature.settings.SettingsUiState
 import com.mk.newsshorts.feature.settings.SettingsViewModel
 import com.mk.newsshorts.feature.settings.SettingsScreen
@@ -132,7 +133,25 @@ fun NewsScreen(
             }
         }
     }
-    val onNewsEvent: (NewsUiEvent) -> Unit = { event ->
+    LaunchedEffect(Unit) {
+        savedArticlesViewModel.uiEffect.collect { effect ->
+            when (effect) {
+                is SavedArticlesUiEffect.ShowToast -> showToast(effect.message)
+            }
+        }
+    }
+    val onNewsEvent: (NewsUiEvent) -> Unit = onNewsEvent@{ event ->
+        when (event) {
+            is NewsUiEvent.SaveArticle -> {
+                savedArticlesViewModel.processEvent(SavedArticlesUiEvent.Toggle(event.article))
+                return@onNewsEvent
+            }
+            is NewsUiEvent.RemoveSavedArticle -> {
+                savedArticlesViewModel.processEvent(SavedArticlesUiEvent.Remove(event.article))
+                return@onNewsEvent
+            }
+            else -> Unit
+        }
         when {
             event == NewsUiEvent.OpenSearch -> searchViewModel.processEvent(
                 SearchUiEvent.Opened(uiState.selectedLanguage.code)
@@ -141,6 +160,9 @@ fun NewsScreen(
                 searchViewModel.processEvent(SearchUiEvent.Closed)
         }
         viewModel.processEvent(event)
+    }
+    val onSettingsEvent: (SettingsUiEvent) -> Unit = { event ->
+        settingsViewModel.processEvent(event)
     }
     val onSearchEvent: (SearchUiEvent) -> Unit = { event ->
         searchViewModel.processEvent(event)
@@ -158,6 +180,7 @@ fun NewsScreen(
         savedArticlesUiState = savedArticlesUiState,
         settingsUiState = settingsUiState,
         onEvent = onNewsEvent,
+        onSettingsEvent = onSettingsEvent,
         onSearchEvent = onSearchEvent,
         modifier = modifier
     )
@@ -171,6 +194,7 @@ private fun NewsScreenContent(
     savedArticlesUiState: SavedArticlesUiState,
     settingsUiState: SettingsUiState,
     onEvent: (NewsUiEvent) -> Unit,
+    onSettingsEvent: (SettingsUiEvent) -> Unit,
     onSearchEvent: (SearchUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -289,7 +313,8 @@ private fun NewsScreenContent(
                 SettingsScreen(
                     newsUiState = uiState,
                     settingsUiState = settingsUiState,
-                    onEvent = onEvent,
+                    onNewsEvent = onEvent,
+                    onSettingsEvent = onSettingsEvent,
                     modifier = Modifier.fillMaxSize()
                 )
             }

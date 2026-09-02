@@ -32,7 +32,7 @@ class ThemeModeTest {
 
     @Test
     fun `a stored value round-trips through the enum name`() {
-        // handleSelectThemeMode persists mode.name.lowercase(); loadSavedSettings
+        // SettingsViewModel persists mode.name.lowercase(); settings loading
         // reads it back with equals(ignoreCase = true). Both directions in one
         // case, so a rename of the enum constant fails this rather than
         // silently resetting everyone to SYSTEM on the next launch.

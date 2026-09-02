@@ -164,6 +164,7 @@ fun App(
                         uiState = uiState,
                         settingsUiState = settingsUiState,
                         onEvent = viewModel::processEvent,
+                        onSettingsEvent = { event -> settingsViewModel.processEvent(event) },
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {

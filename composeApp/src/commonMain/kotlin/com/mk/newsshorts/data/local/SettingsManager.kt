@@ -75,6 +75,19 @@ class SettingsManager(
         preferencesState.update { it.copy(notifyReminder = enabled) }
     }
 
+    suspend fun apply(preferences: AppPreferences) {
+        settingsStorage.putString(KEY_NEWS_LANGUAGE, preferences.newsLanguage)
+        settingsStorage.putString(KEY_APP_LOCALE, preferences.appLocale)
+        settingsStorage.putString(KEY_SELECTED_COUNTRY, preferences.selectedCountry)
+        settingsStorage.putString(KEY_THEME_MODE, preferences.themeMode)
+        settingsStorage.putString(KEY_TEXT_SCALE, preferences.textScale)
+        settingsStorage.putString(NotificationPreferenceKeys.ENABLED, preferences.notificationsEnabled.toString())
+        settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_BREAKING, preferences.notifyBreaking.toString())
+        settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_TOP_STORY, preferences.notifyTopStory.toString())
+        settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_REMINDER, preferences.notifyReminder.toString())
+        preferencesState.value = preferences
+    }
+
     /**
      * Whether the device-integrity warning has already been shown. Stored so a
      * reader on a rooted device is told once and then left alone — a warning on
