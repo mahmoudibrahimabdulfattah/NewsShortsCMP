@@ -35,7 +35,7 @@ packages are already acyclic, so they carry build risk but no design risk.
 |---|---|---|
 | 0 | build-logic, convention plugins, catalog, cache-correct BuildConfig | **done** |
 | 1 | Shared services; delete VM-in-VM injection (in place) | **done** |
-| 2 | Decompose `NewsViewModel` and `NewsUiState` (in place) | not started |
+| 2 | Decompose `NewsViewModel` and `NewsUiState` (in place) | **done** |
 | 3 | Break the package cycles (package moves only) | not started |
 | 4 | `:core:contract` + `:core:testing` + server de-duplication | not started |
 | 5 | `:core:config`, `:core:model`, `:core:domain` | not started |
@@ -74,20 +74,41 @@ so it is worth stating plainly for the phases that still have ViewModels to
 decompose.
 
 `runTest` will not finish while a coroutine started in the test's own scope is
-still running, and a collector or a `SupervisorJob` never finishes. The obvious
-escape is `backgroundScope`, and it is a trap: **`advanceUntilIdle()` does not
-run work in `backgroundScope`**. Verified directly — `backgroundScope.launch {
-println(...) }` followed by `advanceUntilIdle()` prints nothing. So moving a
-class's work there does not fix the test, it hides it: the writes stop happening
-and no assertion says so.
+still running, and a collector or a `SupervisorJob` never finishes.
+`backgroundScope` is usable for work the test deliberately leaves running, but
+it has to be driven precisely. Verified directly:
 
-The way out is not to pick a scope but to remove the endless coroutine:
+- `backgroundScope.launch { ... }` followed by `runCurrent()` runs the body.
+- The same launch followed by `advanceUntilIdle()` does not run the body.
+- A `delay` inside `backgroundScope` never advances, even after `runCurrent()`
+  then `advanceUntilIdle()`.
+
+So a long-lived collector can use `backgroundScope` when the test only needs
+current-time work and calls `runCurrent()`. If the class under test needs a fake
+delay to elapse, that coroutine cannot be in `backgroundScope`; pass the test
+scope itself and ensure no endless coroutine is left running at the end.
+
+For the phase 1 sync/settings cases, the way out was not to pick a scope but to
+remove the endless coroutine:
 
 - `SyncPublisher` has no auth collector. The observer that already reacts to
   sign-in calls `discardQueued()` instead.
 - `SettingsViewModel` seeds its state from the store instead of collecting it.
 - The writer's `SupervisorJob` is deliberately *not* a child of the caller's
   scope, because as a child it is itself a coroutine that never completes.
+
+**Phase 2 — the tab did not move.** `NewsUiState.currentTab` stayed with
+`FeedViewModel` rather than going to `AppShellViewModel` with the overlay stack.
+Switching tabs both moves the reader and decides which feed loads; splitting
+those two halves before phase 8 gives both sides a `Navigator` to read would
+only replace the coupling with an event bus, or with the screen dispatching one
+tap twice. Phase 8 is where it moves.
+
+**Phase 2 — Kotlin/Native rejects commas in backtick test names.** A name like
+``fun `ticked, and saved at the end`()`` compiles for Android and JVM and fails
+`compileTestKotlinIosSimulatorArm64` with "Name contains illegal characters".
+This is what `check → iosSimulatorArm64Test` is for; without it the break would
+have reached `master` and only surfaced on someone's iOS build.
 
 **Phase 1 — a failing test can point at the wrong thing.** Two account-switch
 tests failed with `UncompletedCoroutinesError` naming a coroutine, while their

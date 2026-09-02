@@ -26,7 +26,7 @@ import com.mk.newsshorts.presentation.mvi.ThemeMode
 actual fun ApplyAppNightMode(themeMode: ThemeMode) {
     val context: Context = LocalContext.current
     // The first value is always the SYSTEM default, not the reader's choice:
-    // NewsUiState starts there and only becomes the saved setting once
+    // FeedUiState starts there and only becomes the saved setting once
     // loadSavedSettings returns. Pinning it would unpin a saved Light or Dark
     // on every single launch — the bug this function exists to prevent.
     var sawInitialValue: Boolean by remember { mutableStateOf(false) }

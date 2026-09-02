@@ -1,5 +1,8 @@
 package com.mk.newsshorts.presentation.ui.screen
 
+import com.mk.newsshorts.presentation.viewmodel.AppShellUiEvent
+import com.mk.newsshorts.presentation.viewmodel.AppShellUiState
+import com.mk.newsshorts.presentation.viewmodel.AppShellViewModel
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -51,6 +54,15 @@ import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.mk.newsshorts.feature.auth.AuthUiEvent
+import com.mk.newsshorts.feature.auth.AuthUiState
+import com.mk.newsshorts.feature.auth.AuthViewModel
+import com.mk.newsshorts.feature.auth.SignInScreen
+import com.mk.newsshorts.feature.inbox.InboxUiEffect
+import com.mk.newsshorts.feature.inbox.InboxUiEvent
+import com.mk.newsshorts.feature.inbox.InboxUiState
+import com.mk.newsshorts.feature.inbox.InboxViewModel
+import com.mk.newsshorts.feature.inbox.NotificationInboxScreen
 import com.mk.newsshorts.feature.saved.SavedArticlesUiEffect
 import com.mk.newsshorts.feature.saved.SavedArticlesUiEvent
 import com.mk.newsshorts.feature.saved.SavedArticlesUiState
@@ -69,9 +81,9 @@ import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.localization.countryName
 import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
 import com.mk.newsshorts.presentation.mvi.NavigationTab
-import com.mk.newsshorts.presentation.mvi.NewsUiEffect
-import com.mk.newsshorts.presentation.mvi.NewsUiEvent
-import com.mk.newsshorts.presentation.mvi.NewsUiState
+import com.mk.newsshorts.feature.feed.FeedUiEffect
+import com.mk.newsshorts.feature.feed.FeedUiEvent
+import com.mk.newsshorts.feature.feed.FeedUiState
 import com.mk.newsshorts.presentation.mvi.Overlay
 import com.mk.newsshorts.presentation.ui.components.BottomNavigationBar
 import com.mk.newsshorts.presentation.ui.components.CategoryRow
@@ -84,11 +96,14 @@ import com.mk.newsshorts.presentation.ui.theme.NewsShortsTheme
 import com.mk.newsshorts.presentation.ui.theme.ImageryScrim
 import com.mk.newsshorts.presentation.ui.theme.OnImagery
 import com.mk.newsshorts.presentation.ui.theme.PillShape
-import com.mk.newsshorts.presentation.viewmodel.NewsViewModel
+import com.mk.newsshorts.feature.feed.FeedViewModel
 
 @Composable
 fun NewsScreen(
-    viewModel: NewsViewModel,
+    viewModel: FeedViewModel,
+    shellViewModel: AppShellViewModel,
+    authViewModel: AuthViewModel,
+    inboxViewModel: InboxViewModel,
     searchViewModel: SearchViewModel,
     savedArticlesViewModel: SavedArticlesViewModel,
     settingsViewModel: SettingsViewModel,
@@ -98,7 +113,10 @@ fun NewsScreen(
     onRequestNotificationPermission: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val uiState: NewsUiState by viewModel.uiState.collectAsState()
+    val uiState: FeedUiState by viewModel.uiState.collectAsState()
+    val shellUiState by shellViewModel.uiState.collectAsState()
+    val authUiState: AuthUiState by authViewModel.uiState.collectAsState()
+    val inboxUiState: InboxUiState by inboxViewModel.uiState.collectAsState()
     val searchUiState: SearchUiState by searchViewModel.uiState.collectAsState()
     val savedArticlesUiState: SavedArticlesUiState by savedArticlesViewModel.uiState.collectAsState()
     val settingsUiState: SettingsUiState by settingsViewModel.uiState.collectAsState()
@@ -117,11 +135,11 @@ fun NewsScreen(
     LaunchedEffect(Unit) {
         viewModel.uiEffect.collect { effect ->
             when (effect) {
-                is NewsUiEffect.OpenUrl -> openUrl(effect.url)
-                is NewsUiEffect.ShareContent ->
+                is FeedUiEffect.OpenUrl -> openUrl(effect.url)
+                is FeedUiEffect.ShareContent ->
                     shareContent(effect.title, effect.url, effect.chooserTitle)
-                is NewsUiEffect.ShowToast -> showToast(effect.message)
-                NewsUiEffect.RequestNotificationPermission -> requestNotificationPermission()
+                is FeedUiEffect.ShowToast -> showToast(effect.message)
+                FeedUiEffect.RequestNotificationPermission -> requestNotificationPermission()
             }
         }
     }
@@ -140,46 +158,71 @@ fun NewsScreen(
             }
         }
     }
-    val onNewsEvent: (NewsUiEvent) -> Unit = onNewsEvent@{ event ->
-        when (event) {
-            is NewsUiEvent.SaveArticle -> {
-                savedArticlesViewModel.processEvent(SavedArticlesUiEvent.Toggle(event.article))
-                return@onNewsEvent
+    LaunchedEffect(Unit) {
+        inboxViewModel.uiEffect.collect { effect ->
+            when (effect) {
+                InboxUiEffect.OpenInboxOverlay -> {
+                    shellViewModel.processEvent(AppShellUiEvent.OpenOverlay(Overlay.NotificationInbox))
+                }
+                is InboxUiEffect.OpenNotification -> {
+                    shellViewModel.processEvent(AppShellUiEvent.OpenDeepLink(effect.link))
+                }
             }
-            is NewsUiEvent.RemoveSavedArticle -> {
-                savedArticlesViewModel.processEvent(SavedArticlesUiEvent.Remove(event.article))
-                return@onNewsEvent
-            }
-            else -> Unit
         }
+    }
+    val onFeedEvent: (FeedUiEvent) -> Unit = { event -> viewModel.processEvent(event) }
+    val onSavedEvent: (SavedArticlesUiEvent) -> Unit = { event ->
+        savedArticlesViewModel.processEvent(event)
+    }
+    // Search opens and closes as an overlay, so the two ViewModels have to
+    // agree on when it is on screen. Routed here rather than by either of them
+    // knowing the other: the shell owns the stack and search owns the query.
+    val onShellEvent: (AppShellUiEvent) -> Unit = { event ->
         when {
-            event == NewsUiEvent.OpenSearch -> searchViewModel.processEvent(
+            event == AppShellUiEvent.OpenSearch -> searchViewModel.processEvent(
                 SearchUiEvent.Opened(uiState.selectedLanguage.code)
             )
-            event == NewsUiEvent.CloseOverlay && uiState.overlays.lastOrNull() == Overlay.Search ->
+            event == AppShellUiEvent.CloseOverlay &&
+                shellUiState.overlays.lastOrNull() == Overlay.Search ->
                 searchViewModel.processEvent(SearchUiEvent.Closed)
         }
-        viewModel.processEvent(event)
+        shellViewModel.processEvent(event)
     }
     val onSettingsEvent: (SettingsUiEvent) -> Unit = { event ->
         settingsViewModel.processEvent(event)
     }
+    val onAuthEvent: (AuthUiEvent) -> Unit = { event ->
+        authViewModel.processEvent(event)
+        if (event == AuthUiEvent.Closed) {
+            shellViewModel.processEvent(AppShellUiEvent.CloseOverlay)
+        }
+    }
     val onSearchEvent: (SearchUiEvent) -> Unit = { event ->
         searchViewModel.processEvent(event)
         when (event) {
-            SearchUiEvent.Closed -> viewModel.processEvent(NewsUiEvent.CloseOverlay)
-            is SearchUiEvent.ResultOpened -> viewModel.processEvent(
-                NewsUiEvent.OpenArticleDetails(event.article, ArticleOpenOrigin.SEARCH)
+            SearchUiEvent.Closed -> shellViewModel.processEvent(AppShellUiEvent.CloseOverlay)
+            is SearchUiEvent.ResultOpened -> shellViewModel.processEvent(
+                AppShellUiEvent.OpenArticleDetails(event.article, ArticleOpenOrigin.SEARCH)
             )
             else -> Unit
         }
     }
+    val onInboxEvent: (InboxUiEvent) -> Unit = { event ->
+        inboxViewModel.processEvent(event)
+    }
     NewsScreenContent(
         uiState = uiState,
+        authUiState = authUiState,
+        inboxUiState = inboxUiState,
+        shellUiState = shellUiState,
         searchUiState = searchUiState,
         savedArticlesUiState = savedArticlesUiState,
         settingsUiState = settingsUiState,
-        onEvent = onNewsEvent,
+        onFeedEvent = onFeedEvent,
+        onShellEvent = onShellEvent,
+        onSavedEvent = onSavedEvent,
+        onAuthEvent = onAuthEvent,
+        onInboxEvent = onInboxEvent,
         onSettingsEvent = onSettingsEvent,
         onSearchEvent = onSearchEvent,
         modifier = modifier
@@ -189,11 +232,18 @@ fun NewsScreen(
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun NewsScreenContent(
-    uiState: NewsUiState,
+    uiState: FeedUiState,
+    authUiState: AuthUiState,
+    inboxUiState: InboxUiState,
+    shellUiState: AppShellUiState,
     searchUiState: SearchUiState,
     savedArticlesUiState: SavedArticlesUiState,
     settingsUiState: SettingsUiState,
-    onEvent: (NewsUiEvent) -> Unit,
+    onFeedEvent: (FeedUiEvent) -> Unit,
+    onShellEvent: (AppShellUiEvent) -> Unit,
+    onSavedEvent: (SavedArticlesUiEvent) -> Unit,
+    onAuthEvent: (AuthUiEvent) -> Unit,
+    onInboxEvent: (InboxUiEvent) -> Unit,
     onSettingsEvent: (SettingsUiEvent) -> Unit,
     onSearchEvent: (SearchUiEvent) -> Unit,
     modifier: Modifier = Modifier
@@ -202,8 +252,8 @@ private fun NewsScreenContent(
     // Settings, Saved — rather than each owning its own BackHandler. Only
     // Android has a back gesture, which is why every overlay also keeps a
     // visible back arrow instead of relying on this alone.
-    BackHandler(enabled = uiState.overlays.isNotEmpty()) {
-        onEvent(NewsUiEvent.CloseOverlay)
+    BackHandler(enabled = shellUiState.overlays.isNotEmpty()) {
+        onShellEvent(AppShellUiEvent.CloseOverlay)
     }
 
     // With no overlay open, back off a secondary tab returns to the feed
@@ -211,8 +261,8 @@ private fun NewsScreenContent(
     // first tab is the app's home, and closing from Countries or Profile feels
     // like losing your place. Disabled on the feed itself, which hands back to
     // the system so the app still closes from there on the next press.
-    BackHandler(enabled = uiState.overlays.isEmpty() && uiState.currentTab != NavigationTab.FOR_YOU) {
-        onEvent(NewsUiEvent.SelectTab(NavigationTab.FOR_YOU))
+    BackHandler(enabled = shellUiState.overlays.isEmpty() && uiState.currentTab != NavigationTab.FOR_YOU) {
+        onFeedEvent(FeedUiEvent.SelectTab(NavigationTab.FOR_YOU))
     }
 
     Box(
@@ -223,9 +273,10 @@ private fun NewsScreenContent(
         when (uiState.currentTab) {
             NavigationTab.PROFILE -> {
                 ProfileScreen(
-                    uiState = uiState,
+                    authUser = authUiState.authUser,
                     savedArticlesUiState = savedArticlesUiState,
-                    onEvent = onEvent,
+                    onShellEvent = onShellEvent,
+                    onSavedEvent = onSavedEvent,
                 )
             }
             else -> {
@@ -242,26 +293,31 @@ private fun NewsScreenContent(
                             uiState.isError && !uiState.hasArticles -> {
                                 ErrorScreen(
                                     errorMessage = uiState.errorMessage ?: appStrings().unknownError,
-                                    onRetry = { onEvent(NewsUiEvent.RetryLoading) }
+                                    onRetry = { onFeedEvent(FeedUiEvent.RetryLoading) }
                                 )
                             }
                             uiState.hasArticles -> {
                                 NewsArticlesPager(
                                     uiState = uiState,
                                     savedArticlesUiState = savedArticlesUiState,
-                                    onEvent = onEvent
+                                    onEvent = onFeedEvent,
+                                    onShellEvent = onShellEvent,
+                                    onSavedEvent = onSavedEvent,
                                 )
                             }
                         }
                         TopGradientOverlay()
                         NewsScreenHeader(
                             uiState = uiState,
-                            onEvent = onEvent,
+                            inboxUiState = inboxUiState,
+                            onEvent = onFeedEvent,
+                            onShellEvent = onShellEvent,
+                            onInboxEvent = onInboxEvent,
                             modifier = Modifier.align(Alignment.TopCenter)
                         )
                         NextPageStatus(
                             uiState = uiState,
-                            onEvent = onEvent,
+                            onEvent = onFeedEvent,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = 96.dp)
@@ -270,16 +326,16 @@ private fun NewsScreenContent(
                 }
             }
         }
-        if (uiState.overlays.isEmpty()) {
+        if (shellUiState.overlays.isEmpty()) {
             BottomNavigationBar(
                 selectedTab = uiState.currentTab,
-                onTabSelected = { tab -> onEvent(NewsUiEvent.SelectTab(tab)) },
+                onTabSelected = { tab -> onFeedEvent(FeedUiEvent.SelectTab(tab)) },
                 // Every tab but Profile is the feed, drawn over photographs.
                 isOverImagery = uiState.currentTab != NavigationTab.PROFILE,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
-        val topOverlay = uiState.overlays.lastOrNull()
+        val topOverlay = shellUiState.overlays.lastOrNull()
         // A plain Box with only a background does not consume touch input in
         // Compose — a tap on empty space (a gap between controls, the space
         // below a button) falls straight through to whatever is laid out
@@ -305,7 +361,8 @@ private fun NewsScreenContent(
                     isSaved = savedArticlesUiState.articles.any {
                         it.articleUrl == topOverlay.article.articleUrl
                     },
-                    onEvent = onEvent,
+                    onShellEvent = onShellEvent,
+                    onSavedEvent = onSavedEvent,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -313,30 +370,38 @@ private fun NewsScreenContent(
                 SettingsScreen(
                     newsUiState = uiState,
                     settingsUiState = settingsUiState,
-                    onNewsEvent = onEvent,
+                    authUser = authUiState.authUser,
+                    authInProgress = authUiState.authInProgress,
+                    authError = authUiState.authError,
+                    onFeedEvent = onFeedEvent,
+                    onShellEvent = onShellEvent,
                     onSettingsEvent = onSettingsEvent,
+                    onOpenSignIn = { onShellEvent(AppShellUiEvent.OpenOverlay(Overlay.SignIn)) },
+                    onSignOut = { onAuthEvent(AuthUiEvent.SignOut) },
+                    onDeleteAccount = { onAuthEvent(AuthUiEvent.DeleteAccount) },
+                    onDismissAuthError = { onAuthEvent(AuthUiEvent.DismissAuthError) },
                     modifier = Modifier.fillMaxSize()
                 )
             }
             Overlay.SavedArticles -> {
                 SavedArticlesScreen(
                     uiState = savedArticlesUiState,
-                    onEvent = onEvent,
+                    onShellEvent = onShellEvent,
+                    onSavedEvent = onSavedEvent,
                     modifier = Modifier.fillMaxSize()
                 )
             }
             Overlay.Licenses -> {
                 LicensesScreen(
-                    onEvent = onEvent,
+                    onShellEvent = onShellEvent,
                     modifier = Modifier.fillMaxSize()
                 )
             }
             Overlay.NotificationInbox -> {
                 NotificationInboxScreen(
-                    notifications = uiState.visibleInboxNotifications,
-                    unreadIds = uiState.unreadInboxIds,
-                    isRefreshing = uiState.isRefreshingInbox,
-                    onEvent = onEvent,
+                    uiState = inboxUiState,
+                    onEvent = onInboxEvent,
+                    onClose = { onShellEvent(AppShellUiEvent.CloseOverlay) },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -349,13 +414,8 @@ private fun NewsScreenContent(
             }
             Overlay.SignIn -> {
                 SignInScreen(
-                    isLoading = uiState.authInProgress,
-                    errorFailure = uiState.authError,
-                    pendingEmail = uiState.pendingSignInEmail,
-                    hasUnclaimedLink = uiState.unclaimedSignInLink != null,
-                    onGoogleClick = { onEvent(NewsUiEvent.SignInWithGoogle) },
-                    onDismissError = { onEvent(NewsUiEvent.DismissAuthError) },
-                    onEvent = onEvent,
+                    uiState = authUiState,
+                    onEvent = onAuthEvent,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -375,8 +435,8 @@ private fun NewsScreenContent(
  */
 @Composable
 private fun NextPageStatus(
-    uiState: NewsUiState,
-    onEvent: (NewsUiEvent) -> Unit,
+    uiState: FeedUiState,
+    onEvent: (FeedUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -403,7 +463,7 @@ private fun NextPageStatus(
                     shape = PillShape
                 )
                 .clickable(enabled = uiState.nextPageFailed) {
-                    onEvent(NewsUiEvent.RetryNextPage)
+                    onEvent(FeedUiEvent.RetryNextPage)
                 }
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         )
@@ -424,8 +484,11 @@ private fun TopGradientOverlay(
 
 @Composable
 private fun NewsScreenHeader(
-    uiState: NewsUiState,
-    onEvent: (NewsUiEvent) -> Unit,
+    uiState: FeedUiState,
+    inboxUiState: InboxUiState,
+    onEvent: (FeedUiEvent) -> Unit,
+    onShellEvent: (AppShellUiEvent) -> Unit,
+    onInboxEvent: (InboxUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -452,7 +515,7 @@ private fun NewsScreenHeader(
             // things you do to the news, not further places the news lives.
             // The bell is here and not in Profile because it carries the
             // unread mark, and a mark nobody passes is not a mark.
-            IconButton(onClick = { onEvent(NewsUiEvent.OpenNotificationInbox) }) {
+            IconButton(onClick = { onInboxEvent(InboxUiEvent.Opened) }) {
                 // Wider than the glyph so the badge has a corner of its own to
                 // sit in. It used to be nudged out with an offset, which put it
                 // past the icon button's bounds — and that clips, so the circle
@@ -464,7 +527,7 @@ private fun NewsScreenHeader(
                         tint = OnImagery.content,
                         modifier = Modifier.align(Alignment.BottomStart).size(24.dp),
                     )
-                    val unread = uiState.unreadInboxCount
+                    val unread = inboxUiState.unreadCount
                     if (unread > 0) {
                         // A minimum size rather than a fixed one: at one digit
                         // this is a circle, and "9+" widens it into a capsule
@@ -509,7 +572,7 @@ private fun NewsScreenHeader(
                     }
                 }
             }
-            IconButton(onClick = { onEvent(NewsUiEvent.OpenSearch) }) {
+            IconButton(onClick = { onShellEvent(AppShellUiEvent.OpenSearch) }) {
                 Icon(
                     imageVector = Icons.Filled.Search,
                     contentDescription = strings.search,
@@ -531,7 +594,7 @@ private fun NewsScreenHeader(
                     categories = uiState.categoryOrder,
                     selectedCategory = uiState.selectedCategory,
                     onCategorySelected = { category ->
-                        onEvent(NewsUiEvent.SelectCategory(category))
+                        onEvent(FeedUiEvent.SelectCategory(category))
                     }
                 )
             }
@@ -539,7 +602,7 @@ private fun NewsScreenHeader(
                 CountrySelector(
                     selectedCountry = uiState.selectedCountry,
                     onCountrySelected = { country ->
-                        onEvent(NewsUiEvent.SelectCountry(country))
+                        onEvent(FeedUiEvent.SelectCountry(country))
                     }
                 )
             }
@@ -552,7 +615,7 @@ private fun NewsScreenHeader(
 
 @Composable
 private fun getHeaderSubtitle(
-    uiState: NewsUiState,
+    uiState: FeedUiState,
     strings: com.mk.newsshorts.presentation.localization.AppStrings
 ): String {
     return when (uiState.currentTab) {
@@ -566,9 +629,11 @@ private fun getHeaderSubtitle(
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun NewsArticlesPager(
-    uiState: NewsUiState,
+    uiState: FeedUiState,
     savedArticlesUiState: SavedArticlesUiState,
-    onEvent: (NewsUiEvent) -> Unit,
+    onEvent: (FeedUiEvent) -> Unit,
+    onShellEvent: (AppShellUiEvent) -> Unit,
+    onSavedEvent: (SavedArticlesUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val pagerState = rememberPagerState(
@@ -577,7 +642,7 @@ private fun NewsArticlesPager(
     )
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.currentPage }.collect { page ->
-            onEvent(NewsUiEvent.ScrollToArticle(page))
+            onEvent(FeedUiEvent.ScrollToArticle(page))
         }
     }
     // The revision now means the feed was genuinely replaced as a new reading
@@ -599,7 +664,7 @@ private fun NewsArticlesPager(
     }
     PullToRefreshBox(
         isRefreshing = uiState.isRefreshing,
-        onRefresh = { onEvent(NewsUiEvent.RefreshNews) },
+        onRefresh = { onEvent(FeedUiEvent.RefreshNews) },
         modifier = modifier.fillMaxSize()
     ) {
         VerticalPager(
@@ -618,10 +683,10 @@ private fun NewsArticlesPager(
                 article = article,
                 isSaved = isArticleSaved,
                 onOpenArticle = {
-                    onEvent(NewsUiEvent.OpenArticleDetails(article, ArticleOpenOrigin.FEED))
+                    onShellEvent(AppShellUiEvent.OpenArticleDetails(article, ArticleOpenOrigin.FEED))
                 },
-                onShareArticle = { onEvent(NewsUiEvent.ShareArticle(article)) },
-                onSaveArticle = { onEvent(NewsUiEvent.SaveArticle(article)) }
+                onShareArticle = { onShellEvent(AppShellUiEvent.ShareArticle(article)) },
+                onSaveArticle = { onSavedEvent(SavedArticlesUiEvent.Toggle(article)) }
             )
         }
     }

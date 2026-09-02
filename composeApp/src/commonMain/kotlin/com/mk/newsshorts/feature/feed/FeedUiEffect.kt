@@ -1,7 +1,7 @@
-package com.mk.newsshorts.presentation.mvi
+package com.mk.newsshorts.feature.feed
 
-sealed interface NewsUiEffect {
-    data class OpenUrl(val url: String) : NewsUiEffect
+sealed interface FeedUiEffect {
+    data class OpenUrl(val url: String) : FeedUiEffect
 
     /**
      * [chooserTitle] is passed down rather than read from a platform resource:
@@ -12,14 +12,14 @@ sealed interface NewsUiEffect {
         val title: String,
         val url: String,
         val chooserTitle: String
-    ) : NewsUiEffect
+    ) : FeedUiEffect
 
-    data class ShowToast(val message: String) : NewsUiEffect
+    data class ShowToast(val message: String) : FeedUiEffect
 
     /**
      * Asks the platform layer to show the OS permission dialog. Kept as an
      * effect rather than a direct call so the ViewModel decides *when* to ask
      * without knowing *how* — only Android has this permission at all.
      */
-    data object RequestNotificationPermission : NewsUiEffect
+    data object RequestNotificationPermission : FeedUiEffect
 }

@@ -4,7 +4,7 @@ import com.mk.newsshorts.domain.model.NewsArticle
 
 /**
  * The settings worth following a reader across devices. Deliberately not all
- * of [com.mk.newsshorts.presentation.mvi.NewsUiState] — `selectedCategory`,
+ * of [com.mk.newsshorts.feature.feed.FeedUiState] — `selectedCategory`,
  * `currentArticleIndex` and the rest are session state, not preference.
  */
 data class SyncedSettings(

@@ -12,17 +12,23 @@ package com.mk.newsshorts.data.local
  * It is cleared as soon as sign-in finishes, and it is not secret: it is the
  * reader's own address, already sitting in their inbox.
  */
+interface PendingSignInEmailPersistence {
+    fun save(email: String)
+    fun load(): String?
+    fun clear()
+}
+
 class PendingSignInEmailStore(
     private val settingsStorage: SettingsStorage
-) {
-    fun save(email: String) {
+) : PendingSignInEmailPersistence {
+    override fun save(email: String) {
         settingsStorage.putString(KEY_PENDING_EMAIL, email.trim())
     }
 
     /** Null when the link is opened on a device that never asked for one. */
-    fun load(): String? = settingsStorage.getString(KEY_PENDING_EMAIL, "").ifBlank { null }
+    override fun load(): String? = settingsStorage.getString(KEY_PENDING_EMAIL, "").ifBlank { null }
 
-    fun clear() {
+    override fun clear() {
         settingsStorage.putString(KEY_PENDING_EMAIL, "")
     }
 

@@ -6,7 +6,6 @@ import com.mk.newsshorts.data.local.AppPreferences
 import com.mk.newsshorts.data.local.SettingsPersistence
 import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.presentation.localization.AppLocale
-import com.mk.newsshorts.presentation.mvi.NotificationTier
 import com.mk.newsshorts.presentation.mvi.TextScale
 import com.mk.newsshorts.presentation.mvi.ThemeMode
 import com.mk.newsshorts.sync.SyncPublisher

@@ -1,4 +1,4 @@
-package com.mk.newsshorts.presentation.mvi
+package com.mk.newsshorts.feature.inbox
 
 import com.mk.newsshorts.data.local.InboxReadState
 import com.mk.newsshorts.data.local.articleKey
@@ -17,8 +17,8 @@ class UnreadInboxCountTest {
         read: InboxReadState,
         vararg sentAt: Long,
         dismissed: Set<Int> = emptySet(),
-    ) = NewsUiState(
-        inboxNotifications = sentAt.map {
+    ) = InboxUiState(
+        notifications = sentAt.map {
             InboxNotification(
                 sentAt = it,
                 title = "t",
@@ -27,8 +27,8 @@ class UnreadInboxCountTest {
                 articleUrl = url(it),
             )
         },
-        inboxRead = read,
-        inboxDismissed = dismissed,
+        read = read,
+        dismissed = dismissed,
     )
 
     /**
@@ -37,7 +37,7 @@ class UnreadInboxCountTest {
      */
     @Test
     fun `everything is unread until something clears it`() {
-        assertEquals(3, state(InboxReadState(), 3_000L, 2_000L, 1_000L).unreadInboxCount)
+        assertEquals(3, state(InboxReadState(), 3_000L, 2_000L, 1_000L).unreadCount)
     }
 
     /**
@@ -50,8 +50,8 @@ class UnreadInboxCountTest {
         val onOpen = state(InboxReadState(), 3_000L, 2_000L, 1_000L)
 
         // Nothing about opening the screen touches this state at all.
-        assertEquals(3, onOpen.unreadInboxCount)
-        assertEquals(setOf(3_000L, 2_000L, 1_000L), onOpen.unreadInboxIds)
+        assertEquals(3, onOpen.unreadCount)
+        assertEquals(setOf(3_000L, 2_000L, 1_000L), onOpen.unreadIds)
     }
 
     /** The first of the two things that does clear one. */
@@ -62,8 +62,8 @@ class UnreadInboxCountTest {
             3_000L, 2_000L, 1_000L,
         )
 
-        assertEquals(2, after.unreadInboxCount)
-        assertEquals(setOf(3_000L, 1_000L), after.unreadInboxIds)
+        assertEquals(2, after.unreadCount)
+        assertEquals(setOf(3_000L, 1_000L), after.unreadIds)
     }
 
     /**
@@ -76,7 +76,7 @@ class UnreadInboxCountTest {
 
         val afterListArrives = state(markedFirst, 3_000L, 2_000L, 1_000L)
 
-        assertEquals(setOf(2_000L, 1_000L), afterListArrives.unreadInboxIds)
+        assertEquals(setOf(2_000L, 1_000L), afterListArrives.unreadIds)
     }
 
     /** The second. */
@@ -84,8 +84,8 @@ class UnreadInboxCountTest {
     fun `marking all read clears every mark in the list`() {
         val after = state(InboxReadState(readAllBefore = 3_000L), 3_000L, 2_000L, 1_000L)
 
-        assertEquals(0, after.unreadInboxCount)
-        assertEquals(emptySet(), after.unreadInboxIds)
+        assertEquals(0, after.unreadCount)
+        assertEquals(emptySet(), after.unreadIds)
     }
 
     /**
@@ -96,8 +96,8 @@ class UnreadInboxCountTest {
     fun `a notification arriving after the sweep is unread`() {
         val after = state(InboxReadState(readAllBefore = 3_000L), 4_000L, 3_000L, 2_000L)
 
-        assertEquals(1, after.unreadInboxCount)
-        assertEquals(setOf(4_000L), after.unreadInboxIds)
+        assertEquals(1, after.unreadCount)
+        assertEquals(setOf(4_000L), after.unreadIds)
     }
 
     /**
@@ -113,8 +113,8 @@ class UnreadInboxCountTest {
             dismissed = setOf(articleKey(url(2_000L))),
         )
 
-        assertEquals(listOf(3_000L, 1_000L), after.visibleInboxNotifications.map { it.sentAt })
-        assertEquals(2, after.unreadInboxCount)
+        assertEquals(listOf(3_000L, 1_000L), after.visibleNotifications.map { it.sentAt })
+        assertEquals(2, after.unreadCount)
     }
 
     /** Undo puts it back, marks and all. */
@@ -122,12 +122,12 @@ class UnreadInboxCountTest {
     fun `restoring brings the row back unread`() {
         val restored = state(InboxReadState(), 3_000L, 2_000L, 1_000L, dismissed = emptySet())
 
-        assertEquals(3, restored.visibleInboxNotifications.size)
-        assertEquals(3, restored.unreadInboxCount)
+        assertEquals(3, restored.visibleNotifications.size)
+        assertEquals(3, restored.unreadCount)
     }
 
     @Test
     fun `an empty inbox counts nothing`() {
-        assertEquals(0, state(InboxReadState()).unreadInboxCount)
+        assertEquals(0, state(InboxReadState()).unreadCount)
     }
 }

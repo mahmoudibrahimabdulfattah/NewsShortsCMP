@@ -1,5 +1,7 @@
 package com.mk.newsshorts.feature.saved
 
+import com.mk.newsshorts.feature.saved.SavedArticlesUiEvent
+import com.mk.newsshorts.presentation.viewmodel.AppShellUiEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
-import com.mk.newsshorts.presentation.mvi.NewsUiEvent
+import com.mk.newsshorts.feature.feed.FeedUiEvent
 import com.mk.newsshorts.presentation.ui.components.EmptySavedArticlesCard
 import com.mk.newsshorts.presentation.ui.components.OverlayTopBar
 import com.mk.newsshorts.presentation.ui.components.SavedArticleCard
@@ -36,7 +38,8 @@ import com.mk.newsshorts.presentation.ui.components.SavedArticleCard
 @Composable
 fun SavedArticlesScreen(
     uiState: SavedArticlesUiState,
-    onEvent: (NewsUiEvent) -> Unit,
+    onShellEvent: (AppShellUiEvent) -> Unit,
+    onSavedEvent: (SavedArticlesUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -46,7 +49,7 @@ fun SavedArticlesScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            OverlayTopBar(title = strings.savedArticles, onBack = { onEvent(NewsUiEvent.CloseOverlay) })
+            OverlayTopBar(title = strings.savedArticles, onBack = { onShellEvent(AppShellUiEvent.CloseOverlay) })
             if (!uiState.hasArticles) {
                 EmptySavedArticlesCard(
                     strings = strings,
@@ -67,9 +70,9 @@ fun SavedArticlesScreen(
                         SavedArticleCard(
                             article = article,
                             onClick = {
-                                onEvent(NewsUiEvent.OpenArticleDetails(article, ArticleOpenOrigin.SAVED))
+                                onShellEvent(AppShellUiEvent.OpenArticleDetails(article, ArticleOpenOrigin.SAVED))
                             },
-                            onRemove = { onEvent(NewsUiEvent.RemoveSavedArticle(article)) }
+                            onRemove = { onSavedEvent(SavedArticlesUiEvent.Remove(article)) }
                         )
                     }
                 }

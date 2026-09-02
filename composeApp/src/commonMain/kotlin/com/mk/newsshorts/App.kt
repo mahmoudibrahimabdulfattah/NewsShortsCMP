@@ -1,5 +1,6 @@
 package com.mk.newsshorts
 
+import com.mk.newsshorts.presentation.viewmodel.AppShellUiEvent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -9,31 +10,42 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
 import newsshorts.composeapp.generated.resources.Res
 import newsshorts.composeapp.generated.resources.logo
-import com.mk.newsshorts.di.provideNewsViewModel
+import com.mk.newsshorts.di.provideAppGateViewModel
+import com.mk.newsshorts.di.provideAppShellViewModel
+import com.mk.newsshorts.di.provideAuthViewModel
+import com.mk.newsshorts.di.provideInboxViewModel
+import com.mk.newsshorts.di.provideFeedViewModel
+import com.mk.newsshorts.di.provideOnboardingViewModel
 import com.mk.newsshorts.di.provideSavedArticlesViewModel
 import com.mk.newsshorts.di.provideSearchViewModel
 import com.mk.newsshorts.di.provideSettingsViewModel
+import com.mk.newsshorts.feature.auth.AuthUiEffect
 import com.mk.newsshorts.feature.settings.SettingsUiState
 import com.mk.newsshorts.presentation.localization.LocaleProvider
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.mvi.NavigationTab
-import com.mk.newsshorts.presentation.mvi.NewsUiEvent
-import com.mk.newsshorts.presentation.mvi.NewsUiState
-import com.mk.newsshorts.presentation.ui.screen.BlockingNoticeScreen
-import com.mk.newsshorts.presentation.ui.screen.SecurityWarningDialog
+import com.mk.newsshorts.feature.feed.FeedUiEvent
+import com.mk.newsshorts.feature.feed.FeedUiState
+import com.mk.newsshorts.presentation.mvi.Overlay
+import com.mk.newsshorts.feature.appgate.AppGateUiEvent
+import com.mk.newsshorts.feature.appgate.BlockingNoticeScreen
+import com.mk.newsshorts.feature.appgate.SecurityWarningDialog
 import com.mk.newsshorts.security.SecurityNotice
 import com.mk.newsshorts.security.SecurityReason
 import com.mk.newsshorts.presentation.ui.screen.NewsScreen
-import com.mk.newsshorts.presentation.ui.screen.OnboardingScreen
+import com.mk.newsshorts.feature.onboarding.OnboardingScreen
+import com.mk.newsshorts.feature.onboarding.OnboardingUiEffect
 import com.mk.newsshorts.presentation.ui.screen.SplashScreen
 import com.mk.newsshorts.presentation.ui.theme.ApplyAppNightMode
 import com.mk.newsshorts.presentation.ui.theme.LocalTextScale
@@ -41,6 +53,8 @@ import com.mk.newsshorts.presentation.ui.theme.NewsShortsTheme
 import com.mk.newsshorts.presentation.ui.theme.SystemBarAppearance
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.launch
 
 private const val CROSSFADE_DURATION_MS: Int = 150
 
@@ -60,12 +74,48 @@ fun App(
     val logoPainter: Painter = painterResource(Res.drawable.logo)
     // The ViewModel is read here rather than inside MainContent so the splash
     // is inside LocaleProvider too — otherwise it always renders in English.
-    val viewModel = provideNewsViewModel()
+    val viewModel = provideFeedViewModel()
+    val authViewModel = provideAuthViewModel()
+    val inboxViewModel = provideInboxViewModel()
     val searchViewModel = provideSearchViewModel()
     val savedArticlesViewModel = provideSavedArticlesViewModel()
     val settingsViewModel = provideSettingsViewModel()
-    val uiState: NewsUiState by viewModel.uiState.collectAsState()
+    val appGateViewModel = provideAppGateViewModel()
+    val onboardingViewModel = provideOnboardingViewModel()
+    val shellViewModel = provideAppShellViewModel()
+    val uiState: FeedUiState by viewModel.uiState.collectAsState()
     val settingsUiState: SettingsUiState by settingsViewModel.uiState.collectAsState()
+    val gateUiState by appGateViewModel.uiState.collectAsState()
+    val onboardingUiState by onboardingViewModel.uiState.collectAsState()
+    val shellUiState by shellViewModel.uiState.collectAsState()
+    // Onboarding asks for the notification permission only when the reader
+    // pressed through the last step with notifications on. Collected here
+    // rather than in NewsScreen because onboarding is drawn above it, and by
+    // the time the request is made the screen below has not been composed.
+    val requestNotificationPermission by rememberUpdatedState(onRequestNotificationPermission)
+    LaunchedEffect(Unit) {
+        onboardingViewModel.uiEffect.collect { effect ->
+            when (effect) {
+                OnboardingUiEffect.RequestNotificationPermission ->
+                    requestNotificationPermission()
+            }
+        }
+    }
+    LaunchedEffect(Unit) {
+        launch(start = CoroutineStart.UNDISPATCHED) {
+            authViewModel.uiEffect.collect { effect ->
+                when (effect) {
+                    AuthUiEffect.CloseOverlay -> {
+                        shellViewModel.processEvent(AppShellUiEvent.CloseOverlay)
+                    }
+                    AuthUiEffect.OpenSignInOverlay -> {
+                        shellViewModel.processEvent(AppShellUiEvent.OpenOverlay(Overlay.SignIn))
+                    }
+                }
+            }
+        }
+        authViewModel.consumePendingSignInLink()
+    }
     // Resolved once here rather than inside NewsShortsTheme's own default: the
     // feed branch inside NewsScreen overrides this with a forced-dark theme of
     // its own, so the resolution has to be visible at this level to differ
@@ -77,10 +127,10 @@ fun App(
     val barsUseDarkIcons: Boolean = when {
         // Splash and the two blocking screens are branded full-bleed dark.
         showSplash -> false
-        uiState.requiredUpdate != null -> false
-        uiState.securityNotice == SecurityNotice.BLOCKED -> false
+        gateUiState.requiredUpdate != null -> false
+        gateUiState.securityNotice == SecurityNotice.BLOCKED -> false
         // Details, Settings, Saved and Search all paint colorScheme.background.
-        uiState.overlays.isNotEmpty() -> !isDarkTheme
+        shellUiState.overlays.isNotEmpty() -> !isDarkTheme
         uiState.currentTab == NavigationTab.PROFILE -> !isDarkTheme
         // What is left is the feed, which is forced dark whatever the setting.
         else -> false
@@ -114,7 +164,7 @@ fun App(
                 animationSpec = tween(CROSSFADE_DURATION_MS),
                 label = "SplashTransition"
             ) { isSplashVisible: Boolean ->
-                val requiredUpdate = uiState.requiredUpdate
+                val requiredUpdate = gateUiState.requiredUpdate
                 val strings = appStrings()
                 if (requiredUpdate != null) {
                     // Replaces the content rather than covering it: nothing
@@ -129,11 +179,11 @@ fun App(
                             modifier = Modifier.fillMaxSize()
                         )
                     }
-                } else if (uiState.securityNotice == SecurityNotice.BLOCKED) {
+                } else if (gateUiState.securityNotice == SecurityNotice.BLOCKED) {
                     // No action: there is nothing the reader can tap that would
                     // make the device trustworthy, and a button that pretends
                     // otherwise would only teach them to distrust the message.
-                    val isEnvironment = uiState.securityReason == SecurityReason.ENVIRONMENT
+                    val isEnvironment = gateUiState.securityReason == SecurityReason.ENVIRONMENT
                     NewsShortsTheme(isDarkTheme = true) {
                         BlockingNoticeScreen(
                             icon = if (isEnvironment) "🛠️" else "🔒",
@@ -156,20 +206,23 @@ fun App(
                         onSplashComplete = { showSplash = false },
                         modifier = Modifier.fillMaxSize()
                     )
-                } else if (uiState.onboarding != null) {
+                } else if (onboardingUiState.isShowing) {
                     // After the splash, before the feed. The feed is already
                     // loading behind this, and the category chosen here decides
                     // which feed that should have been — see finishOnboarding.
                     OnboardingScreen(
-                        uiState = uiState,
+                        uiState = onboardingUiState,
                         settingsUiState = settingsUiState,
-                        onEvent = viewModel::processEvent,
+                        onEvent = onboardingViewModel::processEvent,
                         onSettingsEvent = { event -> settingsViewModel.processEvent(event) },
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
                     NewsScreen(
                         viewModel = viewModel,
+                        shellViewModel = shellViewModel,
+                        authViewModel = authViewModel,
+                        inboxViewModel = inboxViewModel,
                         searchViewModel = searchViewModel,
                         savedArticlesViewModel = savedArticlesViewModel,
                         settingsViewModel = settingsViewModel,
@@ -181,11 +234,13 @@ fun App(
                     )
                     // Over the feed, not instead of it: this tier is a
                     // caution, and the reader is allowed to carry on.
-                    if (uiState.securityNotice == SecurityNotice.WARNING) {
+                    if (gateUiState.securityNotice == SecurityNotice.WARNING) {
                         SecurityWarningDialog(
-                            reason = uiState.securityReason,
+                            reason = gateUiState.securityReason,
                             onDismiss = {
-                                viewModel.processEvent(NewsUiEvent.DismissSecurityWarning)
+                                appGateViewModel.processEvent(
+                                    AppGateUiEvent.DismissSecurityWarning
+                                )
                             }
                         )
                     }

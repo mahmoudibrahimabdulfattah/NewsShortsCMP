@@ -1,5 +1,6 @@
 package com.mk.newsshorts.presentation.ui.screen
 
+import com.mk.newsshorts.presentation.viewmodel.AppShellUiEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,7 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.mk.newsshorts.presentation.localization.appStrings
-import com.mk.newsshorts.presentation.mvi.NewsUiEvent
+import com.mk.newsshorts.feature.feed.FeedUiEvent
 import com.mk.newsshorts.presentation.ui.components.OverlayTopBar
 import com.mk.newsshorts.presentation.ui.components.SectionHeader
 
@@ -41,7 +42,7 @@ import com.mk.newsshorts.presentation.ui.components.SectionHeader
  */
 @Composable
 fun LicensesScreen(
-    onEvent: (NewsUiEvent) -> Unit,
+    onShellEvent: (AppShellUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -53,7 +54,7 @@ fun LicensesScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             OverlayTopBar(
                 title = strings.openSourceLicenses,
-                onBack = { onEvent(NewsUiEvent.CloseOverlay) },
+                onBack = { onShellEvent(AppShellUiEvent.CloseOverlay) },
             )
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
