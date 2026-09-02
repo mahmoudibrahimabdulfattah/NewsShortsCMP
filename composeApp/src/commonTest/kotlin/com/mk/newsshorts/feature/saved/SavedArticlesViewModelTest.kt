@@ -2,8 +2,8 @@ package com.mk.newsshorts.feature.saved
 
 import com.mk.newsshorts.analytics.AnalyticsEvent
 import com.mk.newsshorts.analytics.AnalyticsReporter
-import com.mk.newsshorts.data.repository.SavedArticlesRepository
-import com.mk.newsshorts.data.repository.ToggleResult
+import com.mk.newsshorts.data.repository.DefaultSavedArticlesRepository
+import com.mk.newsshorts.data.repository.SavedArticles
 import com.mk.newsshorts.domain.model.ArticleAuthor
 import com.mk.newsshorts.domain.model.ArticleContent
 import com.mk.newsshorts.domain.model.ArticleDescription
@@ -16,19 +16,19 @@ import com.mk.newsshorts.domain.model.NewsSource
 import com.mk.newsshorts.domain.model.PublishedTimestamp
 import com.mk.newsshorts.domain.model.SourceId
 import com.mk.newsshorts.domain.model.SourceName
-import com.mk.newsshorts.sync.AccountSyncCoordinator
-import com.mk.newsshorts.sync.SyncFetch
+import com.mk.newsshorts.presentation.localization.AppLocale
+import com.mk.newsshorts.presentation.localization.getStrings
+import com.mk.newsshorts.sync.SyncPublisher
 import com.mk.newsshorts.sync.SyncedSettings
-import com.mk.newsshorts.testing.FakeRemoteSyncClient
 import com.mk.newsshorts.testing.FakeSavedArticlesLocalStore
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertIs
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SavedArticlesViewModelTest {
@@ -39,21 +39,36 @@ class SavedArticlesViewModelTest {
     @Test
     fun `saving and unsaving a story immediately changes the saved screen`() = runTest {
         val store = FakeSavedArticlesLocalStore()
-        val viewModel = viewModel(store)
+        val syncPublisher = RecordingSyncPublisher()
+        val viewModel = viewModel(store, syncPublisher)
+        val effects = collectEffects(viewModel)
 
-        val saved = viewModel.processEvent(SavedArticlesUiEvent.Toggle(first))
+        viewModel.processEvent(SavedArticlesUiEvent.Toggle(first))
         runCurrent()
 
-        assertEquals(ToggleResult.SAVED, assertIs<SavedArticlesMutation.Changed>(saved).result)
         assertEquals(listOf(first), viewModel.uiState.value.articles)
         assertEquals(listOf(first), store.contents)
+        assertEquals(listOf(first), syncPublisher.publishedSavedArticles.last())
+        assertEquals(
+            listOf<SavedArticlesUiEffect>(
+                SavedArticlesUiEffect.ShowToast(getStrings(AppLocale.ENGLISH).articleSaved),
+            ),
+            effects,
+        )
 
-        val removed = viewModel.processEvent(SavedArticlesUiEvent.Toggle(first))
+        viewModel.processEvent(SavedArticlesUiEvent.Toggle(first))
         runCurrent()
 
-        assertEquals(ToggleResult.REMOVED, assertIs<SavedArticlesMutation.Changed>(removed).result)
-        assertEquals(emptyList(), viewModel.uiState.value.articles)
-        assertEquals(emptyList(), store.contents)
+        assertEquals(emptyList<NewsArticle>(), viewModel.uiState.value.articles)
+        assertEquals(emptyList<NewsArticle>(), store.contents)
+        assertEquals(emptyList<NewsArticle>(), syncPublisher.publishedSavedArticles.last())
+        assertEquals(
+            listOf<SavedArticlesUiEffect>(
+                SavedArticlesUiEffect.ShowToast(getStrings(AppLocale.ENGLISH).articleSaved),
+                SavedArticlesUiEffect.ShowToast(getStrings(AppLocale.ENGLISH).articleRemoved),
+            ),
+            effects,
+        )
     }
 
     @Test
@@ -73,58 +88,52 @@ class SavedArticlesViewModelTest {
     @Test
     fun `removing a story that was never saved leaves the list untouched`() = runTest {
         val store = FakeSavedArticlesLocalStore(listOf(first))
-        val viewModel = viewModel(store)
+        val syncPublisher = RecordingSyncPublisher()
+        val viewModel = viewModel(store, syncPublisher)
+        val effects = collectEffects(viewModel)
         viewModel.load()
         runCurrent()
         val writesBeforeRemoval = store.saveCount
 
-        val result = viewModel.processEvent(SavedArticlesUiEvent.Remove(second))
+        viewModel.processEvent(SavedArticlesUiEvent.Remove(second))
         runCurrent()
 
-        assertEquals(SavedArticlesMutation.Unchanged, result)
         assertEquals(listOf(first), viewModel.uiState.value.articles)
         assertEquals(listOf(first), store.contents)
         assertEquals(writesBeforeRemoval, store.saveCount)
-    }
-
-    @Test
-    fun `signing out leaves this device's saved stories available to the guest`() = runTest {
-        val store = FakeSavedArticlesLocalStore(listOf(first))
-        val repository = SavedArticlesRepository(store)
-        val viewModel = viewModel(repository)
-        viewModel.load()
-        runCurrent()
-        val remote = FakeRemoteSyncClient().apply {
-            savedArticles = SyncFetch.Found(listOf(second))
-            fetchSavedArticlesDelayMs = 1_000
-        }
-        val coordinator = AccountSyncCoordinator(
-            remoteSyncClient = remote,
-            savedArticlesRepository = repository,
-            currentSettings = { syncedSettings() },
-            applyRemoteSettings = {},
-        )
-
-        coordinator.onUserChanged(this, "reader-1")
-        runCurrent()
-        coordinator.onUserChanged(this, null)
-        advanceUntilIdle()
-
-        assertEquals(listOf(first), viewModel.uiState.value.articles)
-        assertEquals(listOf(first), store.contents)
+        assertEquals(emptyList(), syncPublisher.publishedSavedArticles)
+        assertEquals(emptyList(), effects)
     }
 
     private fun TestScope.viewModel(
         store: FakeSavedArticlesLocalStore,
-    ): SavedArticlesViewModel = viewModel(SavedArticlesRepository(store))
+        syncPublisher: RecordingSyncPublisher = RecordingSyncPublisher(),
+    ): SavedArticlesViewModel = viewModel(
+        repository = DefaultSavedArticlesRepository(store),
+        syncPublisher = syncPublisher,
+    )
 
     private fun TestScope.viewModel(
-        repository: SavedArticlesRepository,
+        repository: SavedArticles,
+        syncPublisher: RecordingSyncPublisher = RecordingSyncPublisher(),
     ): SavedArticlesViewModel = SavedArticlesViewModel(
         repository = repository,
         analytics = RecordingAnalytics(),
+        syncPublisher = syncPublisher,
+        strings = { getStrings(AppLocale.ENGLISH) },
         scopeOverride = backgroundScope,
     ).also { runCurrent() }
+
+    private fun TestScope.collectEffects(
+        viewModel: SavedArticlesViewModel,
+    ): MutableList<SavedArticlesUiEffect> {
+        val effects = mutableListOf<SavedArticlesUiEffect>()
+        backgroundScope.launch {
+            viewModel.uiEffect.collect { effects += it }
+        }
+        runCurrent()
+        return effects
+    }
 
     private class RecordingAnalytics : AnalyticsReporter {
         override fun logEvent(event: AnalyticsEvent) = Unit
@@ -145,14 +154,21 @@ class SavedArticlesViewModelTest {
         category = NewsCategory.GENERAL,
     )
 
-    private fun syncedSettings() = SyncedSettings(
-        newsLanguage = "en",
-        appLocale = "en",
-        selectedCountry = "us",
-        themeMode = "system",
-        notificationsEnabled = true,
-        notifyBreaking = true,
-        notifyTopStory = true,
-        notifyReminder = true,
-    )
+    private class RecordingSyncPublisher : SyncPublisher {
+        val publishedSavedArticles = mutableListOf<List<NewsArticle>>()
+
+        override fun publishSavedArticles(articles: List<NewsArticle>) {
+            publishedSavedArticles += articles
+        }
+
+        override suspend fun publishSavedArticlesNow(articles: List<NewsArticle>) {
+            publishSavedArticles(articles)
+        }
+
+        override fun publishSettings(settings: SyncedSettings) = Unit
+
+        override suspend fun publishSettingsNow(settings: SyncedSettings) = Unit
+
+        override fun discardQueued() = Unit
+    }
 }

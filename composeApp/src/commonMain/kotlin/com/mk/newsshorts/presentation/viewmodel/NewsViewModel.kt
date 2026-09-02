@@ -7,25 +7,32 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import com.mk.newsshorts.auth.AuthClient
 import com.mk.newsshorts.auth.AuthFailure
 import com.mk.newsshorts.auth.AuthResult
+import com.mk.newsshorts.auth.AuthSession
 import com.mk.newsshorts.data.local.NotificationInboxStore
 import com.mk.newsshorts.data.local.PendingSignInEmailStore
-import com.mk.newsshorts.data.repository.SavedArticlesRepository
-import com.mk.newsshorts.data.repository.ToggleResult
+import com.mk.newsshorts.data.repository.SavedArticles
 import com.mk.newsshorts.data.local.SeenArticlesStore
 import com.mk.newsshorts.data.local.SettingsManager
 import com.mk.newsshorts.data.local.currentTimeMillis
 import com.mk.newsshorts.data.local.isPlausibleEmail
+import com.mk.newsshorts.domain.feed.FeedInvalidator
+import com.mk.newsshorts.domain.feed.InvalidationReason
 import com.mk.newsshorts.domain.feed.appendPage
 import com.mk.newsshorts.domain.feed.shouldLoadNextPage
 import com.mk.newsshorts.domain.ranking.deprioritiseSeen
+import com.mk.newsshorts.domain.repository.ArticleLookup
+import com.mk.newsshorts.domain.repository.InboxReadMarker
+import com.mk.newsshorts.sync.AccountSyncUseCase
 import com.mk.newsshorts.sync.RemoteSyncClient
-import com.mk.newsshorts.sync.AccountSyncCoordinator
-import com.mk.newsshorts.sync.SyncFetch
+import com.mk.newsshorts.sync.SyncOutcome
+import com.mk.newsshorts.sync.SyncPublisher
 import com.mk.newsshorts.sync.SyncedSettings
+import com.mk.newsshorts.sync.apply
 import com.mk.newsshorts.sync.toSyncedSettings
 import com.mk.newsshorts.data.remote.RemoteConfigClient
 import com.mk.newsshorts.security.DeviceIntegrityInspector
@@ -45,11 +52,6 @@ import com.mk.newsshorts.domain.model.NewsResult
 import com.mk.newsshorts.domain.use_case.GetTopHeadlinesRequest
 import com.mk.newsshorts.domain.use_case.GetTopHeadlinesUseCase
 import com.mk.newsshorts.domain.use_case.DeleteAccountUseCase
-import com.mk.newsshorts.feature.saved.SavedArticlesMutation
-import com.mk.newsshorts.feature.saved.SavedArticlesUiEvent
-import com.mk.newsshorts.feature.saved.SavedArticlesViewModel
-import com.mk.newsshorts.feature.settings.SettingsUiEvent
-import com.mk.newsshorts.feature.settings.SettingsViewModel
 import com.mk.newsshorts.analytics.AnalyticsEvent
 import com.mk.newsshorts.analytics.AnalyticsReporter
 import com.mk.newsshorts.config.BuildConfig
@@ -62,7 +64,6 @@ import com.mk.newsshorts.navigation.NotificationBus
 import com.mk.newsshorts.navigation.PendingLink
 import com.mk.newsshorts.navigation.SignInLinkBus
 import com.mk.newsshorts.navigation.toNewsArticle
-import com.mk.newsshorts.notifications.PushSubscriber
 import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.getStrings
@@ -74,12 +75,9 @@ import com.mk.newsshorts.presentation.mvi.NavigationTab
 import com.mk.newsshorts.presentation.mvi.NewsUiEffect
 import com.mk.newsshorts.presentation.mvi.NewsUiEvent
 import com.mk.newsshorts.presentation.mvi.NewsUiState
-import com.mk.newsshorts.presentation.mvi.NotificationTier
 import com.mk.newsshorts.presentation.mvi.OnboardingStep
-import com.mk.newsshorts.presentation.mvi.TextScale
 import com.mk.newsshorts.presentation.mvi.InboxNotification
 import com.mk.newsshorts.presentation.mvi.Overlay
-import com.mk.newsshorts.presentation.mvi.ThemeMode
 import com.mk.newsshorts.presentation.mvi.afterUnsuccessfulAuth
 
 internal data class RememberedCategoryFeed(
@@ -215,14 +213,16 @@ internal fun NewsUiState.withLoadedFeed(
 
 class NewsViewModel(
     private val getTopHeadlinesUseCase: GetTopHeadlinesUseCase,
-    private val savedArticlesViewModel: SavedArticlesViewModel,
-    private val settingsViewModel: SettingsViewModel,
     private val settingsManager: SettingsManager,
     private val analytics: AnalyticsReporter,
-    private val pushSubscriber: PushSubscriber,
     private val deepLinkBus: DeepLinkBus,
     private val signInLinkBus: SignInLinkBus,
-    private val savedArticlesRepository: SavedArticlesRepository,
+    private val savedArticles: SavedArticles,
+    private val accountSync: AccountSyncUseCase,
+    private val authSession: AuthSession,
+    private val syncPublisher: SyncPublisher,
+    private val feedInvalidator: FeedInvalidator,
+    private val articleLookup: ArticleLookup,
     private val seenArticlesStore: SeenArticlesStore,
     private val pendingSignInEmailStore: PendingSignInEmailStore,
     private val remoteConfigClient: RemoteConfigClient,
@@ -232,6 +232,7 @@ class NewsViewModel(
     private val sharePageResolver: SharePageResolver,
     private val notificationInboxClient: NotificationInboxClient,
     private val notificationInboxStore: NotificationInboxStore,
+    private val inboxReadMarker: InboxReadMarker,
     private val notificationBus: NotificationBus,
 ) : BaseViewModel() {
 
@@ -246,34 +247,43 @@ class NewsViewModel(
     private val deleteAccountUseCase = DeleteAccountUseCase(authClient, remoteSyncClient)
 
     /** Toast text is built here rather than in the UI, so it needs the locale too. */
-    private fun strings(): AppStrings = getStrings(settingsViewModel.uiState.value.appLocale)
+    private fun strings(): AppStrings =
+        getStrings(AppLocale.fromCode(settingsManager.preferences.value.appLocale))
 
     init {
         loadSavedSettings()
         observeDeepLinks()
         observeArrivingNotifications()
         observeSignInLinks()
+        observeFeedInvalidations()
         checkForRequiredUpdate()
         observeAuthState()
     }
 
-    /**
-     * Everything that has to happen when the account changes lives in the
-     * coordinator, which is built here rather than injected because it needs
-     * [viewModelScope] and two callbacks that are the ViewModel's own.
-     */
-    private val accountSync = AccountSyncCoordinator(
-        remoteSyncClient = remoteSyncClient,
-        savedArticlesRepository = savedArticlesRepository,
-        currentSettings = { currentSyncedSettings() },
-        applyRemoteSettings = { applySyncedSettings(it) },
-    )
+    private var accountSyncJob: Job? = null
+    private var activeAccountSyncUid: String? = null
 
     private fun observeAuthState() {
         viewModelScope.launch {
-            authClient.currentUser.collect { user ->
+            authSession.user.collect { user ->
                 mutableState.update { it.copy(authUser = user, authInProgress = false) }
-                accountSync.onUserChanged(viewModelScope, user?.uid)
+                val uid = user?.uid
+                if (uid != null && uid == activeAccountSyncUid) return@collect
+                accountSyncJob?.cancel()
+                // Anything still queued or in the air belongs to the account
+                // that just went away. A write that was legitimately current
+                // when it left can still land minutes later, under whoever is
+                // signed in by then.
+                syncPublisher.discardQueued()
+                activeAccountSyncUid = uid
+                accountSyncJob = if (uid == null) {
+                    null
+                } else {
+                    launch {
+                        val outcome = accountSync()
+                        if (authSession.user.value?.uid == uid) applySyncOutcome(outcome)
+                    }
+                }
             }
         }
     }
@@ -285,43 +295,32 @@ class NewsViewModel(
      * and "system" over whatever the reader had actually chosen. The store has
      * the real values from the moment it is constructed.
      */
-    private fun currentSyncedSettings(): SyncedSettings = settingsViewModel.currentSyncedSettings()
+    private fun currentSyncedSettings(): SyncedSettings =
+        settingsManager.preferences.value.toSyncedSettings()
+
+    private suspend fun applySyncOutcome(outcome: SyncOutcome) {
+        if (outcome.settings == null) {
+            replaceSavedArticlesFromSync(outcome.saved)
+            return
+        }
+        applySyncedSettings(settings = outcome.settings, saved = outcome.saved)
+    }
 
     /** The remote copy becomes the local one — this is the "remote wins" side of sync. */
-    private suspend fun applySyncedSettings(settings: SyncedSettings) {
-        val newsLanguage = LanguageOption.entries.find { it.code == settings.newsLanguage }
-            ?: mutableState.value.selectedLanguage
-        val country = CountryOption.entries.find { it.code == settings.selectedCountry }
-            ?: mutableState.value.selectedCountry
+    private suspend fun applySyncedSettings(settings: SyncedSettings, saved: List<NewsArticle>) {
+        settingsManager.apply(settings)
+        savedArticles.replaceAll(saved)
+        feedInvalidator.invalidate(InvalidationReason.SyncApplied)
+    }
 
-        settingsManager.saveNewsLanguage(newsLanguage.code)
-        settingsManager.saveSelectedCountry(country.code)
-        settingsViewModel.applySynced(settings)
-
-        val languageChanged = newsLanguage != mutableState.value.selectedLanguage
-        if (languageChanged) categoryFeedMemory.clear()
-        mutableState.update { state ->
-            state.copy(
-                selectedLanguage = newsLanguage,
-                selectedCountry = country,
-            )
+    private fun replaceSavedArticlesFromSync(articles: List<NewsArticle>) {
+        if (articles != savedArticles.saved.value) {
+            savedArticles.replaceAll(articles)
         }
-        if (languageChanged) loadNewsWithCache()
     }
 
-    /**
-     * Queued rather than launched. Every one of these used to be its own
-     * coroutine, so two quick taps could finish in the wrong order and the
-     * slower, older list — still holding the bookmark just removed — was the
-     * one the server kept.
-     */
-    private fun pushSavedArticlesIfSignedIn(articles: List<NewsArticle>) {
-        accountSync.pushSavedArticles(viewModelScope, articles)
-    }
-
-    /** Queued for the same reason bookmark writes are — see the coordinator. */
-    private fun pushSettingsIfSignedIn() {
-        accountSync.pushSettings(viewModelScope, currentSyncedSettings())
+    private fun publishSettingsIfSignedIn() {
+        syncPublisher.publishSettings(currentSyncedSettings())
     }
 
     private fun handleSignInWithGoogle() {
@@ -352,7 +351,7 @@ class NewsViewModel(
         }
         mutableState.update { it.copy(authInProgress = true, authError = null) }
         viewModelScope.launch {
-            val language = settingsViewModel.uiState.value.appLocale.code
+            val language = settingsManager.preferences.value.appLocale
             when (val result = authClient.sendSignInLink(address, language)) {
                 AuthResult.Success -> {
                     pendingSignInEmailStore.save(address)
@@ -581,13 +580,48 @@ class NewsViewModel(
         }
     }
 
+    private fun observeFeedInvalidations() {
+        viewModelScope.launch {
+            feedInvalidator.signals.collect { reason ->
+                handleFeedInvalidation(reason)
+            }
+        }
+    }
+
+    private fun handleFeedInvalidation(reason: InvalidationReason) {
+        val preferences = settingsManager.preferences.value
+        val newsLanguage = LanguageOption.entries.find { it.code == preferences.newsLanguage }
+            ?: mutableState.value.selectedLanguage
+        val country = CountryOption.entries.find { it.code == preferences.selectedCountry }
+            ?: mutableState.value.selectedCountry
+        val languageChanged = newsLanguage != mutableState.value.selectedLanguage
+
+        if (languageChanged) categoryFeedMemory.clear()
+        mutableState.update { state ->
+            state.copy(
+                selectedLanguage = newsLanguage,
+                selectedCountry = country,
+                currentArticleIndex = 0,
+                errorMessage = null,
+            )
+        }
+        resetArticleTracking()
+        if (languageChanged || reason == InvalidationReason.SyncApplied) {
+            refreshNotificationInbox()
+        }
+        when (reason) {
+            InvalidationReason.CountryChanged -> loadNewsForCountryWithCache(country)
+            InvalidationReason.LanguageChanged,
+            InvalidationReason.SyncApplied,
+            InvalidationReason.OnboardingFinished -> loadNewsWithCache()
+        }
+    }
+
     private fun loadSavedSettings() {
         viewModelScope.launch {
             // One snapshot: reading nine separate flows left a window where
             // half of them had been answered and half had not.
             val stored = settingsManager.preferences.value
-            settingsViewModel.applyStored(stored)
-            val notificationsEnabled: Boolean = stored.notificationsEnabled
             val newsLanguage: LanguageOption = LanguageOption.entries.find { it.code == stored.newsLanguage }
                 ?: LanguageOption.ENGLISH
             val country: CountryOption = CountryOption.entries.find { it.code == stored.selectedCountry }
@@ -605,10 +639,7 @@ class NewsViewModel(
                     selectedCountry = country,
                 )
             }
-            savedArticlesViewModel.load()
-            if (notificationsEnabled) {
-                pushSubscriber.subscribeToLanguage(FeedLanguage.resolve(newsLanguage.code))
-            }
+            savedArticles.load()
             // After the language is in state and not from init: the inbox is
             // published per language, and asking before settings load would
             // fetch the default one and mark its notifications unread.
@@ -648,7 +679,6 @@ class NewsViewModel(
             is NewsUiEvent.SelectCategory -> handleSelectCategory(event.category)
             is NewsUiEvent.SelectCountry -> handleSelectCountry(event.country)
             is NewsUiEvent.SelectLanguage -> handleSelectLanguage(event.language)
-            is NewsUiEvent.SelectAppLocale -> handleSelectAppLocale(event.locale)
             is NewsUiEvent.SelectTab -> handleSelectTab(event.tab)
             is NewsUiEvent.ScrollToArticle -> handleScrollToArticle(event.index)
             is NewsUiEvent.OpenArticleDetails -> handleOpenArticleDetails(event.article, event.origin)
@@ -663,8 +693,8 @@ class NewsViewModel(
             is NewsUiEvent.OpenDeepLink -> handleOpenDeepLink(event.link)
             is NewsUiEvent.OpenSharePage -> handleOpenSharePage(event.url)
             is NewsUiEvent.ShareArticle -> handleShareArticle(event.article)
-            is NewsUiEvent.SaveArticle -> handleSaveArticle(event.article)
-            is NewsUiEvent.RemoveSavedArticle -> handleRemoveSavedArticle(event.article)
+            is NewsUiEvent.SaveArticle -> Unit
+            is NewsUiEvent.RemoveSavedArticle -> Unit
             NewsUiEvent.OpenSearch -> handleOpenSearch()
             NewsUiEvent.OpenNotificationInbox -> handleOpenNotificationInbox()
             is NewsUiEvent.OpenInboxNotification -> handleOpenInboxNotification(event.deepLink)
@@ -676,9 +706,6 @@ class NewsViewModel(
             NewsUiEvent.RetryLoading -> handleRetryLoading()
             NewsUiEvent.RetryNextPage -> handleRetryNextPage()
             NewsUiEvent.DismissError -> handleDismissError()
-            is NewsUiEvent.SelectThemeMode -> handleSelectThemeMode(event.mode)
-            NewsUiEvent.ToggleNotificationsEnabled -> handleToggleNotificationsEnabled()
-            is NewsUiEvent.ToggleNotificationTier -> handleToggleNotificationTier(event.tier)
             NewsUiEvent.RequestNotificationPermissionIfDue -> handleRequestNotificationPermissionIfDue()
             NewsUiEvent.SignInWithGoogle -> handleSignInWithGoogle()
             is NewsUiEvent.SendSignInLink -> handleSendSignInLink(event.email)
@@ -691,7 +718,6 @@ class NewsViewModel(
             is NewsUiEvent.OnboardingToggleCategory -> handleOnboardingToggleCategory(event.category)
             NewsUiEvent.OnboardingNext -> handleOnboardingNext()
             NewsUiEvent.OnboardingSkip -> handleOnboardingSkip()
-            is NewsUiEvent.SelectTextScale -> handleSelectTextScale(event.scale)
         }
     }
 
@@ -723,20 +749,13 @@ class NewsViewModel(
 
     private fun handleSelectCountry(country: CountryOption) {
         if (country == mutableState.value.selectedCountry) return
-        mutableState.update { state ->
-            state.copy(
-                selectedCountry = country,
-                currentArticleIndex = 0,
-                errorMessage = null
-            )
-        }
         analytics.logEvent(AnalyticsEvent.CountrySelected(country.code))
         resetArticleTracking()
         viewModelScope.launch {
             settingsManager.saveSelectedCountry(country.code)
+            publishSettingsIfSignedIn()
+            feedInvalidator.invalidate(InvalidationReason.CountryChanged)
         }
-        pushSettingsIfSignedIn()
-        loadNewsForCountryWithCache(country)
     }
 
     private fun loadNewsForCountryWithCache(country: CountryOption) {
@@ -757,31 +776,14 @@ class NewsViewModel(
 
     private fun handleSelectLanguage(language: LanguageOption) {
         if (language == mutableState.value.selectedLanguage) return
-        categoryFeedMemory.clear()
-        mutableState.update { state ->
-            state.copy(
-                selectedLanguage = language,
-                currentArticleIndex = 0,
-                errorMessage = null,
-            )
-        }
         viewModelScope.launch {
             analytics.logEvent(AnalyticsEvent.NewsLanguageChanged(language.code))
             analytics.setProperty("news_language", language.code)
-            pushSubscriber.subscribeToLanguage(FeedLanguage.resolve(language.code))
             settingsManager.saveNewsLanguage(language.code)
-            // The inbox is per language too, and the old list describes
-            // notifications this reader will no longer be sent.
-            refreshNotificationInbox()
+            publishSettingsIfSignedIn()
+            feedInvalidator.invalidate(InvalidationReason.LanguageChanged)
             mutableEffect.emit(NewsUiEffect.ShowToast(strings().languageNames[language.code] ?: language.displayName))
         }
-        pushSettingsIfSignedIn()
-        loadNewsWithCache()
-    }
-
-    private fun handleSelectAppLocale(locale: AppLocale) {
-        val changed = settingsViewModel.processEvent(SettingsUiEvent.SelectAppLocale(locale))
-        if (changed) pushSettingsIfSignedIn()
     }
 
     private fun handleSelectTab(tab: NavigationTab) {
@@ -878,14 +880,14 @@ class NewsViewModel(
                 // The system dialog only for a yes. Showing it to someone who
                 // just said no would collect the denial that locks the
                 // permission for good.
-                if (settingsViewModel.uiState.value.notificationsEnabled) {
+                if (settingsManager.preferences.value.notificationsEnabled) {
                     mutableEffect.emit(NewsUiEffect.RequestNotificationPermission)
                 }
             }
         }
         // The category may have changed, so the feed is reloaded rather than
         // left showing whatever the default had already fetched behind us.
-        loadNewsWithCache()
+        feedInvalidator.invalidate(InvalidationReason.OnboardingFinished)
     }
 
     private fun handleOnboardingToggleCategory(category: NewsCategory) {
@@ -899,10 +901,6 @@ class NewsViewModel(
                 }
             )
         }
-    }
-
-    private fun handleSelectTextScale(scale: TextScale) {
-        settingsViewModel.processEvent(SettingsUiEvent.SelectTextScale(scale))
     }
 
     /** Start of the current card's time on screen, for the viewed/skipped split. */
@@ -1099,7 +1097,7 @@ class NewsViewModel(
 
     /** The policy page picks its language from this, not from the browser. */
     private fun privacyPolicyUrl(): String =
-        urlInLanguage(BuildConfig.PRIVACY_POLICY_URL, settingsViewModel.uiState.value.appLocale.code)
+        urlInLanguage(BuildConfig.PRIVACY_POLICY_URL, settingsManager.preferences.value.appLocale)
 
     private fun handleOpenArticleSource() {
         val article = mutableState.value.articleDetails?.article ?: return
@@ -1111,11 +1109,6 @@ class NewsViewModel(
         }
     }
 
-    /**
-     * Prefers a copy already in the feed or the saved list — those carry the
-     * real image and timestamp — and falls back to rebuilding the article from
-     * the link, which is all a cold start has.
-     */
     /**
      * Turns a shared landing page into the article it names, and opens it.
      *
@@ -1133,36 +1126,44 @@ class NewsViewModel(
         }
     }
 
+    /**
+     * Prefers a copy already in the feed, saved list, or cached feed — those carry
+     * the real image and timestamp — and falls back to rebuilding the article from
+     * the link, which is all a cold start has.
+     */
     private fun handleOpenDeepLink(link: ArticleDeepLink) {
-        val state = mutableState.value
-        val article = state.articles.firstOrNull { it.articleUrl.value == link.url }
-            ?: savedArticlesViewModel.findByUrl(link.url)
-            ?: link.toNewsArticle()
-            ?: return
-        // A shared link marks itself, so notification_opened stays a count of
-        // notifications rather than of every way into the details screen.
-        val fromShare = link.referrer == ArticleDeepLinks.SHARE_REFERRER
-        if (!fromShare) {
-            analytics.logEvent(
-                AnalyticsEvent.NotificationOpened(article.category.apiValue, article.source.name.value)
+        viewModelScope.launch {
+            val state = mutableState.value
+            val article = state.articles.firstOrNull { it.articleUrl.value == link.url }
+                ?: savedArticles.saved.value.firstOrNull { it.articleUrl.value == link.url }
+                ?: articleLookup.find(link.url)
+                ?: link.toNewsArticle()
+                ?: return@launch
+            // A shared link marks itself, so notification_opened stays a count of
+            // notifications rather than of every way into the details screen.
+            val fromShare = link.referrer == ArticleDeepLinks.SHARE_REFERRER
+            if (!fromShare) {
+                analytics.logEvent(
+                    AnalyticsEvent.NotificationOpened(article.category.apiValue, article.source.name.value)
+                )
+            }
+            // The reader has gone into the story, so the inbox row for it is read —
+            // whether they came from a row, from the notification still sitting in
+            // the tray, or from a shared link that happened to also be pushed.
+            //
+            // Marked before the screen opens rather than after it closes: a mark
+            // that waited for them to come back would still be there if they left
+            // from the details screen instead. And written to the store first, so a
+            // cold start from a tray tap records it even though the published list
+            // has not arrived yet — when it does, the row is already read.
+            inboxReadMarker.markRead(article.articleUrl.value)
+            mutableState.update { it.copy(inboxRead = notificationInboxStore.read()) }
+
+            handleOpenArticleDetails(
+                article,
+                if (fromShare) ArticleOpenOrigin.SHARE else ArticleOpenOrigin.PUSH,
             )
         }
-        // The reader has gone into the story, so the inbox row for it is read —
-        // whether they came from a row, from the notification still sitting in
-        // the tray, or from a shared link that happened to also be pushed.
-        //
-        // Marked before the screen opens rather than after it closes: a mark
-        // that waited for them to come back would still be there if they left
-        // from the details screen instead. And written to the store first, so a
-        // cold start from a tray tap records it even though the published list
-        // has not arrived yet — when it does, the row is already read.
-        notificationInboxStore.markRead(article.articleUrl.value)
-        mutableState.update { it.copy(inboxRead = notificationInboxStore.read()) }
-
-        handleOpenArticleDetails(
-            article,
-            if (fromShare) ArticleOpenOrigin.SHARE else ArticleOpenOrigin.PUSH,
-        )
     }
 
     private fun handleShareArticle(article: NewsArticle) {
@@ -1186,45 +1187,6 @@ class NewsViewModel(
                 )
             )
         }
-    }
-
-    private fun handleSaveArticle(article: NewsArticle) {
-        val mutation = savedArticlesViewModel.processEvent(SavedArticlesUiEvent.Toggle(article))
-            as SavedArticlesMutation.Changed
-        pushSavedArticlesIfSignedIn(mutation.articles)
-        val message = when (mutation.result) {
-            ToggleResult.SAVED -> strings().articleSaved
-            ToggleResult.REMOVED -> strings().articleRemoved
-        }
-        viewModelScope.launch {
-            mutableEffect.emit(NewsUiEffect.ShowToast(message))
-        }
-    }
-
-    private fun handleRemoveSavedArticle(article: NewsArticle) {
-        val mutation = savedArticlesViewModel.processEvent(SavedArticlesUiEvent.Remove(article))
-        if (mutation !is SavedArticlesMutation.Changed) return
-        pushSavedArticlesIfSignedIn(mutation.articles)
-        viewModelScope.launch {
-            mutableEffect.emit(NewsUiEffect.ShowToast(strings().articleRemoved))
-        }
-    }
-
-    private fun handleSelectThemeMode(mode: ThemeMode) {
-        val changed = settingsViewModel.processEvent(SettingsUiEvent.SelectThemeMode(mode))
-        if (changed) pushSettingsIfSignedIn()
-    }
-
-    private fun handleToggleNotificationsEnabled() {
-        settingsViewModel.processEvent(
-            SettingsUiEvent.ToggleNotifications(mutableState.value.selectedLanguage.code)
-        )
-        pushSettingsIfSignedIn()
-    }
-
-    private fun handleToggleNotificationTier(tier: NotificationTier) {
-        settingsViewModel.processEvent(SettingsUiEvent.ToggleNotificationTier(tier))
-        pushSettingsIfSignedIn()
     }
 
     /**
@@ -1303,7 +1265,7 @@ class NewsViewModel(
                 state.copy(
                     isLoading = false,
                     feedRevision = state.feedRevision + 1,
-                        articles = applyRanking(cachedResult.data.articles),
+                    articles = applyRanking(cachedResult.data.articles),
                     nextPageFile = cachedResult.data.nextPage,
                     isLoadingNextPage = false,
                     nextPageFailed = false,

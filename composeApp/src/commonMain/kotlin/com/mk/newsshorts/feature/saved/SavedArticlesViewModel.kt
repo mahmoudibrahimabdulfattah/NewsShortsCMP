@@ -2,13 +2,18 @@ package com.mk.newsshorts.feature.saved
 
 import com.mk.newsshorts.analytics.AnalyticsEvent
 import com.mk.newsshorts.analytics.AnalyticsReporter
-import com.mk.newsshorts.data.repository.SavedArticlesRepository
+import com.mk.newsshorts.data.repository.SavedArticles
 import com.mk.newsshorts.data.repository.ToggleResult
 import com.mk.newsshorts.domain.model.NewsArticle
+import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.viewmodel.BaseViewModel
+import com.mk.newsshorts.sync.SyncPublisher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -24,25 +29,28 @@ sealed interface SavedArticlesUiEvent {
     data class Remove(val article: NewsArticle) : SavedArticlesUiEvent
 }
 
-sealed interface SavedArticlesMutation {
-    data class Changed(
-        val result: ToggleResult,
-        val articles: List<NewsArticle>,
-    ) : SavedArticlesMutation
-
-    data object Unchanged : SavedArticlesMutation
+sealed interface SavedArticlesUiEffect {
+    data class ShowToast(val message: String) : SavedArticlesUiEffect
 }
 
 class SavedArticlesViewModel(
-    private val repository: SavedArticlesRepository,
+    private val repository: SavedArticles,
     private val analytics: AnalyticsReporter,
+    private val syncPublisher: SyncPublisher,
+    private val strings: () -> AppStrings,
     private val scopeOverride: CoroutineScope? = null,
 ) : BaseViewModel() {
     private val mutableState = MutableStateFlow(SavedArticlesUiState())
     val uiState: StateFlow<SavedArticlesUiState> = mutableState.asStateFlow()
 
+    private val mutableEffect = MutableSharedFlow<SavedArticlesUiEffect>()
+    val uiEffect: SharedFlow<SavedArticlesUiEffect> = mutableEffect.asSharedFlow()
+
+    private val savedScope: CoroutineScope
+        get() = scopeOverride ?: viewModelScope
+
     init {
-        (scopeOverride ?: viewModelScope).launch {
+        savedScope.launch {
             repository.saved.collect { articles ->
                 mutableState.update { it.copy(articles = articles) }
             }
@@ -53,24 +61,36 @@ class SavedArticlesViewModel(
         repository.load()
     }
 
-    fun processEvent(event: SavedArticlesUiEvent): SavedArticlesMutation = when (event) {
-        is SavedArticlesUiEvent.Toggle -> toggle(event.article)
-        is SavedArticlesUiEvent.Remove -> remove(event.article)
+    fun processEvent(event: SavedArticlesUiEvent) {
+        when (event) {
+            is SavedArticlesUiEvent.Toggle -> toggle(event.article)
+            is SavedArticlesUiEvent.Remove -> remove(event.article)
+        }
     }
 
     fun findByUrl(url: String): NewsArticle? =
         repository.saved.value.firstOrNull { it.articleUrl.value == url }
 
-    private fun toggle(article: NewsArticle): SavedArticlesMutation.Changed {
+    private fun toggle(article: NewsArticle) {
         val result = repository.toggle(article)
         if (result == ToggleResult.SAVED) {
             analytics.logEvent(AnalyticsEvent.ArticleSaved(article.category.apiValue))
         }
-        return SavedArticlesMutation.Changed(result, repository.saved.value)
+        syncPublisher.publishSavedArticles(repository.saved.value)
+        val message = when (result) {
+            ToggleResult.SAVED -> strings().articleSaved
+            ToggleResult.REMOVED -> strings().articleRemoved
+        }
+        savedScope.launch {
+            mutableEffect.emit(SavedArticlesUiEffect.ShowToast(message))
+        }
     }
 
-    private fun remove(article: NewsArticle): SavedArticlesMutation {
-        if (!repository.remove(article)) return SavedArticlesMutation.Unchanged
-        return SavedArticlesMutation.Changed(ToggleResult.REMOVED, repository.saved.value)
+    private fun remove(article: NewsArticle) {
+        if (!repository.remove(article)) return
+        syncPublisher.publishSavedArticles(repository.saved.value)
+        savedScope.launch {
+            mutableEffect.emit(SavedArticlesUiEffect.ShowToast(strings().articleRemoved))
+        }
     }
 }

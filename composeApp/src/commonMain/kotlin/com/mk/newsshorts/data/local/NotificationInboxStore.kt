@@ -1,5 +1,6 @@
 package com.mk.newsshorts.data.local
 
+import com.mk.newsshorts.domain.repository.InboxReadMarker
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -29,7 +30,7 @@ import kotlinx.serialization.json.Json
  */
 class NotificationInboxStore(
     private val settingsStorage: SettingsStorage,
-) {
+) : InboxReadMarker {
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -75,7 +76,7 @@ class NotificationInboxStore(
      * One article, opened — from a row in the inbox, or from the notification
      * itself out in the tray.
      */
-    fun markRead(articleUrl: String) {
+    override fun markRead(articleUrl: String) {
         if (articleUrl.isBlank()) return
         val key = articleKey(articleUrl)
         val current = read()

@@ -8,8 +8,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 
-/** What [SavedArticlesRepository.toggle] did, so the caller knows which toast to show. */
+/** What [SavedArticles.toggle] did, so the caller knows which toast to show. */
 enum class ToggleResult { SAVED, REMOVED }
+
+interface SavedArticles {
+    val saved: StateFlow<List<NewsArticle>>
+    val isLoaded: StateFlow<Boolean>
+
+    suspend fun awaitLoaded()
+    suspend fun load()
+    fun toggle(article: NewsArticle): ToggleResult
+    fun remove(article: NewsArticle): Boolean
+    fun mergeWithRemote(remote: List<NewsArticle>): List<NewsArticle>
+    fun replaceAll(articles: List<NewsArticle>)
+}
 
 /**
  * The one owner of the bookmark list.
@@ -19,11 +31,11 @@ enum class ToggleResult { SAVED, REMOVED }
  * means the rules — match by URL, newest first, write through to disk — are
  * stated once, and can be tested without a ViewModel.
  */
-class SavedArticlesRepository(
+class DefaultSavedArticlesRepository(
     private val store: SavedArticlesLocalStore,
-) {
+) : SavedArticles {
     private val mutableSaved = MutableStateFlow<List<NewsArticle>>(emptyList())
-    val saved: StateFlow<List<NewsArticle>> = mutableSaved.asStateFlow()
+    override val saved: StateFlow<List<NewsArticle>> = mutableSaved.asStateFlow()
 
     private val mutableLoaded = MutableStateFlow(false)
 
@@ -34,10 +46,10 @@ class SavedArticlesRepository(
      * that is empty only because the disk read has not finished yet is how
      * local-only bookmarks get destroyed.
      */
-    val isLoaded: StateFlow<Boolean> = mutableLoaded.asStateFlow()
+    override val isLoaded: StateFlow<Boolean> = mutableLoaded.asStateFlow()
 
     /** Suspends until the on-disk list has been read at least once. */
-    suspend fun awaitLoaded() {
+    override suspend fun awaitLoaded() {
         isLoaded.first { it }
     }
 
@@ -47,13 +59,13 @@ class SavedArticlesRepository(
      * Deliberately without `withContext(Dispatchers.IO)`: that dispatcher does
      * not exist on js or wasmJs, and every caller is already off the frame.
      */
-    suspend fun load() {
+    override suspend fun load() {
         mutableSaved.value = store.load()
         mutableLoaded.value = true
     }
 
     /** Adds the article, or removes it if that URL is already bookmarked. */
-    fun toggle(article: NewsArticle): ToggleResult {
+    override fun toggle(article: NewsArticle): ToggleResult {
         val current = mutableSaved.value
         val existing = current.indexOfFirst { it.articleUrl == article.articleUrl }
         return if (existing != -1) {
@@ -68,7 +80,7 @@ class SavedArticlesRepository(
     }
 
     /** False when that URL was not bookmarked, so the caller can stay silent. */
-    fun remove(article: NewsArticle): Boolean {
+    override fun remove(article: NewsArticle): Boolean {
         val current = mutableSaved.value
         // Matched by URL, the only stable identity an article has.
         val existing = current.indexOfFirst { it.articleUrl == article.articleUrl }
@@ -81,10 +93,14 @@ class SavedArticlesRepository(
      * The sign-in union. Returns the merged list because the caller still owns
      * pushing it back to the server.
      */
-    fun mergeWithRemote(remote: List<NewsArticle>): List<NewsArticle> {
+    override fun mergeWithRemote(remote: List<NewsArticle>): List<NewsArticle> {
         val merged = mergeSavedArticles(local = mutableSaved.value, remote = remote)
         publish(merged)
         return merged
+    }
+
+    override fun replaceAll(articles: List<NewsArticle>) {
+        publish(articles)
     }
 
     /** Bookmarks are only useful if they outlive the session. */

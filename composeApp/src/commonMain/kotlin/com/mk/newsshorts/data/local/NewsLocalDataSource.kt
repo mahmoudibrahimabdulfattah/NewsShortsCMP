@@ -6,9 +6,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import com.mk.newsshorts.data.mapper.NewsMapper
 import com.mk.newsshorts.data.remote.ArticleDto
 import com.mk.newsshorts.data.remote.NewsApiResponse
 import com.mk.newsshorts.data.remote.SourceDto
+import com.mk.newsshorts.domain.model.NewsArticle
+import com.mk.newsshorts.domain.model.NewsCategory
+import com.mk.newsshorts.domain.repository.ArticleLookup
 
 @Serializable
 data class CachedNewsData(
@@ -51,7 +55,7 @@ internal data class CacheKeyInfo(
 
 class NewsLocalDataSource(
     private val settingsStorage: SettingsStorage
-) {
+) : ArticleLookup {
     private val memoryCache: MutableMap<String, CachedNewsData> = mutableMapOf()
     private val cacheStateFlow: MutableStateFlow<Map<String, CachedNewsData>> = MutableStateFlow(emptyMap())
     val cacheState: StateFlow<Map<String, CachedNewsData>> = cacheStateFlow.asStateFlow()
@@ -166,6 +170,21 @@ class NewsLocalDataSource(
         settingsStorage.putString(CACHE_INDEX_KEY, "")
     }
 
+    override suspend fun find(url: String): NewsArticle? {
+        val target = url.trim()
+        if (target.isBlank()) return null
+        return memoryCache.values
+            .asSequence()
+            .filter { isCacheValid(it.timestamp) }
+            .flatMap { cachedData ->
+                NewsMapper.mapToDomain(
+                    response = convertToApiResponse(cachedData),
+                    category = categoryFor(cachedData.cacheKey),
+                ).asSequence()
+            }
+            .firstOrNull { it.articleUrl.value == target }
+    }
+
     private fun clearAllCache() {
         memoryCache.clear()
         cacheStateFlow.value = emptyMap()
@@ -247,6 +266,10 @@ class NewsLocalDataSource(
         val cacheAge: Long = currentTime - timestamp
         return cacheAge < CACHE_EXPIRY_MS
     }
+
+    private fun categoryFor(cacheKey: String): NewsCategory =
+        NewsCategory.entries.firstOrNull { cacheKey.endsWith("_${it.apiValue}") }
+            ?: NewsCategory.GENERAL
 
     companion object {
         /**

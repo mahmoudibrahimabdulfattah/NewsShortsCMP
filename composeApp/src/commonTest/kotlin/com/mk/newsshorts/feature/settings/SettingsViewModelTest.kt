@@ -4,12 +4,14 @@ import com.mk.newsshorts.analytics.AnalyticsEvent
 import com.mk.newsshorts.analytics.AnalyticsReporter
 import com.mk.newsshorts.data.local.AppPreferences
 import com.mk.newsshorts.data.local.SettingsPersistence
-import com.mk.newsshorts.notifications.PushSubscriber
+import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.mvi.NotificationTier
 import com.mk.newsshorts.presentation.mvi.TextScale
 import com.mk.newsshorts.presentation.mvi.ThemeMode
+import com.mk.newsshorts.sync.SyncPublisher
 import com.mk.newsshorts.sync.SyncedSettings
+import com.mk.newsshorts.sync.toSyncedSettings
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -38,14 +41,13 @@ class SettingsViewModelTest {
             textScale = "default",
         )
         val persistence = RecordingSettingsPersistence(stored)
-        val push = RecordingPushSubscriber()
-        val viewModel = viewModel(persistence, push)
-        viewModel.applyStored(stored)
+        val syncPublisher = RecordingSyncPublisher()
+        val viewModel = viewModel(persistence, syncPublisher)
 
         viewModel.processEvent(SettingsUiEvent.SelectAppLocale(AppLocale.ARABIC))
         viewModel.processEvent(SettingsUiEvent.SelectThemeMode(ThemeMode.DARK))
         viewModel.processEvent(SettingsUiEvent.SelectTextScale(TextScale.LARGE))
-        viewModel.processEvent(SettingsUiEvent.ToggleNotifications("ar"))
+        viewModel.processEvent(SettingsUiEvent.ToggleNotifications)
         viewModel.processEvent(SettingsUiEvent.ToggleNotificationTier(NotificationTier.BREAKING))
         viewModel.processEvent(SettingsUiEvent.ToggleNotificationTier(NotificationTier.TOP_STORY))
         viewModel.processEvent(SettingsUiEvent.ToggleNotificationTier(NotificationTier.REMINDER))
@@ -75,7 +77,18 @@ class SettingsViewModelTest {
             ),
             persistence.preferences.value,
         )
-        assertEquals(listOf("ar"), push.subscribedLanguages)
+        assertEquals(
+            stored.copy(
+                appLocale = "ar",
+                themeMode = "dark",
+                textScale = "large",
+                notificationsEnabled = true,
+                notifyBreaking = false,
+                notifyTopStory = false,
+                notifyReminder = false,
+            ).toSyncedSettings(),
+            syncPublisher.publishedSettings.last(),
+        )
     }
 
     @Test
@@ -93,7 +106,6 @@ class SettingsViewModelTest {
         )
         val persistence = RecordingSettingsPersistence(stored)
         val viewModel = viewModel(persistence)
-        viewModel.applyStored(stored)
 
         viewModel.processEvent(SettingsUiEvent.SelectThemeMode(ThemeMode.LIGHT))
         advanceUntilIdle()
@@ -145,13 +157,13 @@ class SettingsViewModelTest {
 
     private fun TestScope.viewModel(
         persistence: RecordingSettingsPersistence,
-        pushSubscriber: RecordingPushSubscriber = RecordingPushSubscriber(),
+        syncPublisher: RecordingSyncPublisher = RecordingSyncPublisher(),
     ): SettingsViewModel = SettingsViewModel(
         settingsManager = persistence,
         analytics = RecordingAnalytics(),
-        pushSubscriber = pushSubscriber,
+        syncPublisher = syncPublisher,
         scopeOverride = this,
-    )
+    ).also { runCurrent() }
 
     private class RecordingSettingsPersistence(
         initial: AppPreferences,
@@ -188,19 +200,27 @@ class SettingsViewModelTest {
         }
     }
 
-    private class RecordingPushSubscriber : PushSubscriber {
-        val subscribedLanguages = mutableListOf<String>()
-
-        override fun subscribeToLanguage(language: String) {
-            subscribedLanguages += language
-        }
-
-        override fun unsubscribeAll() = Unit
-    }
-
     private class RecordingAnalytics : AnalyticsReporter {
         override fun logEvent(event: AnalyticsEvent) = Unit
         override fun setProperty(name: String, value: String) = Unit
         override fun recordError(message: String, cause: Throwable?) = Unit
+    }
+
+    private class RecordingSyncPublisher : SyncPublisher {
+        val publishedSettings = mutableListOf<SyncedSettings>()
+
+        override fun publishSavedArticles(articles: List<NewsArticle>) = Unit
+
+        override suspend fun publishSavedArticlesNow(articles: List<NewsArticle>) = Unit
+
+        override fun publishSettings(settings: SyncedSettings) {
+            publishedSettings += settings
+        }
+
+        override suspend fun publishSettingsNow(settings: SyncedSettings) {
+            publishSettings(settings)
+        }
+
+        override fun discardQueued() = Unit
     }
 }

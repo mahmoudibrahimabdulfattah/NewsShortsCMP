@@ -1,14 +1,10 @@
 package com.mk.newsshorts.feature.settings
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -22,12 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.FormatSize
@@ -55,7 +47,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -88,7 +79,8 @@ private const val ANIMATION_DURATION_MILLIS: Int = 200
 fun SettingsScreen(
     newsUiState: NewsUiState,
     settingsUiState: SettingsUiState,
-    onEvent: (NewsUiEvent) -> Unit,
+    onNewsEvent: (NewsUiEvent) -> Unit,
+    onSettingsEvent: (SettingsUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -98,7 +90,7 @@ fun SettingsScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            OverlayTopBar(title = strings.settings, onBack = { onEvent(NewsUiEvent.CloseOverlay) })
+            OverlayTopBar(title = strings.settings, onBack = { onNewsEvent(NewsUiEvent.CloseOverlay) })
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 // The app draws behind the system navigation bar, so the last
@@ -111,35 +103,35 @@ fun SettingsScreen(
                 item {
                     AppLanguageSection(
                         selectedLocale = settingsUiState.appLocale,
-                        onLocaleSelected = { onEvent(NewsUiEvent.SelectAppLocale(it)) },
+                        onLocaleSelected = { onSettingsEvent(SettingsUiEvent.SelectAppLocale(it)) },
                     )
                 }
                 item {
                     Spacer(modifier = Modifier.height(28.dp))
                     NewsLanguageSection(
                         selectedLanguage = newsUiState.selectedLanguage,
-                        onLanguageSelected = { onEvent(NewsUiEvent.SelectLanguage(it)) },
+                        onLanguageSelected = { onNewsEvent(NewsUiEvent.SelectLanguage(it)) },
                     )
                 }
                 item {
                     Spacer(modifier = Modifier.height(28.dp))
                     ThemeSection(
                         selectedMode = settingsUiState.themeMode,
-                        onModeSelected = { onEvent(NewsUiEvent.SelectThemeMode(it)) },
+                        onModeSelected = { onSettingsEvent(SettingsUiEvent.SelectThemeMode(it)) },
                     )
                 }
                 item {
                     Spacer(modifier = Modifier.height(28.dp))
                     TextSizeSection(
                         selectedScale = settingsUiState.textScale,
-                        onScaleSelected = { onEvent(NewsUiEvent.SelectTextScale(it)) },
+                        onScaleSelected = { onSettingsEvent(SettingsUiEvent.SelectTextScale(it)) },
                     )
                 }
                 item {
                     Spacer(modifier = Modifier.height(28.dp))
                     NotificationsSection(
                         uiState = settingsUiState,
-                        onEvent = onEvent,
+                        onEvent = onSettingsEvent,
                     )
                 }
                 item {
@@ -148,7 +140,7 @@ fun SettingsScreen(
                         authUser = newsUiState.authUser,
                         isLoading = newsUiState.authInProgress,
                         authError = newsUiState.authError,
-                        onEvent = onEvent,
+                        onEvent = onNewsEvent,
                     )
                 }
             }
@@ -313,7 +305,7 @@ private fun ThemeSection(
 @Composable
 private fun NotificationsSection(
     uiState: SettingsUiState,
-    onEvent: (NewsUiEvent) -> Unit,
+    onEvent: (SettingsUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -337,7 +329,7 @@ private fun NotificationsSection(
                 SettingsSwitchRow(
                     label = strings.notificationsMasterLabel,
                     checked = uiState.notificationsEnabled,
-                    onCheckedChange = { onEvent(NewsUiEvent.ToggleNotificationsEnabled) },
+                    onCheckedChange = { onEvent(SettingsUiEvent.ToggleNotifications) },
                 )
                 // Disabled rather than hidden: the per-tier choice a reader made
                 // is still visible, and re-enabling the master switch restores
@@ -346,19 +338,25 @@ private fun NotificationsSection(
                     label = strings.notifyBreakingLabel,
                     checked = uiState.notifyBreaking,
                     enabled = uiState.notificationsEnabled,
-                    onCheckedChange = { onEvent(NewsUiEvent.ToggleNotificationTier(NotificationTier.BREAKING)) },
+                    onCheckedChange = {
+                        onEvent(SettingsUiEvent.ToggleNotificationTier(NotificationTier.BREAKING))
+                    },
                 )
                 SettingsSwitchRow(
                     label = strings.notifyTopStoryLabel,
                     checked = uiState.notifyTopStory,
                     enabled = uiState.notificationsEnabled,
-                    onCheckedChange = { onEvent(NewsUiEvent.ToggleNotificationTier(NotificationTier.TOP_STORY)) },
+                    onCheckedChange = {
+                        onEvent(SettingsUiEvent.ToggleNotificationTier(NotificationTier.TOP_STORY))
+                    },
                 )
                 SettingsSwitchRow(
                     label = strings.notifyReminderLabel,
                     checked = uiState.notifyReminder,
                     enabled = uiState.notificationsEnabled,
-                    onCheckedChange = { onEvent(NewsUiEvent.ToggleNotificationTier(NotificationTier.REMINDER)) },
+                    onCheckedChange = {
+                        onEvent(SettingsUiEvent.ToggleNotificationTier(NotificationTier.REMINDER))
+                    },
                 )
             }
         }

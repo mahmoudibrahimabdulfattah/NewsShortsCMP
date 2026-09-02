@@ -3,13 +3,11 @@ package com.mk.newsshorts.presentation.mvi
 import com.mk.newsshorts.domain.model.NewsArticle
 import com.mk.newsshorts.domain.model.NewsCategory
 import com.mk.newsshorts.navigation.ArticleDeepLink
-import com.mk.newsshorts.presentation.localization.AppLocale
 
 sealed interface NewsUiEvent {
     data class SelectCategory(val category: NewsCategory) : NewsUiEvent
     data class SelectCountry(val country: CountryOption) : NewsUiEvent
     data class SelectLanguage(val language: LanguageOption) : NewsUiEvent
-    data class SelectAppLocale(val locale: AppLocale) : NewsUiEvent
     data class SelectTab(val tab: NavigationTab) : NewsUiEvent
 
     /** A pager position, so genuinely an index — unlike the events below. */
@@ -90,10 +88,6 @@ sealed interface NewsUiEvent {
     /** Acknowledges the device-integrity warning, which then stays dismissed. */
     data object DismissSecurityWarning : NewsUiEvent
 
-    data class SelectThemeMode(val mode: ThemeMode) : NewsUiEvent
-
-    data object ToggleNotificationsEnabled : NewsUiEvent
-    data class ToggleNotificationTier(val tier: NotificationTier) : NewsUiEvent
     /** Fired once, after the reader has read enough to make an informed choice. */
     data object RequestNotificationPermissionIfDue : NewsUiEvent
 
@@ -124,8 +118,6 @@ sealed interface NewsUiEvent {
      * and the reader gets a working app, they just did not pick.
      */
     data object OnboardingSkip : NewsUiEvent
-
-    data class SelectTextScale(val scale: TextScale) : NewsUiEvent
 }
 
 /**
