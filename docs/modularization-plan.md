@@ -273,27 +273,79 @@ Delete the dead entries: all six `sqldelight-*` plus the `sqldelight` plugin,
 for the recurring groups (`compose-common`, `ktor-client-common`, `koin-common`)
 so each convention plugin reads as one line.
 
-**Verify:**
+**Verify:** the standard command, plus the stale-backend check described in
+*The verification baseline* below — that check is this phase's real acceptance
+criterion, since it is the bug the phase exists to fix.
+
+**Risk:** Low — nothing moves; rollback is one revert. **Effort: M.**
+
+---
+
+## The verification baseline
+
+`./gradlew build` **is not a valid check on this repository**, and neither is a
+bare `./gradlew check`. Two failures predate this work and reproduce identically
+on `master`:
+
+1. **`verifyReleaseSigning`** fails whenever `local.properties` has no
+   `RELEASE_*` keys, which is the normal state on a development machine.
+   `build` reaches it through `assembleRelease`. The task is *designed* to fail
+   closed — see the comment at its definition — so this is correct behaviour,
+   not something to fix.
+2. **`lintDebug`** reports 4 errors, all `RestrictedApi` on `androidx.glance`
+   in `composeApp/src/androidMain/kotlin/com/mk/newsshorts/widget/TopStoryWidget.kt`.
+   Identical count and locations on `master`.
+
+So **the standard command for every phase is**:
 
 ```bash
-./gradlew clean build --configuration-cache
+./gradlew check :composeApp:assembleDebug -x lintDebug
 ```
 
-Run it twice — the second run must report a configuration-cache **hit**. Then:
+That runs `iosSimulatorArm64Test`, `jvmTest`, `jsBrowserTest`,
+`wasmJsBrowserTest` and `testDebugUnitTest`, and builds a real APK.
+
+Add per phase, where relevant:
 
 ```bash
-./gradlew :composeApp:assembleDebug :composeApp:jvmTest :composeApp:iosSimulatorArm64Test
+./gradlew :server:test
 ```
 
 ```bash
 docker build -f server/Dockerfile .
 ```
 
-Plus one Xcode build, and the stale-backend check: change `BACKEND_ORIGINS` in
-`local.properties`, rebuild **without** `--no-configuration-cache`, confirm the
-new origin ships.
+### What cannot be verified locally
 
-**Risk:** Low — nothing moves; rollback is one revert. **Effort: M.**
+**The configuration cache is never reused on this machine**, on any branch.
+Every run reports:
+
+```
+Calculating task graph as configuration cache cannot be reused because
+file '../../../../.gradle/daemon/8.14.3/daemon-<pid>.out.log' has changed.
+```
+
+The Gradle daemon's own log is being tracked as a configuration input, and it
+changes on every invocation. This reproduces on `master`, so it is environmental
+and not caused by any phase of this work. It also explains why the stale-`BuildConfig`
+trap recorded in the project's history was intermittent rather than constant —
+the cache was rarely warm.
+
+Consequence: **"the second run must be a cache hit" is not a usable acceptance
+criterion here.** Verify configuration-cache correctness by *behaviour* instead —
+change an input, rebuild without `--no-configuration-cache`, and confirm the
+output changed. For Phase 0 that is:
+
+1. Note the current `BACKEND_ORIGINS` in
+   `composeApp/build/generated/buildconfig/commonMain/kotlin/com/mk/newsshorts/config/BuildConfig.kt`.
+2. Append a distinct sentinel `BACKEND_ORIGINS=...` to `local.properties`.
+3. `./gradlew :composeApp:assembleDebug` — **without** `--no-configuration-cache`.
+4. Confirm the generated file now holds the sentinel.
+5. Restore `local.properties` and confirm the original value comes back.
+
+Step 5 matters: proving it changes in both directions rules out a one-off
+regeneration. Back `local.properties` up before editing — it holds secrets and
+is not in version control.
 
 ---
 
@@ -713,7 +765,7 @@ files, and a dozen types pulled out of `NewsUiState`, `AuthClient`,
 changes. Keep it disciplined: **types and pure functions only — no interfaces,
 no coroutine machinery beyond `StateFlow` in signatures.**
 
-**Verify:** `./gradlew build`; the ~10 pure-algorithm test files now live here
+**Verify:** the standard command; the ~10 pure-algorithm test files now live here
 and must run under `iosSimulatorArm64Test`.
 
 **Risk:** Low. **Effort: L** (volume, ~40 files, not difficulty).
@@ -774,7 +826,7 @@ Also flag but **do not bundle**: `isDebugBuild()`'s jvm/ios/js/wasmJs actuals
 all hardcode `true`, so release web and desktop builds run with Ktor body
 logging on. Separate commit.
 
-**Verify:** `./gradlew build` on all targets; the ~12 data test files run here;
+**Verify:** the standard command on all targets; the ~12 data test files run here;
 `jvmTest/FeedOriginOutageIntegrationTest` (real local HTTP server) moves to
 `:core:data/jvmTest`. Manual: settings persist across restart on Android, iOS
 and desktop.
@@ -945,7 +997,7 @@ interface Navigator {
   > comment. This is a latent cold-start bug being carried, not a property being
   > preserved.
 
-**Verify:** `./gradlew build`; navigation/deeplink/slug tests land here. Manual:
+**Verify:** the standard command; navigation/deeplink/slug tests land here. Manual:
 notification-tap cold start, `newsshorts://` cold start, share-page cold start,
 sign-in-link cold start, and Android system back from every overlay depth.
 
@@ -984,7 +1036,7 @@ Two placement decisions, both driven by real edges found in review:
   parameters is fine, and as a `:feature:onboarding` module would be a forbidden
   cross-feature edge.
 
-**Verify:** `./gradlew build`; the ~10 ViewModel test files land in their
+**Verify:** the standard command; the ~10 ViewModel test files land in their
 features and each runs `iosSimulatorArm64Test`.
 
 **Risk:** Low. **Effort: M.**
@@ -1061,7 +1113,7 @@ Two constraints:
   the buses, both from the Koin root. Neither resolves a ViewModel, so the
   switch does not affect them.
 
-**Verify:** `./gradlew build`; a full manual pass; and specifically — background
+**Verify:** the standard command; a full manual pass; and specifically — background
 the app, let Android kill the Activity, return: feed, saved list, settings and
 overlay stack must all be intact. Rotate on every screen. Confirm no scope leak
 with a debug log in `onCleared`.
@@ -1084,6 +1136,12 @@ Each independent; none blocks anything.
   `:core:model`, use it. **S.**
 - **wasmJs `SettingsStorage` persists nothing** — Phase 6 names the class;
   giving it `localStorage` like js is a separate small change. **S.**
+- **`lintDebug`'s 4 pre-existing `RestrictedApi` errors** in `TopStoryWidget.kt`
+  (`androidx.glance`'s `ColorProvider` is library-group restricted). Until these
+  are fixed or baselined, `check` can never be green and every phase has to run
+  with `-x lintDebug`, which means lint regressions cannot be caught. Fixing it
+  is either using the public Glance colour API or adding a scoped
+  `@SuppressLint`. **S.**
 - **Per-feature `AppStrings` split** — only if measured incremental build times
   justify it. **S–M.**
 - **Effects carrying semantic values instead of localized prose** — the real fix
