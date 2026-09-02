@@ -34,7 +34,7 @@ packages are already acyclic, so they carry build risk but no design risk.
 | # | Phase | Status |
 |---|---|---|
 | 0 | build-logic, convention plugins, catalog, cache-correct BuildConfig | **done** |
-| 1 | Shared services; delete VM-in-VM injection (in place) | not started |
+| 1 | Shared services; delete VM-in-VM injection (in place) | **done** |
 | 2 | Decompose `NewsViewModel` and `NewsUiState` (in place) | not started |
 | 3 | Break the package cycles (package moves only) | not started |
 | 4 | `:core:contract` + `:core:testing` + server de-duplication | not started |
@@ -68,3 +68,29 @@ hit.
 `master` before and after: 555 artifacts, zero difference. Worth repeating on
 any phase that touches dependency declarations — it is the cheapest way to catch
 a silent version drift.
+
+**Phase 1 — `runTest` and long-lived coroutines.** This cost most of the phase,
+so it is worth stating plainly for the phases that still have ViewModels to
+decompose.
+
+`runTest` will not finish while a coroutine started in the test's own scope is
+still running, and a collector or a `SupervisorJob` never finishes. The obvious
+escape is `backgroundScope`, and it is a trap: **`advanceUntilIdle()` does not
+run work in `backgroundScope`**. Verified directly — `backgroundScope.launch {
+println(...) }` followed by `advanceUntilIdle()` prints nothing. So moving a
+class's work there does not fix the test, it hides it: the writes stop happening
+and no assertion says so.
+
+The way out is not to pick a scope but to remove the endless coroutine:
+
+- `SyncPublisher` has no auth collector. The observer that already reacts to
+  sign-in calls `discardQueued()` instead.
+- `SettingsViewModel` seeds its state from the store instead of collecting it.
+- The writer's `SupervisorJob` is deliberately *not* a child of the caller's
+  scope, because as a child it is itself a coroutine that never completes.
+
+**Phase 1 — a failing test can point at the wrong thing.** Two account-switch
+tests failed with `UncompletedCoroutinesError` naming a coroutine, while their
+assertions passed. The real cause was that routing them through the real caller
+also started a hydration, and hydration waits for a local list the test never
+loaded. Print the values before believing the message.
