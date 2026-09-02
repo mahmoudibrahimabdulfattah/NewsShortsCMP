@@ -1,7 +1,8 @@
 package com.mk.newsshorts.feature.inbox
 
-import com.mk.newsshorts.data.local.InboxReadState
-import com.mk.newsshorts.data.local.articleKey
+import com.mk.newsshorts.core.model.inbox.InboxNotification
+import com.mk.newsshorts.core.data.local.InboxReadState
+import com.mk.newsshorts.core.data.local.articleKey
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

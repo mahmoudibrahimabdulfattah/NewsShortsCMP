@@ -1,8 +1,8 @@
 package com.mk.newsshorts.testing
 
-import com.mk.newsshorts.data.local.SavedArticlesLocalStore
-import com.mk.newsshorts.data.local.cappedForStorage
-import com.mk.newsshorts.domain.model.NewsArticle
+import com.mk.newsshorts.core.data.local.SavedArticlesLocalStore
+import com.mk.newsshorts.core.data.local.cappedForStorage
+import com.mk.newsshorts.core.model.NewsArticle
 
 /**
  * In-memory stand-in for `SavedArticlesStore`, which needs a `SettingsStorage`

@@ -1,8 +1,8 @@
 package com.mk.newsshorts.testing
 
-import com.mk.newsshorts.auth.AuthClient
-import com.mk.newsshorts.auth.AuthResult
-import com.mk.newsshorts.auth.AuthUser
+import com.mk.newsshorts.core.domain.auth.AuthClient
+import com.mk.newsshorts.core.model.auth.AuthResult
+import com.mk.newsshorts.core.model.auth.AuthUser
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

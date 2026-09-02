@@ -1,33 +1,34 @@
 package com.mk.newsshorts.di
 
-import com.mk.newsshorts.auth.AuthSession
-import com.mk.newsshorts.auth.DefaultAuthSession
-import com.mk.newsshorts.data.local.NewsLocalDataSource
-import com.mk.newsshorts.data.local.NotificationInboxStore
-import com.mk.newsshorts.data.local.SavedArticlesStore
-import com.mk.newsshorts.data.local.PendingSignInEmailPersistence
-import com.mk.newsshorts.data.local.PendingSignInEmailStore
-import com.mk.newsshorts.feature.search.RecentSearchesStore
-import com.mk.newsshorts.feature.search.RecentSearches
-import com.mk.newsshorts.data.local.SeenArticlesStore
-import com.mk.newsshorts.data.local.SettingsManager
-import com.mk.newsshorts.data.local.OriginPreferenceStore
-import com.mk.newsshorts.data.local.SettingsOriginPreferenceStore
-import com.mk.newsshorts.data.remote.ApiConfig
-import com.mk.newsshorts.data.remote.OriginFailoverClient
-import com.mk.newsshorts.data.remote.RemoteConfigClient
-import com.mk.newsshorts.data.remote.NewsApiClient
-import com.mk.newsshorts.data.remote.NotificationInboxClient
-import com.mk.newsshorts.data.remote.SharePageResolver
-import com.mk.newsshorts.data.remote.createHttpClient
-import com.mk.newsshorts.data.repository.DefaultSavedArticlesRepository
-import com.mk.newsshorts.data.repository.NewsRepositoryImpl
-import com.mk.newsshorts.data.repository.SavedArticles
-import com.mk.newsshorts.domain.feed.DefaultFeedInvalidator
-import com.mk.newsshorts.domain.feed.FeedInvalidator
-import com.mk.newsshorts.domain.repository.ArticleLookup
-import com.mk.newsshorts.domain.repository.InboxReadMarker
-import com.mk.newsshorts.domain.repository.NewsRepository
+import com.mk.newsshorts.core.domain.auth.AuthSession
+import com.mk.newsshorts.core.domain.auth.DefaultAuthSession
+import com.mk.newsshorts.core.data.local.NewsLocalDataSource
+import com.mk.newsshorts.core.data.local.NotificationInboxStore
+import com.mk.newsshorts.core.data.local.SavedArticlesStore
+import com.mk.newsshorts.core.data.local.PendingSignInEmailPersistence
+import com.mk.newsshorts.core.data.local.PendingSignInEmailStore
+import com.mk.newsshorts.core.data.local.RecentSearchesStore
+import com.mk.newsshorts.core.domain.search.RecentSearches
+import com.mk.newsshorts.core.data.local.SeenArticlesStore
+import com.mk.newsshorts.core.data.local.SettingsManager
+import com.mk.newsshorts.core.domain.OriginPreferenceStore
+import com.mk.newsshorts.core.data.local.SettingsOriginPreferenceStore
+import com.mk.newsshorts.core.data.remote.ApiConfig
+import com.mk.newsshorts.core.data.remote.DefaultRemoteConfigClient
+import com.mk.newsshorts.core.data.remote.OriginFailoverClient
+import com.mk.newsshorts.core.domain.config.RemoteConfigClient
+import com.mk.newsshorts.core.data.remote.NewsApiClient
+import com.mk.newsshorts.core.data.remote.NotificationInboxClient
+import com.mk.newsshorts.core.data.remote.SharePageResolver
+import com.mk.newsshorts.core.data.remote.createHttpClient
+import com.mk.newsshorts.core.data.repository.DefaultSavedArticlesRepository
+import com.mk.newsshorts.core.data.repository.NewsRepositoryImpl
+import com.mk.newsshorts.core.domain.saved.SavedArticles
+import com.mk.newsshorts.core.domain.feed.DefaultFeedInvalidator
+import com.mk.newsshorts.core.domain.feed.FeedInvalidator
+import com.mk.newsshorts.core.domain.repository.ArticleLookup
+import com.mk.newsshorts.core.domain.repository.InboxReadMarker
+import com.mk.newsshorts.core.domain.repository.NewsRepository
 import com.mk.newsshorts.navigation.DeepLinkBus
 import com.mk.newsshorts.navigation.NotificationBus
 import com.mk.newsshorts.navigation.SignInLinkBus
@@ -47,7 +48,9 @@ val dataModule = module {
         OriginFailoverClient(httpClient = get(), apiConfig = get(), preferenceStore = get())
     }
     single(createdAtStart = false) { NewsApiClient(originClient = get(), apiConfig = get()) }
-    single(createdAtStart = false) { RemoteConfigClient(originClient = get(), apiConfig = get()) }
+    single<RemoteConfigClient>(createdAtStart = false) {
+        DefaultRemoteConfigClient(originClient = get(), apiConfig = get())
+    }
     single(createdAtStart = false) { SharePageResolver(httpClient = get()) }
     single(createdAtStart = false) { NotificationInboxClient(originClient = get(), apiConfig = get()) }
     single(createdAtStart = false) { NewsLocalDataSource(settingsStorage = get()) }

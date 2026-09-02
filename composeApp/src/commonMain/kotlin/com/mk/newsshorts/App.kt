@@ -41,8 +41,8 @@ import com.mk.newsshorts.presentation.mvi.Overlay
 import com.mk.newsshorts.feature.appgate.AppGateUiEvent
 import com.mk.newsshorts.feature.appgate.BlockingNoticeScreen
 import com.mk.newsshorts.feature.appgate.SecurityWarningDialog
-import com.mk.newsshorts.security.SecurityNotice
-import com.mk.newsshorts.security.SecurityReason
+import com.mk.newsshorts.core.model.security.SecurityNotice
+import com.mk.newsshorts.core.model.security.SecurityReason
 import com.mk.newsshorts.presentation.ui.screen.NewsScreen
 import com.mk.newsshorts.feature.onboarding.OnboardingScreen
 import com.mk.newsshorts.feature.onboarding.OnboardingUiEffect

@@ -1,11 +1,11 @@
 package com.mk.newsshorts.feature.onboarding
 
-import com.mk.newsshorts.data.local.AppPreferences
-import com.mk.newsshorts.data.local.OnboardingPersistence
-import com.mk.newsshorts.data.local.SettingsPersistence
-import com.mk.newsshorts.domain.feed.FeedInvalidator
-import com.mk.newsshorts.domain.feed.InvalidationReason
-import com.mk.newsshorts.domain.model.NewsCategory
+import com.mk.newsshorts.core.model.settings.AppPreferences
+import com.mk.newsshorts.core.data.local.OnboardingPersistence
+import com.mk.newsshorts.core.domain.settings.SettingsPersistence
+import com.mk.newsshorts.core.domain.feed.FeedInvalidator
+import com.mk.newsshorts.core.domain.feed.InvalidationReason
+import com.mk.newsshorts.core.model.NewsCategory
 import com.mk.newsshorts.presentation.mvi.OnboardingStep
 import kotlin.test.Test
 import kotlin.test.assertEquals

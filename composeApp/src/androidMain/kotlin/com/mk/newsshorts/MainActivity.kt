@@ -22,7 +22,7 @@ import com.mk.newsshorts.di.platformModule
 import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
 import com.mk.newsshorts.config.BuildConfig
-import com.mk.newsshorts.navigation.ArticleDeepLinks
+import com.mk.newsshorts.core.model.deeplink.ArticleDeepLinks
 import com.mk.newsshorts.navigation.DeepLinkBus
 import com.mk.newsshorts.navigation.SignInLinkBus
 import com.mk.newsshorts.notifications.NewsMessagingService

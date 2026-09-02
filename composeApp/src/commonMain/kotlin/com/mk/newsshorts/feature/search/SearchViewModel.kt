@@ -1,10 +1,14 @@
 package com.mk.newsshorts.feature.search
 
-import com.mk.newsshorts.analytics.AnalyticsEvent
-import com.mk.newsshorts.analytics.AnalyticsReporter
-import com.mk.newsshorts.domain.model.FeedLanguage
-import com.mk.newsshorts.domain.model.NewsArticle
-import com.mk.newsshorts.domain.model.NewsResult
+import com.mk.newsshorts.core.model.search.isSearchable
+import com.mk.newsshorts.core.model.analytics.AnalyticsEvent
+import com.mk.newsshorts.core.domain.analytics.AnalyticsReporter
+import com.mk.newsshorts.core.domain.search.RecentSearches
+import com.mk.newsshorts.core.domain.search.SearchNews
+import com.mk.newsshorts.core.domain.search.SearchNewsRequest
+import com.mk.newsshorts.core.model.FeedLanguage
+import com.mk.newsshorts.core.model.NewsArticle
+import com.mk.newsshorts.core.model.NewsResult
 import com.mk.newsshorts.presentation.viewmodel.BaseViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job

@@ -6,7 +6,9 @@ import android.content.pm.ApplicationInfo
 import android.os.Build
 import android.os.Debug
 import android.provider.Settings
-import com.mk.newsshorts.BuildConfig
+import com.mk.newsshorts.core.domain.security.DeviceIntegrityInspector
+import com.mk.newsshorts.core.model.security.DeviceIntegrity
+import com.mk.newsshorts.core.model.security.IntegrityPolicy
 import java.io.File
 import java.security.MessageDigest
 
@@ -25,7 +27,8 @@ import java.security.MessageDigest
  */
 class AndroidDeviceIntegrityInspector(
     private val context: Context,
-    private val expectedSigningSha256: String = BuildConfig.EXPECTED_SIGNING_SHA256,
+    private val expectedSigningSha256: String,
+    private val isDebug: Boolean,
 ) : DeviceIntegrityInspector {
 
     override fun inspect(): DeviceIntegrity = DeviceIntegrity(
@@ -89,7 +92,7 @@ class AndroidDeviceIntegrityInspector(
      * usually has a debugger attached, which is the point of it.
      */
     private fun isDebuggerAttached(): Boolean {
-        if (BuildConfig.DEBUG) return false
+        if (isDebug) return false
         val debuggableFlag =
             context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
         return debuggableFlag || Debug.isDebuggerConnected()

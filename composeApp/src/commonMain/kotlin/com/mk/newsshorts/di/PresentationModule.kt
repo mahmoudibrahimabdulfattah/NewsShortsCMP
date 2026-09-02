@@ -1,7 +1,7 @@
 package com.mk.newsshorts.di
 
-import com.mk.newsshorts.data.local.SettingsManager
-import com.mk.newsshorts.data.repository.SavedArticles
+import com.mk.newsshorts.core.data.local.SettingsManager
+import com.mk.newsshorts.core.domain.saved.SavedArticles
 import com.mk.newsshorts.feature.appgate.AppGateViewModel
 import com.mk.newsshorts.feature.auth.AuthViewModel
 import com.mk.newsshorts.feature.inbox.InboxViewModel

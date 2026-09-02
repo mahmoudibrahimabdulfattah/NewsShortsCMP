@@ -5,8 +5,13 @@ import org.gradle.api.JavaVersion
 import org.gradle.api.Project
 import org.gradle.api.artifacts.VersionCatalog
 import org.gradle.api.artifacts.VersionCatalogsExtension
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.SourceTask
+import org.gradle.api.tasks.TaskAction
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.getByType
+import org.gradle.kotlin.dsl.register
 import org.jetbrains.compose.ComposeExtension
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -113,6 +118,24 @@ internal fun Project.configureNewsshortsAppDependencies() {
     }
 }
 
+internal fun Project.registerPackageLayeringCheck() {
+    val checkPackageLayering = tasks.register<PackageLayeringCheckTask>("checkPackageLayering") {
+        group = "verification"
+        description = "Fails when app package imports break the intended module layering."
+        // Captured here rather than read from `project` in the task action:
+        // getProject() throws on a configuration-cache hit, and this machine
+        // never gets one, so the failure would first appear on someone else's.
+        projectDirectory.set(layout.projectDirectory)
+        source(project.layout.projectDirectory.asFileTree.matching {
+            include("src/*Main/kotlin/**/*.kt")
+            exclude("src/*Main/kotlin/**/BuildConfig.kt")
+        })
+    }
+    tasks.named("check") {
+        dependsOn(checkPackageLayering)
+    }
+}
+
 private fun Project.libsCatalog(): VersionCatalog =
     extensions.getByType<VersionCatalogsExtension>().named("libs")
 
@@ -124,6 +147,73 @@ private fun VersionCatalog.requiredBundle(alias: String) =
 
 private fun VersionCatalog.requiredVersion(alias: String): String =
     findVersion(alias).orElseThrow { IllegalArgumentException("Missing version: $alias") }.requiredVersion
+
+abstract class PackageLayeringCheckTask : SourceTask() {
+    @get:Internal
+    abstract val projectDirectory: DirectoryProperty
+
+    private val importRegex = Regex("""^\s*import\s+(com\.mk\.newsshorts(?:\.[A-Za-z_][A-Za-z0-9_]*)*)""")
+
+    @TaskAction
+    fun checkLayering() {
+        val root = projectDirectory.get().asFile
+        val violations = source.files
+            .filter { it.isFile }
+            .flatMap { file ->
+                val sourcePackage = file.readLines().firstNotNullOfOrNull { line ->
+                    line.removePrefix("package ").takeIf { it != line }
+                } ?: return@flatMap emptyList()
+                val sourceTier = tierFor(sourcePackage) ?: return@flatMap emptyList()
+                file.readLines().mapIndexedNotNull { index, line ->
+                    val imported = importRegex.find(line)?.groupValues?.get(1) ?: return@mapIndexedNotNull null
+                    val targetTier = tierFor(imported) ?: return@mapIndexedNotNull null
+                    if (targetTier <= sourceTier || isAllowedBackEdge(sourcePackage, imported)) {
+                        null
+                    } else {
+                        "${file.relativeTo(root)}:${index + 1}: $sourcePackage imports $imported"
+                    }
+                }
+            }
+
+        if (violations.isNotEmpty()) {
+            throw org.gradle.api.GradleException(
+                buildString {
+                    appendLine("Package layering violations:")
+                    violations.forEach { appendLine("  - $it") }
+                },
+            )
+        }
+    }
+
+    private fun tierFor(packageName: String): Int? = when {
+        packageName.startsWith("com.mk.newsshorts.core.contract") -> 0
+        packageName.startsWith("com.mk.newsshorts.core.model") -> 1
+        packageName.startsWith("com.mk.newsshorts.core.domain") -> 2
+        packageName.startsWith("com.mk.newsshorts.core.data") -> 3
+        packageName.startsWith("com.mk.newsshorts.auth") -> 3
+        packageName.startsWith("com.mk.newsshorts.analytics") -> 3
+        packageName.startsWith("com.mk.newsshorts.notifications") -> 3
+        packageName.startsWith("com.mk.newsshorts.security") -> 3
+        packageName.startsWith("com.mk.newsshorts.config") -> 3
+        packageName.startsWith("com.mk.newsshorts.feature.") -> 4
+        packageName.startsWith("com.mk.newsshorts.presentation.") -> 4
+        packageName.startsWith("com.mk.newsshorts.navigation") -> 4
+        packageName == "com.mk.newsshorts" || packageName.startsWith("com.mk.newsshorts.di") -> 5
+        else -> null
+    }
+
+    private fun isAllowedBackEdge(sourcePackage: String, imported: String): Boolean {
+        // Android delivers FCM through a system-instantiated service that must
+        // remain in composeApp/androidMain; it posts into the app shell bus.
+        if (
+            sourcePackage == "com.mk.newsshorts.notifications" &&
+            imported == "com.mk.newsshorts.navigation.NotificationBus"
+        ) {
+            return true
+        }
+        return false
+    }
+}
 
 @OptIn(ExperimentalWasmDsl::class)
 private fun KotlinMultiplatformExtension.configureWasmJsTarget() {

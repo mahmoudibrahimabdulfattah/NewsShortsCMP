@@ -52,8 +52,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.mk.newsshorts.auth.AuthFailure
-import com.mk.newsshorts.auth.AuthUser
+import com.mk.newsshorts.core.model.auth.AuthFailure
+import com.mk.newsshorts.core.model.auth.AuthUser
 import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.appStrings

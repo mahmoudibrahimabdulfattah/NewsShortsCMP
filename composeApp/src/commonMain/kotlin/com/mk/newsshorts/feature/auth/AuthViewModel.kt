@@ -1,13 +1,13 @@
 package com.mk.newsshorts.feature.auth
 
-import com.mk.newsshorts.auth.AuthClient
-import com.mk.newsshorts.auth.AuthFailure
-import com.mk.newsshorts.auth.AuthResult
-import com.mk.newsshorts.auth.AuthSession
-import com.mk.newsshorts.auth.AuthUser
-import com.mk.newsshorts.data.local.PendingSignInEmailPersistence
-import com.mk.newsshorts.data.local.isPlausibleEmail
-import com.mk.newsshorts.domain.use_case.DeleteAccountUseCase
+import com.mk.newsshorts.core.domain.auth.AuthClient
+import com.mk.newsshorts.core.model.auth.AuthFailure
+import com.mk.newsshorts.core.model.auth.AuthResult
+import com.mk.newsshorts.core.domain.auth.AuthSession
+import com.mk.newsshorts.core.model.auth.AuthUser
+import com.mk.newsshorts.core.data.local.PendingSignInEmailPersistence
+import com.mk.newsshorts.core.data.local.isPlausibleEmail
+import com.mk.newsshorts.core.domain.use_case.DeleteAccountUseCase
 import com.mk.newsshorts.navigation.SignInLinkBus
 import com.mk.newsshorts.presentation.viewmodel.BaseViewModel
 import kotlinx.coroutines.CoroutineScope

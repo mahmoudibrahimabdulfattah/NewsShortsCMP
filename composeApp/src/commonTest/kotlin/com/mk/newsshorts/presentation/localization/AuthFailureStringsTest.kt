@@ -1,6 +1,6 @@
 package com.mk.newsshorts.presentation.localization
 
-import com.mk.newsshorts.auth.AuthFailure
+import com.mk.newsshorts.core.model.auth.AuthFailure
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue

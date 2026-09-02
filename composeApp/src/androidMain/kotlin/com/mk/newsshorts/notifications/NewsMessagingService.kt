@@ -12,11 +12,11 @@ import androidx.core.app.NotificationManagerCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.mk.newsshorts.MainActivity
-import com.mk.newsshorts.data.local.NotificationPreferenceKeys
-import com.mk.newsshorts.data.local.SettingsStorage
-import com.mk.newsshorts.navigation.ArticleDeepLinks
+import com.mk.newsshorts.core.model.settings.NotificationPreferenceKeys
+import com.mk.newsshorts.core.data.local.SettingsStorage
+import com.mk.newsshorts.core.model.deeplink.ArticleDeepLinks
 import com.mk.newsshorts.navigation.NotificationBus
-import com.mk.newsshorts.feature.inbox.InboxNotification
+import com.mk.newsshorts.core.model.inbox.InboxNotification
 import com.mk.newsshorts.R
 import org.koin.mp.KoinPlatformTools
 

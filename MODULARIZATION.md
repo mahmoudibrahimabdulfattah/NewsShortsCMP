@@ -36,7 +36,7 @@ packages are already acyclic, so they carry build risk but no design risk.
 | 0 | build-logic, convention plugins, catalog, cache-correct BuildConfig | **done** |
 | 1 | Shared services; delete VM-in-VM injection (in place) | **done** |
 | 2 | Decompose `NewsViewModel` and `NewsUiState` (in place) | **done** |
-| 3 | Break the package cycles (package moves only) | not started |
+| 3 | Break the package cycles (package moves only) | **done** |
 | 4 | `:core:contract` + `:core:testing` + server de-duplication | not started |
 | 5 | `:core:config`, `:core:model`, `:core:domain` | not started |
 | 6 | `:core:data` | not started |
@@ -96,6 +96,29 @@ remove the endless coroutine:
 - `SettingsViewModel` seeds its state from the store instead of collecting it.
 - The writer's `SupervisorJob` is deliberately *not* a child of the caller's
   scope, because as a child it is itself a coroutine that never completes.
+
+**Phase 3 — the packages went further than the plan asked.** The plan wanted
+only the moves that break the three cycles. What landed is the whole
+`core/{contract,model,domain,data}` hierarchy, so `com.mk.newsshorts.domain.*`,
+`data.*` and `sync.*` no longer exist. That is still only package moves, and it
+makes phases 5 and 6 a `git mv` of whole trees rather than a scatter — but it
+means those phases are now smaller than the plan's effort estimates suggest.
+
+Left behind on purpose: `navigation/` (phase 8 owns it) and the Android
+implementations under `analytics/`, `auth/`, `security/`, `notifications/`,
+which follow their interfaces into `:core:data`'s androidMain in phase 6.
+
+**Phase 3 — `checkPackageLayering` guards the tiers now.** It is a `SourceTask`
+in build-logic wired into `check`. It has one exception, for the Android FCM
+service reaching `NotificationBus`: that service is instantiated by the system
+from the manifest, so it cannot leave `composeApp/androidMain`.
+
+Its first version called `project.projectDir` inside `@TaskAction`.
+`getProject()` throws on a configuration-cache **hit**, and this machine never
+gets one, so it would have failed first on someone else's build. It now takes a
+`DirectoryProperty` captured at registration. Worth remembering for every task
+build-logic gains: the rule from phase 0 is that no task action may touch
+`Project`.
 
 **Phase 2 — the tab did not move.** `NewsUiState.currentTab` stayed with
 `FeedViewModel` rather than going to `AppShellViewModel` with the overlay stack.

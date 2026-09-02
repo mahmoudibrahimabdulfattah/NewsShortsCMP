@@ -1,14 +1,14 @@
 package com.mk.newsshorts.di
 
-import com.mk.newsshorts.data.local.SettingsManager
-import com.mk.newsshorts.domain.use_case.DeleteAccountUseCase
-import com.mk.newsshorts.domain.use_case.GetTopHeadlinesUseCase
-import com.mk.newsshorts.feature.search.SearchNewsUseCase
-import com.mk.newsshorts.feature.search.SearchNews
-import com.mk.newsshorts.notifications.PushSubscriptionSynchronizer
-import com.mk.newsshorts.sync.AccountSyncUseCase
-import com.mk.newsshorts.sync.DefaultSyncPublisher
-import com.mk.newsshorts.sync.SyncPublisher
+import com.mk.newsshorts.core.data.local.SettingsManager
+import com.mk.newsshorts.core.domain.use_case.DeleteAccountUseCase
+import com.mk.newsshorts.core.domain.use_case.GetTopHeadlinesUseCase
+import com.mk.newsshorts.core.domain.search.SearchNewsUseCase
+import com.mk.newsshorts.core.domain.search.SearchNews
+import com.mk.newsshorts.core.domain.notifications.PushSubscriptionSynchronizer
+import com.mk.newsshorts.core.domain.sync.AccountSyncUseCase
+import com.mk.newsshorts.core.domain.sync.DefaultSyncPublisher
+import com.mk.newsshorts.core.domain.sync.SyncPublisher
 import org.koin.dsl.module
 
 val domainModule = module {

@@ -29,7 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.mk.newsshorts.domain.model.NewsCategory
+import com.mk.newsshorts.core.model.NewsCategory
 import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.feature.settings.SettingsUiEvent

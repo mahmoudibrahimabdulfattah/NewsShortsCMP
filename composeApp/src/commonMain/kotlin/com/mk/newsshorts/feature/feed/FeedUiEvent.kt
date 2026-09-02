@@ -5,9 +5,9 @@ import com.mk.newsshorts.presentation.mvi.CountryOption
 import com.mk.newsshorts.presentation.mvi.LanguageOption
 import com.mk.newsshorts.presentation.mvi.NavigationTab
 import com.mk.newsshorts.presentation.mvi.Overlay
-import com.mk.newsshorts.domain.model.NewsArticle
-import com.mk.newsshorts.domain.model.NewsCategory
-import com.mk.newsshorts.navigation.ArticleDeepLink
+import com.mk.newsshorts.core.model.NewsArticle
+import com.mk.newsshorts.core.model.NewsCategory
+import com.mk.newsshorts.core.model.deeplink.ArticleDeepLink
 
 sealed interface FeedUiEvent {
     data class SelectCategory(val category: NewsCategory) : FeedUiEvent
