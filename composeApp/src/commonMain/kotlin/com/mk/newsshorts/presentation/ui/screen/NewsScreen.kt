@@ -79,7 +79,7 @@ import com.mk.newsshorts.feature.settings.SettingsViewModel
 import com.mk.newsshorts.feature.settings.SettingsScreen
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.localization.countryName
-import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
+import com.mk.newsshorts.core.model.article.ArticleOpenOrigin
 import com.mk.newsshorts.presentation.mvi.NavigationTab
 import com.mk.newsshorts.feature.feed.FeedUiEffect
 import com.mk.newsshorts.feature.feed.FeedUiEvent

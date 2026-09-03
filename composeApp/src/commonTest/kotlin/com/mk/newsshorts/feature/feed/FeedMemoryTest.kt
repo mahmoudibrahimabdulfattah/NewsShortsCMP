@@ -12,7 +12,7 @@ import com.mk.newsshorts.core.model.NewsSource
 import com.mk.newsshorts.core.model.PublishedTimestamp
 import com.mk.newsshorts.core.model.SourceId
 import com.mk.newsshorts.core.model.SourceName
-import com.mk.newsshorts.presentation.mvi.LanguageOption
+import com.mk.newsshorts.core.model.feed.LanguageOption
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

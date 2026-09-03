@@ -6,8 +6,8 @@ import com.mk.newsshorts.core.model.settings.AppPreferences
 import com.mk.newsshorts.core.domain.settings.SettingsPersistence
 import com.mk.newsshorts.core.model.NewsArticle
 import com.mk.newsshorts.presentation.localization.AppLocale
-import com.mk.newsshorts.presentation.mvi.TextScale
-import com.mk.newsshorts.presentation.mvi.ThemeMode
+import com.mk.newsshorts.core.model.settings.TextScale
+import com.mk.newsshorts.core.model.settings.ThemeMode
 import com.mk.newsshorts.core.domain.sync.SyncPublisher
 import com.mk.newsshorts.core.model.sync.SyncedSettings
 import com.mk.newsshorts.core.model.sync.toSyncedSettings

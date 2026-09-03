@@ -48,7 +48,7 @@ packages are already acyclic, so they carry build risk but no design risk.
 | 5 | `:core:config`, `:core:model`, `:core:domain` | **done** |
 | 6a | `:core:data` + `:core:testing` (moves only) | **done** |
 | 6b | `SettingsStorage` to an interface; collapse the no-op platform modules | **done** |
-| 7 | `:core:localization` + `:core:ui` | not started |
+| 7 | `:core:localization` + `:core:ui` | **done** |
 | 8 | `:core:navigation` + `Navigator` | not started |
 | 9 | The six `:feature:*` modules | not started |
 | 10 | DI restructure + `viewModel { }` switch | not started |
@@ -344,3 +344,47 @@ do not survive a reload on wasm; the difference is that the class now says so.
 **Still open after phase 6:** `isDebugBuild()` hardcodes `true` on ios, jvm, js
 and wasmJs, so release desktop and web run with Ktor body logging on and skip the
 device-integrity check.
+
+**Phase 7 — `Navigation.kt` was two files wearing one name.** `presentation/mvi/`
+held `ThemeMode`, `ArticleDetails`, `ArticleOpenOrigin`, `LanguageOption`,
+`CountryOption`, `OnboardingStep` and `TextScale` next to `Overlay` and
+`NavigationTab`. The first group is exactly what the plan's phase 5 contents
+list named for `:core:model` — they were missed because phase 5 moved the
+`core/model` package tree and these were sitting under `presentation`. They moved
+here because `:core:ui`'s theme cannot compile without `ThemeMode`. `Overlay` and
+`NavigationTab` stayed for phase 8.
+
+`ThemeMode` and `TextScale` are persisted (`mode.name.lowercase()` and
+`scale.stored`), so `ThemeModeTest` and `TextScaleTest` now pin `"system"`,
+`"light"`, `"dark"` and every `stored` literal. Moving an enum does not change
+its `name` — renaming a constant does, and that would reset readers' themes
+silently. Same class of risk as phase 6b's prefs node.
+
+**Phase 7 — a green build proves the least in this phase, and that held.** The
+build passed while three things still needed eyes:
+
+- The JS and Wasm IR link tasks ran out of heap at `kotlin.daemon.jvmargs=-Xmx3072M`
+  once the Compose UI became its own module. Raised to 5 GB with a comment saying
+  which tasks need it, so it does not get trimmed back as an arbitrary number.
+- Resource packaging had to be checked per target rather than assumed: 11 fonts
+  in the JS distribution, 11 in the Wasm distribution, 11 in the APK, 11 in the
+  iOS framework, plus `logo.png`.
+- The fonts had to be *looked at*. Tajawal renders for Arabic and Poppins for
+  Latin on the same screen, and the splash logo comes through
+  `appLogoPainter()`, the one accessor `:core:ui` exposes so `Res` can stay
+  internal.
+
+**Phase 7 — an incremental build reported resources twice; a clean one did not.**
+Mid-review the APK looked like it shipped every font twice, ~1.2 MB of
+duplication, under both `com.mk.newsshorts.core.ui.resources` and
+`newsshorts.composeapp.generated.resources`. The second set was stale output
+from before the move — the source files were already deleted in git.
+`:composeApp:clean` then `assembleDebug` ships exactly 11, one copy, from
+`:core:ui`. Worth knowing for any later phase that moves resources: **measure
+packaging on a clean build**, because the resource copy tasks do not remove what
+an earlier layout left behind.
+
+**Phase 7 — three more `internal`s had to widen.** `formatPublishedTime`,
+`isolateBidi` and `ImageryScrim` all had callers in screens that stay in
+`:composeApp` until phase 9. Same pattern as phase 6; the `internal` grep before
+moving is now the standing first step of any extraction.

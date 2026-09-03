@@ -58,14 +58,14 @@ import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.getStrings
 import com.mk.newsshorts.presentation.localization.urlInLanguage
-import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
-import com.mk.newsshorts.presentation.mvi.CountryOption
-import com.mk.newsshorts.presentation.mvi.LanguageOption
+import com.mk.newsshorts.core.model.article.ArticleOpenOrigin
+import com.mk.newsshorts.core.model.feed.CountryOption
+import com.mk.newsshorts.core.model.feed.LanguageOption
 import com.mk.newsshorts.presentation.mvi.NavigationTab
 import com.mk.newsshorts.feature.feed.FeedUiEffect
 import com.mk.newsshorts.feature.feed.FeedUiEvent
 import com.mk.newsshorts.feature.feed.FeedUiState
-import com.mk.newsshorts.presentation.mvi.OnboardingStep
+import com.mk.newsshorts.core.model.onboarding.OnboardingStep
 import com.mk.newsshorts.presentation.mvi.Overlay
 import com.mk.newsshorts.presentation.viewmodel.BaseViewModel
 
