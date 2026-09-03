@@ -338,14 +338,16 @@ class AppShellViewModel(
         settingsManager.preferences.value.toSyncedSettings()
 
     private suspend fun applySyncOutcome(outcome: SyncOutcome) {
-        if (outcome.settings == null) {
+        // Read once so the null guard and the apply use the same object.
+        val settings = outcome.settings
+        if (settings == null) {
             if (outcome.saved != savedArticles.saved.value) {
                 savedArticles.replaceAll(outcome.saved)
             }
             return
         }
         // The remote copy becomes the local one — the "remote wins" side of sync.
-        settingsManager.apply(outcome.settings)
+        settingsManager.apply(settings)
         savedArticles.replaceAll(outcome.saved)
         feedInvalidator.invalidate(InvalidationReason.SyncApplied)
     }

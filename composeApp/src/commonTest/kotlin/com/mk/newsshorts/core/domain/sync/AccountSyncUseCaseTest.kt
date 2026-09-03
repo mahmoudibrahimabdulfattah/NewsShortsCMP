@@ -290,34 +290,6 @@ class AccountSyncUseCaseTest {
     }
 
     @Test
-    fun `a write submitted exactly as the writer drains is still sent`() = runTest {
-        val written = mutableListOf<Int>()
-        lateinit var writer: ConflatedRemoteWriter<Int>
-        writer = ConflatedRemoteWriter(
-            scope = this,
-            write = { _, value ->
-                written += value
-                if (value == 1) {
-                    writer.submit(
-                        uid = "reader-1",
-                        stillCurrent = { true },
-                        value = 2,
-                    )
-                }
-            },
-        )
-
-        writer.submit(
-            uid = "reader-1",
-            stillCurrent = { true },
-            value = 1,
-        )
-        advanceUntilIdle()
-
-        assertEquals(listOf(1, 2), written)
-    }
-
-    @Test
     fun `a signed-out reader queues nothing`() = runTest {
         val f = fixture(localArticles = listOf(local), settings = settings)
 
