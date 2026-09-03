@@ -46,7 +46,8 @@ packages are already acyclic, so they carry build risk but no design risk.
 | 3 | Break the package cycles (package moves only) | **done** |
 | 4 | `:core:contract` + server de-duplication | **done** |
 | 5 | `:core:config`, `:core:model`, `:core:domain` | **done** |
-| 6 | `:core:data` | not started |
+| 6a | `:core:data` + `:core:testing` (moves only) | **done** |
+| 6b | `SettingsStorage` to an interface; collapse the no-op platform modules | not started |
 | 7 | `:core:localization` + `:core:ui` | not started |
 | 8 | `:core:navigation` + `Navigator` | not started |
 | 9 | The six `:feature:*` modules | not started |
@@ -244,3 +245,53 @@ name. Phase 9. Likewise `SyncPublisher`'s implementation and
 `PushSubscriptionSynchronizer` stay in `:core:domain` until phase 6 moves them
 with the rest of the data layer — they depend only on `core.model` and
 coroutines, so they are not a layering problem where they are.
+
+**Phase 6 was split in two.** The plan bundles two refactors into the move:
+`SettingsStorage` from `expect class` to interface, and collapsing the four
+byte-identical no-op platform modules. The first one rewrites the paths user
+settings persist through, and a drifted key silently loses a reader's choices.
+Reviewing that inside a 60-file move is how such a change gets waved through, so
+6a is the move alone and 6b is the two refactors.
+
+**Phase 6 — the plan's stated reason for `:core:testing` is wrong.** It claims
+the three shared fakes "exist only because `SettingsStorage` is an `expect
+class`". They do not: `FakeAuthClient`, `FakeRemoteSyncClient` and
+`FakeSavedArticlesLocalStore` implement `AuthClient`, `RemoteSyncClient` and
+`SavedArticlesLocalStore`, all ordinary interfaces, and there is no
+`FakeSettingsStorage` or `InMemorySettingsStorage` anywhere in the repo. So
+`:core:testing` never depended on that refactor, which is what made the split
+above possible.
+
+**Phase 6 — `internal` decided where three tests live.** Grepping the moving
+trees for `internal` before moving anything was worth more than any other check
+in this phase. Most internals travel with their tests and are fine. Two had to
+become public because a *user* outside the new module needs them —
+`articleKey`, which `InboxViewModel` must key articles by exactly as the store
+does, and `cappedForStorage`, which the fake uses so that a test cannot pass on
+a list the real store would truncate. Both are contract rather than detail, so
+widening them was right; the rest stayed `internal`.
+
+`AccountSyncUseCaseTest` went to `:core:data`, not `:core:domain`: it wires the
+use case, `DefaultSyncPublisher` and `DefaultSavedArticlesRepository` together,
+so it is a data-layer integration test that only `:core:data` can see all of.
+
+**Phase 6 — `isDebugBuild()` on Android, and the bug still open on four
+targets.** The Android actual read `com.mk.newsshorts.BuildConfig.DEBUG`, the
+*app* module's AGP flag, which a library cannot see. `:core:data` now enables
+`buildConfig` for itself and reads its own. This is not cosmetic:
+`AppGateViewModel` skips the device-integrity check when `isDebugBuild()` is
+true, so a wrong value means a shipped build stops enforcing the root and
+emulator policy.
+
+Still open, deliberately untouched here: the `ios`, `jvm`, `js` and `wasmJs`
+actuals all hardcode `return true`. Release desktop and web builds therefore run
+with Ktor body logging on *and* skip the integrity check. It is a behaviour
+change, it predates this work, and it needs its own commit.
+
+**Phase 6 — the layering check now covers every module.** It was registered only
+for `:composeApp`, so the tier rules stopped being enforced the moment code left
+that module. `newsshorts.kmp.library` registers it unconditionally now.
+`tierFor` returns null for unrecognised packages, so `com.mk.newsshorts.testing`
+is skipped rather than failing. Resist writing `project.path == ":core:x"` into a
+convention plugin — a shared plugin that knows one project's name becomes a
+switch over the project list by phase 9.
