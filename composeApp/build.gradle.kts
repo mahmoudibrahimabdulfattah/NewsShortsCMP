@@ -5,7 +5,6 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 plugins {
     alias(libs.plugins.androidApplication)
     id("newsshorts.kmp.app")
-    id("newsshorts.buildconfig")
     alias(libs.plugins.composeHotReload)
 }
 
@@ -96,7 +95,10 @@ kotlin {
     
     sourceSets {
         commonMain.dependencies {
+            api(projects.core.config)
             api(projects.core.contract)
+            api(projects.core.model)
+            api(projects.core.domain)
         }
         androidMain.dependencies {
             implementation(compose.preview)
