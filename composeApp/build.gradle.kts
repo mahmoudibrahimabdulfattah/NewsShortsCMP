@@ -97,52 +97,37 @@ kotlin {
         commonMain.dependencies {
             api(projects.core.config)
             api(projects.core.contract)
+            api(projects.core.data)
             api(projects.core.model)
             api(projects.core.domain)
+        }
+        commonTest.dependencies {
+            implementation(projects.core.testing)
         }
         androidMain.dependencies {
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
-            implementation(libs.ktor.client.okhttp)
             implementation(libs.koin.android)
             // Lifecycle for Android
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(libs.koin.composeViewModel)
             implementation(project.dependencies.platform(libs.firebase.bom))
-            implementation(libs.firebase.analytics)
-            implementation(libs.firebase.crashlytics)
             implementation(libs.firebase.messaging)
-            implementation(libs.firebase.auth)
-            implementation(libs.firebase.firestore)
-            implementation(libs.androidx.credentials)
-            implementation(libs.androidx.credentials.playServicesAuth)
-            implementation(libs.google.id)
-            implementation(libs.kotlinx.coroutinesPlayServices)
             implementation(libs.androidx.browser)
             implementation(libs.androidx.glance.appwidget)
         }
         iosMain.dependencies {
-            implementation(libs.ktor.client.darwin)
             // Note: koin-compose-viewmodel has compatibility issues on iOS Native
             // Using direct Koin injection instead
         }
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutinesSwing)
-            implementation(libs.ktor.client.java)
             // Lifecycle for Desktop
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(libs.koin.composeViewModel)
-        }
-        jsMain.dependencies {
-            implementation(libs.ktor.client.js)
-        }
-        val wasmJsMain by getting {
-            dependencies {
-                implementation(libs.ktor.client.js)
-            }
         }
     }
 }
