@@ -34,5 +34,8 @@ plugins {
 }
 
 include(":composeApp")
+include(":core:config")
 include(":core:contract")
+include(":core:model")
+include(":core:domain")
 include(":server")

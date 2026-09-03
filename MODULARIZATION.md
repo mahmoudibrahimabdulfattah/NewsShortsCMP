@@ -45,7 +45,7 @@ packages are already acyclic, so they carry build risk but no design risk.
 | 2 | Decompose `NewsViewModel` and `NewsUiState` (in place) | **done** |
 | 3 | Break the package cycles (package moves only) | **done** |
 | 4 | `:core:contract` + server de-duplication | **done** |
-| 5 | `:core:config`, `:core:model`, `:core:domain` | not started |
+| 5 | `:core:config`, `:core:model`, `:core:domain` | **done** |
 | 6 | `:core:data` | not started |
 | 7 | `:core:localization` + `:core:ui` | not started |
 | 8 | `:core:navigation` + `Navigator` | not started |
@@ -202,3 +202,45 @@ The enum's declaration order drives the reader's category tabs; the contract
 set's order drives the server's feed iteration. Deriving either from the other
 would silently reorder something a reader sees. A test asserts they match as
 **sets**, so membership cannot drift while each keeps its own order.
+
+**Phase 5 — a module boundary is not only a build change.** The packages did not
+move and not one import needed editing, and the phase still broke the build
+twice, both times on things that are legal inside a module and illegal across
+one:
+
+- **Smart casts stop at the boundary.** `AppShellViewModel` guarded
+  `outcome.settings == null` and then used it; once `SyncOutcome` lived in
+  `:core:domain`, Kotlin refused, because from outside the module nothing rules
+  out a custom getter returning something different on the second read. Bind to
+  a local `val` — that is the honest fix, not a workaround, since it makes the
+  read-once assumption the guard already depended on explicit.
+- **`internal` is module-scoped.** `AccountSyncUseCaseTest` stayed in
+  `:composeApp` because it needs the shared fakes, and one of its cases
+  constructed `ConflatedRemoteWriter` directly. That case moved into
+  `:core:domain`'s own test source set rather than widening the class to
+  `public` — a production class should not lose its encapsulation so a test in
+  another module can see it.
+
+Phase 6 moves far more code and will hit both again. When deciding whether a
+test can stay behind, check what it *touches*, not only what it imports.
+
+**Phase 5 — `api` vs `implementation` matters for coroutines.** `:core:domain`
+exposes `StateFlow` and `SharedFlow` in its own public signatures
+(`SettingsPersistence.preferences`, `FeedInvalidator.signals`), so coroutines
+belong there as `api`. With `implementation` it still built — but only because
+`:composeApp` happened to declare coroutines itself, which means the module was
+relying on its consumer to supply part of its own API. `:core:model` keeps both
+of its dependencies as `implementation`; neither coroutines nor `io.ktor.http.Url`
+appears in a public signature there.
+
+**Phase 5 — two things the plan asked for were deliberately not done.**
+`GetTopHeadlinesUseCase` was not renamed to `FeedRepository`: the plan pairs
+that rename with "while every call site is already being touched", and in this
+phase no call site is touched at all. Doing it here would have turned a
+zero-import-change phase into one editing every feed call site, and mixed a
+design change into a move commit. It also needs a decision about
+`core/domain/repository/NewsRepository.kt`, which already holds the obvious
+name. Phase 9. Likewise `SyncPublisher`'s implementation and
+`PushSubscriptionSynchronizer` stay in `:core:domain` until phase 6 moves them
+with the rest of the data layer — they depend only on `core.model` and
+coroutines, so they are not a layering problem where they are.
