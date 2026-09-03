@@ -99,6 +99,7 @@ kotlin {
             api(projects.core.contract)
             api(projects.core.data)
             api(projects.core.model)
+            api(projects.core.navigation)
             api(projects.core.localization)
             api(projects.core.ui)
             api(projects.core.domain)

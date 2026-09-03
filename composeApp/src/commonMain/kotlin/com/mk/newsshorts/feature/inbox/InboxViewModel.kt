@@ -9,7 +9,9 @@ import com.mk.newsshorts.core.model.FeedLanguage
 import com.mk.newsshorts.core.model.deeplink.ArticleDeepLink
 import com.mk.newsshorts.core.model.deeplink.ArticleDeepLinks
 import com.mk.newsshorts.core.model.inbox.InboxNotification
+import com.mk.newsshorts.navigation.Navigator
 import com.mk.newsshorts.navigation.NotificationBus
+import com.mk.newsshorts.navigation.Overlay
 import com.mk.newsshorts.presentation.viewmodel.BaseViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
@@ -77,7 +79,6 @@ sealed interface InboxUiEvent {
 }
 
 sealed interface InboxUiEffect {
-    data object OpenInboxOverlay : InboxUiEffect
     data class OpenNotification(val link: ArticleDeepLink) : InboxUiEffect
 }
 
@@ -85,6 +86,7 @@ class InboxViewModel(
     private val notificationInboxClient: NotificationInboxClient,
     private val notificationInboxStore: NotificationInboxStore,
     private val notificationBus: NotificationBus,
+    private val navigator: Navigator,
     private val settingsManager: SettingsPersistence,
     private val scopeOverride: CoroutineScope? = null,
 ) : BaseViewModel() {
@@ -173,9 +175,7 @@ class InboxViewModel(
      * a notification is opened, or when the reader says so for all of them.
      */
     private fun handleOpenInbox() {
-        inboxScope.launch {
-            effectChannel.send(InboxUiEffect.OpenInboxOverlay)
-        }
+        navigator.open(Overlay.NotificationInbox)
         // The list on screen may be a session old. Refreshing behind the open
         // screen costs one small file and cannot reorder anything the reader is
         // looking at, because the sort is by time.

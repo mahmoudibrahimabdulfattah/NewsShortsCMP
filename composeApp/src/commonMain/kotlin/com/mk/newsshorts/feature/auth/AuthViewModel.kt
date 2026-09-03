@@ -8,15 +8,14 @@ import com.mk.newsshorts.core.model.auth.AuthUser
 import com.mk.newsshorts.core.data.local.PendingSignInEmailPersistence
 import com.mk.newsshorts.core.data.local.isPlausibleEmail
 import com.mk.newsshorts.core.domain.use_case.DeleteAccountUseCase
+import com.mk.newsshorts.navigation.Navigator
+import com.mk.newsshorts.navigation.Overlay
 import com.mk.newsshorts.navigation.SignInLinkBus
 import com.mk.newsshorts.presentation.viewmodel.BaseViewModel
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -64,16 +63,12 @@ sealed interface AuthUiEvent {
     data object DismissAuthError : AuthUiEvent
 }
 
-sealed interface AuthUiEffect {
-    data object CloseOverlay : AuthUiEffect
-    data object OpenSignInOverlay : AuthUiEffect
-}
-
 class AuthViewModel(
     private val authClient: AuthClient,
     private val authSession: AuthSession,
     private val pendingSignInEmailStore: PendingSignInEmailPersistence,
     private val signInLinkBus: SignInLinkBus,
+    private val navigator: Navigator,
     private val deleteAccountUseCase: DeleteAccountUseCase,
     private val appLocaleCode: () -> String,
     private val scopeOverride: CoroutineScope? = null,
@@ -82,9 +77,6 @@ class AuthViewModel(
         AuthUiState(authUser = authSession.user.value)
     )
     val uiState: StateFlow<AuthUiState> = mutableState.asStateFlow()
-
-    private val effectChannel = Channel<AuthUiEffect>(Channel.BUFFERED)
-    val uiEffect: Flow<AuthUiEffect> = effectChannel.receiveAsFlow()
 
     private val authScope: CoroutineScope
         get() = scopeOverride ?: viewModelScope
@@ -105,7 +97,7 @@ class AuthViewModel(
 
     fun processEvent(event: AuthUiEvent) {
         when (event) {
-            AuthUiEvent.Closed -> Unit
+            AuthUiEvent.Closed -> closeSignInOverlay()
             AuthUiEvent.SignInWithGoogle -> handleSignInWithGoogle()
             is AuthUiEvent.SendSignInLink -> handleSendSignInLink(event.email)
             is AuthUiEvent.SignInLinkOpened -> handleSignInLinkOpened(event.link)
@@ -115,11 +107,6 @@ class AuthViewModel(
             AuthUiEvent.DeleteAccount -> handleDeleteAccount()
             AuthUiEvent.DismissAuthError -> handleDismissAuthError()
         }
-    }
-
-    fun consumePendingSignInLink() {
-        val link = signInLinkBus.pending.value ?: return
-        consumePostedSignInLink(link)
     }
 
     private fun consumePostedSignInLink(link: String) {
@@ -133,7 +120,7 @@ class AuthViewModel(
         mutableState.update { it.copy(authInProgress = true, authError = null) }
         authScope.launch {
             when (val result = authClient.signInWithGoogle()) {
-                AuthResult.Success -> effectChannel.send(AuthUiEffect.CloseOverlay)
+                AuthResult.Success -> closeSignInOverlay()
                 AuthResult.Cancelled -> mutableState.update { it.copy(authInProgress = false) }
                 is AuthResult.Error -> mutableState.update {
                     it.copy(authInProgress = false, authError = result.failure)
@@ -180,9 +167,7 @@ class AuthViewModel(
         val storedEmail = pendingSignInEmailStore.load()
         if (storedEmail == null) {
             mutableState.update { it.copy(unclaimedSignInLink = link) }
-            authScope.launch {
-                effectChannel.send(AuthUiEffect.OpenSignInOverlay)
-            }
+            navigator.open(Overlay.SignIn)
             return
         }
         completeLinkSignIn(email = storedEmail, link = link)
@@ -207,7 +192,7 @@ class AuthViewModel(
                     mutableState.update {
                         it.copy(pendingSignInEmail = null, unclaimedSignInLink = null)
                     }
-                    effectChannel.send(AuthUiEffect.CloseOverlay)
+                    closeSignInOverlay()
                 }
                 AuthResult.Cancelled -> mutableState.update { it.copy(authInProgress = false) }
                 // The link stays held on failure: an expired one is worth saying
@@ -245,7 +230,7 @@ class AuthViewModel(
         mutableState.update { it.copy(authInProgress = true, authError = null) }
         authScope.launch {
             when (val result = deleteAccountUseCase(uid)) {
-                AuthResult.Success -> effectChannel.send(AuthUiEffect.CloseOverlay)
+                AuthResult.Success -> closeSignInOverlay()
                 else -> mutableState.update { it.afterUnsuccessfulAuth(result) }
             }
         }
@@ -253,6 +238,13 @@ class AuthViewModel(
 
     private fun handleDismissAuthError() {
         mutableState.update { it.copy(authError = null) }
+    }
+
+    private fun closeSignInOverlay() {
+        // Close the sign-in entry, not merely the top entry. Deep links and
+        // notifications are observed by the shell independently, so a details
+        // overlay can be pushed above SignIn while auth is still completing.
+        navigator.close(Overlay.SignIn)
     }
 }
 

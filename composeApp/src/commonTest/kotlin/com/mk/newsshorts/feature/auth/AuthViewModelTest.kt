@@ -6,18 +6,15 @@ import com.mk.newsshorts.core.model.auth.AuthUser
 import com.mk.newsshorts.core.domain.auth.DefaultAuthSession
 import com.mk.newsshorts.core.data.local.PendingSignInEmailPersistence
 import com.mk.newsshorts.core.domain.use_case.DeleteAccountUseCase
+import com.mk.newsshorts.navigation.Overlay
+import com.mk.newsshorts.navigation.OverlayNavigator
 import com.mk.newsshorts.navigation.SignInLinkBus
 import com.mk.newsshorts.core.model.sync.SyncDelete
 import com.mk.newsshorts.testing.AuthCall
 import com.mk.newsshorts.testing.FakeAuthClient
 import com.mk.newsshorts.testing.FakeRemoteSyncClient
 import com.mk.newsshorts.testing.RemoteSyncCall
-import kotlinx.coroutines.async
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.take
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -25,7 +22,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AuthViewModelTest {
@@ -47,8 +43,9 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `google sign-in exposes the user and asks the shell to close`() = runTest {
+    fun `google sign-in exposes the user and closes sign-in`() = runTest {
         val fixture = fixture()
+        fixture.navigator.open(Overlay.SignIn)
 
         fixture.viewModel.processEvent(AuthUiEvent.SignInWithGoogle)
         runCurrent()
@@ -58,7 +55,20 @@ class AuthViewModelTest {
         assertEquals(fixture.authClient.userAfterSignIn, fixture.viewModel.uiState.value.authUser)
         assertFalse(fixture.viewModel.uiState.value.authInProgress)
         assertNull(fixture.viewModel.uiState.value.authError)
-        assertEquals(listOf(AuthUiEffect.CloseOverlay), fixture.viewModel.readEffects(1))
+        assertEquals(emptyList(), fixture.navigator.overlays.value)
+    }
+
+    @Test
+    fun `auth success removes sign-in without popping overlays above it`() = runTest {
+        val fixture = fixture()
+        fixture.navigator.open(Overlay.SignIn)
+        fixture.navigator.open(Overlay.Search)
+
+        fixture.viewModel.processEvent(AuthUiEvent.SignInWithGoogle)
+        runCurrent()
+        runCurrent()
+
+        assertEquals(listOf(Overlay.Search), fixture.navigator.overlays.value)
     }
 
     @Test
@@ -127,11 +137,11 @@ class AuthViewModelTest {
         assertNull(fixture.signInLinkBus.pending.value)
         assertNull(fixture.viewModel.uiState.value.pendingSignInEmail)
         assertNull(fixture.viewModel.uiState.value.unclaimedSignInLink)
-        assertEquals(listOf(AuthUiEffect.CloseOverlay), fixture.viewModel.readEffects(1))
+        assertEquals(emptyList(), fixture.navigator.overlays.value)
     }
 
     @Test
-    fun `posted link without stored email asks the shell to open sign-in`() = runTest {
+    fun `posted link without stored email opens sign-in`() = runTest {
         val link = "https://example.com/sign-in?code=abc"
         val fixture = fixture()
         fixture.authClient.isSignInLinkResult = true
@@ -143,7 +153,7 @@ class AuthViewModelTest {
         assertEquals(listOf<AuthCall>(AuthCall.IsSignInLink(link)), fixture.authClient.calls)
         assertEquals(link, fixture.viewModel.uiState.value.unclaimedSignInLink)
         assertNull(fixture.signInLinkBus.pending.value)
-        assertEquals(listOf(AuthUiEffect.OpenSignInOverlay), fixture.viewModel.readEffects(1))
+        assertEquals(listOf(Overlay.SignIn), fixture.navigator.overlays.value)
     }
 
     @Test
@@ -153,6 +163,7 @@ class AuthViewModelTest {
         fixture.authClient.isSignInLinkResult = true
         fixture.viewModel.processEvent(AuthUiEvent.SignInLinkOpened(link))
         runCurrent()
+        assertEquals(listOf(Overlay.SignIn), fixture.navigator.overlays.value)
 
         fixture.viewModel.processEvent(AuthUiEvent.SupplyLinkEmail("  reader@example.com  "))
         runCurrent()
@@ -167,10 +178,7 @@ class AuthViewModelTest {
         )
         assertEquals(fixture.authClient.userAfterSignIn, fixture.viewModel.uiState.value.authUser)
         assertNull(fixture.viewModel.uiState.value.unclaimedSignInLink)
-        assertEquals(
-            listOf(AuthUiEffect.OpenSignInOverlay, AuthUiEffect.CloseOverlay),
-            fixture.viewModel.readEffects(2),
-        )
+        assertEquals(emptyList(), fixture.navigator.overlays.value)
     }
 
     @Test
@@ -207,6 +215,7 @@ class AuthViewModelTest {
     fun `delete account uses the signed-in uid and closes on success`() = runTest {
         val fixture = fixture()
         fixture.authClient.setUser(authUser("reader-1"))
+        fixture.navigator.open(Overlay.SignIn)
         runCurrent()
 
         fixture.viewModel.processEvent(AuthUiEvent.DeleteAccount)
@@ -217,7 +226,7 @@ class AuthViewModelTest {
         assertEquals(listOf<AuthCall>(AuthCall.DeleteAccount), fixture.authClient.calls)
         assertNull(fixture.viewModel.uiState.value.authUser)
         assertFalse(fixture.viewModel.uiState.value.authInProgress)
-        assertEquals(listOf(AuthUiEffect.CloseOverlay), fixture.viewModel.readEffects(1))
+        assertEquals(emptyList(), fixture.navigator.overlays.value)
     }
 
     @Test
@@ -239,7 +248,7 @@ class AuthViewModelTest {
             fixture.viewModel.uiState.value.authError,
         )
         assertFalse(fixture.viewModel.uiState.value.authInProgress)
-        assertNoBufferedEffect(fixture.viewModel)
+        assertEquals(emptyList(), fixture.navigator.overlays.value)
     }
 
     @Test
@@ -264,11 +273,13 @@ class AuthViewModelTest {
         val authClient = FakeAuthClient().apply(configureAuthClient)
         val remoteSync = FakeRemoteSyncClient()
         val pendingEmailStore = RecordingPendingSignInEmailStore(pendingEmail)
+        val navigator = OverlayNavigator()
         val viewModel = AuthViewModel(
             authClient = authClient,
             authSession = DefaultAuthSession(authClient),
             pendingSignInEmailStore = pendingEmailStore,
             signInLinkBus = signInLinkBus,
+            navigator = navigator,
             deleteAccountUseCase = DeleteAccountUseCase(authClient, remoteSync),
             appLocaleCode = { appLocaleCode },
             scopeOverride = backgroundScope,
@@ -281,17 +292,8 @@ class AuthViewModelTest {
             remoteSync = remoteSync,
             pendingEmailStore = pendingEmailStore,
             signInLinkBus = signInLinkBus,
+            navigator = navigator,
         )
-    }
-
-    private suspend fun AuthViewModel.readEffects(count: Int): List<AuthUiEffect> =
-        uiEffect.take(count).toList()
-
-    private suspend fun TestScope.assertNoBufferedEffect(viewModel: AuthViewModel) {
-        val nextEffect = async { viewModel.uiEffect.first() }
-        runCurrent()
-        assertTrue(nextEffect.isActive)
-        nextEffect.cancelAndJoin()
     }
 
     private data class Fixture(
@@ -300,6 +302,7 @@ class AuthViewModelTest {
         val remoteSync: FakeRemoteSyncClient,
         val pendingEmailStore: RecordingPendingSignInEmailStore,
         val signInLinkBus: SignInLinkBus,
+        val navigator: OverlayNavigator,
     )
 
     private class RecordingPendingSignInEmailStore(

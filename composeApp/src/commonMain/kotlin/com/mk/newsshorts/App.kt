@@ -1,6 +1,5 @@
 package com.mk.newsshorts
 
-import com.mk.newsshorts.presentation.viewmodel.AppShellUiEvent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -28,14 +27,12 @@ import com.mk.newsshorts.di.provideOnboardingViewModel
 import com.mk.newsshorts.di.provideSavedArticlesViewModel
 import com.mk.newsshorts.di.provideSearchViewModel
 import com.mk.newsshorts.di.provideSettingsViewModel
-import com.mk.newsshorts.feature.auth.AuthUiEffect
 import com.mk.newsshorts.feature.settings.SettingsUiState
 import com.mk.newsshorts.presentation.localization.LocaleProvider
 import com.mk.newsshorts.presentation.localization.appStrings
-import com.mk.newsshorts.presentation.mvi.NavigationTab
-import com.mk.newsshorts.feature.feed.FeedUiEvent
-import com.mk.newsshorts.feature.feed.FeedUiState
-import com.mk.newsshorts.presentation.mvi.Overlay
+import com.mk.newsshorts.navigation.NavigationTab
+import com.mk.newsshorts.navigation.Navigator
+import com.mk.newsshorts.navigation.Overlay
 import com.mk.newsshorts.feature.appgate.AppGateUiEvent
 import com.mk.newsshorts.feature.appgate.BlockingNoticeScreen
 import com.mk.newsshorts.feature.appgate.SecurityWarningDialog
@@ -51,8 +48,7 @@ import com.mk.newsshorts.presentation.ui.theme.NewsShortsTheme
 import com.mk.newsshorts.presentation.ui.theme.SystemBarAppearance
 import com.mk.newsshorts.presentation.ui.theme.appLogoPainter
 import org.jetbrains.compose.ui.tooling.preview.Preview
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.launch
+import org.koin.mp.KoinPlatform
 
 private const val CROSSFADE_DURATION_MS: Int = 150
 
@@ -81,11 +77,12 @@ fun App(
     val appGateViewModel = provideAppGateViewModel()
     val onboardingViewModel = provideOnboardingViewModel()
     val shellViewModel = provideAppShellViewModel()
-    val uiState: FeedUiState by viewModel.uiState.collectAsState()
+    val navigator: Navigator = remember { KoinPlatform.getKoin().get() }
+    val currentTab: NavigationTab by navigator.tab.collectAsState()
+    val overlays: List<Overlay> by navigator.overlays.collectAsState()
     val settingsUiState: SettingsUiState by settingsViewModel.uiState.collectAsState()
     val gateUiState by appGateViewModel.uiState.collectAsState()
     val onboardingUiState by onboardingViewModel.uiState.collectAsState()
-    val shellUiState by shellViewModel.uiState.collectAsState()
     // Onboarding asks for the notification permission only when the reader
     // pressed through the last step with notifications on. Collected here
     // rather than in NewsScreen because onboarding is drawn above it, and by
@@ -98,21 +95,6 @@ fun App(
                     requestNotificationPermission()
             }
         }
-    }
-    LaunchedEffect(Unit) {
-        launch(start = CoroutineStart.UNDISPATCHED) {
-            authViewModel.uiEffect.collect { effect ->
-                when (effect) {
-                    AuthUiEffect.CloseOverlay -> {
-                        shellViewModel.processEvent(AppShellUiEvent.CloseOverlay)
-                    }
-                    AuthUiEffect.OpenSignInOverlay -> {
-                        shellViewModel.processEvent(AppShellUiEvent.OpenOverlay(Overlay.SignIn))
-                    }
-                }
-            }
-        }
-        authViewModel.consumePendingSignInLink()
     }
     // Resolved once here rather than inside NewsShortsTheme's own default: the
     // feed branch inside NewsScreen overrides this with a forced-dark theme of
@@ -128,8 +110,8 @@ fun App(
         gateUiState.requiredUpdate != null -> false
         gateUiState.securityNotice == SecurityNotice.BLOCKED -> false
         // Details, Settings, Saved and Search all paint colorScheme.background.
-        shellUiState.overlays.isNotEmpty() -> !isDarkTheme
-        uiState.currentTab == NavigationTab.PROFILE -> !isDarkTheme
+        overlays.isNotEmpty() -> !isDarkTheme
+        currentTab == NavigationTab.PROFILE -> !isDarkTheme
         // What is left is the feed, which is forced dark whatever the setting.
         else -> false
     }
@@ -219,6 +201,7 @@ fun App(
                     NewsScreen(
                         viewModel = viewModel,
                         shellViewModel = shellViewModel,
+                        navigator = navigator,
                         authViewModel = authViewModel,
                         inboxViewModel = inboxViewModel,
                         searchViewModel = searchViewModel,

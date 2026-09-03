@@ -1,5 +1,6 @@
 package com.mk.newsshorts.di
 
+import com.mk.newsshorts.navigation.navigationModule
 import org.koin.core.KoinApplication
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
@@ -14,7 +15,7 @@ fun initializeKoin(
         // Common modules bind the no-op defaults; platform modules come last
         // so Android's real clients and Context-backed storage override them.
         modules(
-            listOf(dataModule, domainModule, presentationModule) +
+            listOf(dataModule, domainModule, navigationModule, presentationModule) +
                 platformModules
         )
     }

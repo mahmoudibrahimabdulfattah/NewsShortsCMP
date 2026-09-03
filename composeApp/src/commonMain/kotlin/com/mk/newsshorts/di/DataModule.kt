@@ -52,7 +52,11 @@ val dataModule = module {
     single<DeviceIntegrityInspector>(createdAtStart = false) { NoOpDeviceIntegrityInspector }
     single<AuthClient>(createdAtStart = false) { NoOpAuthClient }
     single<RemoteSyncClient>(createdAtStart = false) { NoOpRemoteSyncClient }
-    // Not lazy: a cold-start deep link is posted before anything else resolves.
+    // These are platform-to-app inboxes, not navigation; they live in
+    // :core:navigation because composeApp, auth, and inbox all need them, and a
+    // :core:eventbus module for three tiny files would be noise. Not lazy:
+    // cold-start links and notifications can be posted before the ViewModels
+    // that consume them exist, so their inboxes must already exist.
     single(createdAtStart = true) { DeepLinkBus() }
     single(createdAtStart = true) { NotificationBus() }
     single(createdAtStart = true) { SignInLinkBus() }

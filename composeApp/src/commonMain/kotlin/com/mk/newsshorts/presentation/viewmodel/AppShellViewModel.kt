@@ -22,9 +22,9 @@ import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.getStrings
 import com.mk.newsshorts.presentation.localization.urlInLanguage
-import com.mk.newsshorts.core.model.article.ArticleDetails
 import com.mk.newsshorts.core.model.article.ArticleOpenOrigin
-import com.mk.newsshorts.presentation.mvi.Overlay
+import com.mk.newsshorts.navigation.Overlay
+import com.mk.newsshorts.navigation.Navigator
 import com.mk.newsshorts.core.domain.sync.AccountSyncUseCase
 import com.mk.newsshorts.core.domain.sync.SyncOutcome
 import com.mk.newsshorts.core.domain.sync.SyncPublisher
@@ -35,42 +35,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-/**
- * Where the reader is, rather than what they are reading.
- *
- * The overlay stack is the one thing every feature needs in order to move the
- * reader and none of them owns, so it lives here until navigation becomes its
- * own module.
- *
- * The tab deliberately stays with the feed for now. Switching tabs both moves
- * the reader and decides which feed loads, and splitting those two halves
- * before there is a Navigator both sides can read would only replace the
- * coupling with a bus or with the screen dispatching the same tap twice.
- */
-data class AppShellUiState(
-    /**
-     * Screens pushed above the tabs — Profile → Settings, Profile → Saved,
-     * a details screen. Last element is what is on screen; empty means none.
-     * A list rather than one nullable field, because Settings needs Sign-in
-     * above it and the tabs themselves are not part of this stack — they
-     * switch, they do not push.
-     */
-    val overlays: List<Overlay> = emptyList(),
-) {
-    val currentOverlay: Overlay? get() = overlays.lastOrNull()
-
-    /** The article being shown full-screen, if that is what is on top. */
-    val articleDetails: ArticleDetails?
-        get() = (currentOverlay as? Overlay.Details)
-            ?.let { ArticleDetails(it.article, it.origin) }
-}
 
 sealed interface AppShellUiEvent {
     data class OpenOverlay(val overlay: Overlay) : AppShellUiEvent
@@ -119,17 +85,15 @@ class AppShellViewModel(
     private val articleLookup: ArticleLookup,
     private val sharePageResolver: SharePageResolver,
     private val inboxReadMarker: InboxReadMarker,
+    private val navigator: Navigator,
     private val scopeOverride: CoroutineScope? = null,
 ) : BaseViewModel() {
 
-    private val mutableState = MutableStateFlow(AppShellUiState())
-    val uiState: StateFlow<AppShellUiState> = mutableState.asStateFlow()
+    private val shellScope: CoroutineScope
+        get() = scopeOverride ?: viewModelScope
 
     private val effectChannel = Channel<AppShellUiEffect>(Channel.BUFFERED)
     val uiEffect: Flow<AppShellUiEffect> = effectChannel.receiveAsFlow()
-
-    private val shellScope: CoroutineScope
-        get() = scopeOverride ?: viewModelScope
 
     private var accountSyncJob: Job? = null
     private var activeAccountSyncUid: String? = null
@@ -159,21 +123,12 @@ class AppShellViewModel(
     }
 
     private fun openOverlay(overlay: Overlay) {
-        mutableState.update { state ->
-            // Never stacked twice, or one back press would leave a duplicate
-            // behind. Sign-in is the one that can arrive from two directions —
-            // a tap and a followed link.
-            if (overlay == Overlay.SignIn && Overlay.SignIn in state.overlays) {
-                state
-            } else {
-                state.copy(overlays = state.overlays + overlay)
-            }
-        }
+        navigator.open(overlay)
     }
 
     /** Pops whatever is on top — the details screen, Settings, Saved, or Search. */
     private fun closeOverlay() {
-        mutableState.update { state -> state.copy(overlays = state.overlays.dropLast(1)) }
+        navigator.close()
     }
 
     private fun openArticleDetails(article: NewsArticle, origin: ArticleOpenOrigin) {
@@ -188,7 +143,7 @@ class AppShellViewModel(
     }
 
     private fun openArticleSource() {
-        val article = mutableState.value.articleDetails?.article ?: return
+        val article = (navigator.overlays.value.lastOrNull() as? Overlay.Details)?.article ?: return
         analytics.logEvent(
             AnalyticsEvent.ArticleSourceOpened(article.category.apiValue, article.source.name.value)
         )

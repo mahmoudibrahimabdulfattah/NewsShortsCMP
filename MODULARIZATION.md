@@ -49,7 +49,7 @@ packages are already acyclic, so they carry build risk but no design risk.
 | 6a | `:core:data` + `:core:testing` (moves only) | **done** |
 | 6b | `SettingsStorage` to an interface; collapse the no-op platform modules | **done** |
 | 7 | `:core:localization` + `:core:ui` | **done** |
-| 8 | `:core:navigation` + `Navigator` | not started |
+| 8 | `:core:navigation` + `Navigator` | **done** |
 | 9 | The six `:feature:*` modules | not started |
 | 10 | DI restructure + `viewModel { }` switch | not started |
 | 11 | Optional cleanups | not started |
@@ -388,3 +388,47 @@ an earlier layout left behind.
 `isolateBidi` and `ImageryScrim` all had callers in screens that stay in
 `:composeApp` until phase 9. Same pattern as phase 6; the `internal` grep before
 moving is now the standing first step of any extraction.
+
+**Phase 8 — the tab finally moved, four phases after it was deferred.** Phase 2
+left `currentTab` in `FeedViewModel` because switching tabs both moves the reader
+and decides which feed loads, and splitting those without a shared object would
+only have replaced the coupling with an event bus. `Navigator` is that object.
+
+`Navigator` needs **two** members for the tab, not one. `tab` is a `StateFlow` —
+where the reader is — and a `StateFlow` cannot express "the reader asked for the
+tab they are already on", which is a real gesture: it means refresh. So
+`tabSelections` is a separate `SharedFlow` that emits on every tap.
+
+**`tabSelections` must not have replay.** The first implementation used
+`replay = 1` so a selection could not be missed by a late collector. But a
+replayed selection arrives at a freshly built collector that has already read
+`tab`, which is exactly the same-tab shape — so every ViewModel rebuild would
+fire a network refresh nobody asked for. Harmless while the ViewModels are Koin
+singletons; phase 10 makes rebuilds routine, which is the whole reason this phase
+exists. Now `replay = 0` with `DROP_OLDEST`, and a test pins it.
+
+The same flow also had `check(tryEmit(...))`, which turns a full buffer into a
+crash on a tab tap. `DROP_OLDEST` removes the failure mode: for a gesture, the
+newest is the one that matters.
+
+**Phase 8 — `close()` versus `close(overlay)`.** `AuthUiEffect.CloseOverlay` meant
+"close the sign-in overlay", but `navigator.close()` means "pop whatever is on
+top". Those differ the moment anything can be pushed above sign-in, and the
+result would be the reader staring at a form they had already completed. The
+navigator has a targeted `close(overlay)` for that, and auth uses it.
+
+**Phase 8 — a test that stores what it then looks for.** `rememberAndFind` both
+writes and reads. A test asserting "a country feed is not remembered" failed
+because its own lookup call stored the very feed it went on to find. The lookup
+has to be made from a different state. Worth remembering for any read-through
+cache with this shape.
+
+**Phase 8 — the same-tab refresh could not be observed, on this branch or on
+`master`.** Scrolling three articles deep and tapping the active tab changes
+nothing visible on either build — compared pixel by pixel, `master` changed 0.
+So the refactor preserves the behaviour exactly, but whether the behaviour its
+comment describes ("a refresh replaces the feed and the pager follows
+`feedRevision` to the top") actually reaches the screen is an open pre-existing
+question, not something this phase changed. There is no `FeedViewModel` test
+fixture to settle it — the class has around a dozen dependencies. Worth building
+one in phase 9, when the feed becomes its own module.

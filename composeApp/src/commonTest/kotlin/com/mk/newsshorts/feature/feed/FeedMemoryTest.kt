@@ -8,6 +8,7 @@ import com.mk.newsshorts.core.model.ArticleTitle
 import com.mk.newsshorts.core.model.ArticleUrl
 import com.mk.newsshorts.core.model.NewsArticle
 import com.mk.newsshorts.core.model.NewsCategory
+import com.mk.newsshorts.navigation.NavigationTab
 import com.mk.newsshorts.core.model.NewsSource
 import com.mk.newsshorts.core.model.PublishedTimestamp
 import com.mk.newsshorts.core.model.SourceId
@@ -34,7 +35,7 @@ class FeedViewModelFeedMemoryTest {
 
         val firstTechnologySelection = sports.withSelectedCategory(
             category = NewsCategory.TECHNOLOGY,
-            remembered = memory.rememberAndFind(sports, NewsCategory.TECHNOLOGY),
+            remembered = memory.rememberAndFind(sports, NewsCategory.TECHNOLOGY, NavigationTab.FOR_YOU),
         )
         val technology = firstTechnologySelection.withLoadedFeed(
             articles = articles(NewsCategory.TECHNOLOGY, "technology"),
@@ -47,7 +48,7 @@ class FeedViewModelFeedMemoryTest {
 
         val returned = technology.withSelectedCategory(
             category = NewsCategory.SPORTS,
-            remembered = memory.rememberAndFind(technology, NewsCategory.SPORTS),
+            remembered = memory.rememberAndFind(technology, NewsCategory.SPORTS, NavigationTab.FOR_YOU),
         )
 
         assertEquals(5, returned.currentArticleIndex)
@@ -69,7 +70,7 @@ class FeedViewModelFeedMemoryTest {
 
         val selected = sports.withSelectedCategory(
             category = NewsCategory.BUSINESS,
-            remembered = memory.rememberAndFind(sports, NewsCategory.BUSINESS),
+            remembered = memory.rememberAndFind(sports, NewsCategory.BUSINESS, NavigationTab.FOR_YOU),
         )
 
         assertEquals(0, selected.currentArticleIndex)
@@ -150,7 +151,7 @@ class FeedViewModelFeedMemoryTest {
             index = 5,
             revision = 2,
         )
-        memory.rememberAndFind(sports, NewsCategory.TECHNOLOGY)
+        memory.rememberAndFind(sports, NewsCategory.TECHNOLOGY, NavigationTab.FOR_YOU)
 
         memory.clear()
 
@@ -161,7 +162,7 @@ class FeedViewModelFeedMemoryTest {
             revision = 3,
             language = LanguageOption.ARABIC,
         )
-        val rememberedSports = memory.rememberAndFind(technology, NewsCategory.SPORTS)
+        val rememberedSports = memory.rememberAndFind(technology, NewsCategory.SPORTS, NavigationTab.FOR_YOU)
         val selected = technology.withSelectedCategory(NewsCategory.SPORTS, rememberedSports)
 
         assertNull(rememberedSports)
@@ -189,9 +190,9 @@ class FeedViewModelFeedMemoryTest {
             index = 3,
             revision = 3,
         )
-        memory.rememberAndFind(sports, NewsCategory.TECHNOLOGY)
-        memory.rememberAndFind(technology, NewsCategory.BUSINESS)
-        memory.rememberAndFind(business, NewsCategory.HEALTH)
+        memory.rememberAndFind(sports, NewsCategory.TECHNOLOGY, NavigationTab.FOR_YOU)
+        memory.rememberAndFind(technology, NewsCategory.BUSINESS, NavigationTab.FOR_YOU)
+        memory.rememberAndFind(business, NewsCategory.HEALTH, NavigationTab.FOR_YOU)
 
         val health = feedState(
             category = NewsCategory.HEALTH,
@@ -200,7 +201,41 @@ class FeedViewModelFeedMemoryTest {
             revision = 4,
         )
 
-        assertNull(memory.rememberAndFind(health, NewsCategory.SPORTS))
+        assertNull(memory.rememberAndFind(health, NewsCategory.SPORTS, NavigationTab.FOR_YOU))
+    }
+
+    /**
+     * Which tab the reader is on used to be read off the feed state; it is now
+     * passed in, which makes it a thing a caller can get wrong. A country feed
+     * carries the same category as a For You feed, so remembering one would
+     * hand the reader Egypt's sports articles when they came back to Sports.
+     *
+     * The lookup below is made from a Technology state on purpose: rememberAndFind
+     * stores as well as reads, so asking from a Sports state would have found
+     * the feed that very call had just stored.
+     */
+    @Test
+    fun `a country feed is not remembered as a category feed`() {
+        val memory = CategoryFeedMemory()
+        val countrySportsFeed = feedState(
+            category = NewsCategory.SPORTS,
+            articles = articles(NewsCategory.SPORTS, "eg-sports"),
+            index = 5,
+            revision = 3,
+        )
+        val technologyFeed = feedState(
+            category = NewsCategory.TECHNOLOGY,
+            articles = articles(NewsCategory.TECHNOLOGY, "technology"),
+            index = 0,
+            revision = 4,
+        )
+
+        memory.rememberAndFind(countrySportsFeed, NewsCategory.TECHNOLOGY, NavigationTab.COUNTRIES)
+
+        assertNull(
+            memory.rememberAndFind(technologyFeed, NewsCategory.SPORTS, NavigationTab.FOR_YOU),
+            "a feed read on the Countries tab was stored as a For You category feed",
+        )
     }
 
     private fun feedState(

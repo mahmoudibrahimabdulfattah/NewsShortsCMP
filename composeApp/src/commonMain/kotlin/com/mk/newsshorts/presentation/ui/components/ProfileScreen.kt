@@ -53,7 +53,7 @@ import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.core.model.article.ArticleOpenOrigin
 import com.mk.newsshorts.feature.feed.FeedUiEvent
-import com.mk.newsshorts.presentation.mvi.Overlay
+import com.mk.newsshorts.navigation.Overlay
 
 /**
  * Identity, a saved-articles preview, the entry into Settings, and app info.

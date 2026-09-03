@@ -44,7 +44,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.appStrings
-import com.mk.newsshorts.presentation.mvi.NavigationTab
+import com.mk.newsshorts.navigation.NavigationTab
 import com.mk.newsshorts.presentation.ui.theme.NewsShortsTheme
 import com.mk.newsshorts.presentation.ui.theme.OnImagery
 

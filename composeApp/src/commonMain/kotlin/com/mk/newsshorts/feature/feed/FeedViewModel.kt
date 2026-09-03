@@ -7,10 +7,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
-import com.mk.newsshorts.core.domain.auth.AuthSession
 import com.mk.newsshorts.core.domain.saved.SavedArticles
 import com.mk.newsshorts.core.data.local.SeenArticlesStore
 import com.mk.newsshorts.core.data.local.SettingsManager
@@ -20,23 +18,8 @@ import com.mk.newsshorts.core.domain.feed.InvalidationReason
 import com.mk.newsshorts.core.domain.feed.appendPage
 import com.mk.newsshorts.core.domain.feed.shouldLoadNextPage
 import com.mk.newsshorts.core.domain.ranking.deprioritiseSeen
-import com.mk.newsshorts.core.domain.repository.ArticleLookup
-import com.mk.newsshorts.core.domain.repository.InboxReadMarker
-import com.mk.newsshorts.core.domain.sync.AccountSyncUseCase
-import com.mk.newsshorts.core.domain.sync.SyncOutcome
 import com.mk.newsshorts.core.domain.sync.SyncPublisher
-import com.mk.newsshorts.core.model.sync.SyncedSettings
-import com.mk.newsshorts.core.data.sync.apply
 import com.mk.newsshorts.core.model.sync.toSyncedSettings
-import com.mk.newsshorts.core.domain.config.RemoteConfigClient
-import com.mk.newsshorts.core.domain.security.DeviceIntegrityInspector
-import com.mk.newsshorts.core.model.security.IntegrityPolicy
-import com.mk.newsshorts.core.model.security.SecurityNotice
-import com.mk.newsshorts.core.model.security.securityNoticeFor
-import com.mk.newsshorts.core.model.security.securityReasonFor
-import com.mk.newsshorts.core.data.remote.isDebugBuild
-import com.mk.newsshorts.core.model.config.requiredUpdateFor
-import com.mk.newsshorts.core.model.FeedLanguage
 import com.mk.newsshorts.core.model.FeedPage
 import com.mk.newsshorts.core.model.NewsArticle
 import com.mk.newsshorts.core.model.NewsCategory
@@ -47,26 +30,16 @@ import com.mk.newsshorts.core.domain.use_case.GetTopHeadlinesRequest
 import com.mk.newsshorts.core.domain.use_case.GetTopHeadlinesUseCase
 import com.mk.newsshorts.core.model.analytics.AnalyticsEvent
 import com.mk.newsshorts.core.domain.analytics.AnalyticsReporter
-import com.mk.newsshorts.config.BuildConfig
-import com.mk.newsshorts.core.model.deeplink.ArticleDeepLink
-import com.mk.newsshorts.core.model.deeplink.ArticleDeepLinks
-import com.mk.newsshorts.core.data.remote.SharePageResolver
-import com.mk.newsshorts.navigation.DeepLinkBus
-import com.mk.newsshorts.navigation.PendingLink
-import com.mk.newsshorts.core.model.deeplink.toNewsArticle
 import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.getStrings
-import com.mk.newsshorts.presentation.localization.urlInLanguage
-import com.mk.newsshorts.core.model.article.ArticleOpenOrigin
 import com.mk.newsshorts.core.model.feed.CountryOption
 import com.mk.newsshorts.core.model.feed.LanguageOption
-import com.mk.newsshorts.presentation.mvi.NavigationTab
+import com.mk.newsshorts.navigation.NavigationTab
+import com.mk.newsshorts.navigation.Navigator
 import com.mk.newsshorts.feature.feed.FeedUiEffect
 import com.mk.newsshorts.feature.feed.FeedUiEvent
 import com.mk.newsshorts.feature.feed.FeedUiState
-import com.mk.newsshorts.core.model.onboarding.OnboardingStep
-import com.mk.newsshorts.presentation.mvi.Overlay
 import com.mk.newsshorts.presentation.viewmodel.BaseViewModel
 
 internal data class RememberedCategoryFeed(
@@ -97,8 +70,9 @@ internal class CategoryFeedMemory(
     fun rememberAndFind(
         currentState: FeedUiState,
         selectedCategory: NewsCategory,
+        currentTab: NavigationTab,
     ): RememberedCategoryFeed? {
-        remember(currentState)
+        remember(currentState, currentTab)
         return find(selectedCategory, currentState.selectedLanguage.code)
     }
 
@@ -106,8 +80,8 @@ internal class CategoryFeedMemory(
         feeds.clear()
     }
 
-    private fun remember(state: FeedUiState) {
-        if (state.currentTab != NavigationTab.FOR_YOU || state.articles.isEmpty()) return
+    private fun remember(state: FeedUiState, currentTab: NavigationTab) {
+        if (currentTab != NavigationTab.FOR_YOU || state.articles.isEmpty()) return
         val key = CategoryFeedKey(state.selectedCategory, state.selectedLanguage.code)
         feeds.remove(key)
         feeds[key] = RememberedCategoryFeed(
@@ -208,6 +182,7 @@ class FeedViewModel(
     private val syncPublisher: SyncPublisher,
     private val feedInvalidator: FeedInvalidator,
     private val seenArticlesStore: SeenArticlesStore,
+    private val navigator: Navigator,
     private val scopeOverride: CoroutineScope? = null,
 ) : BaseViewModel() {
 
@@ -221,6 +196,7 @@ class FeedViewModel(
     val uiEffect: SharedFlow<FeedUiEffect> = mutableEffect.asSharedFlow()
 
     private val categoryFeedMemory = CategoryFeedMemory()
+    private var currentTab: NavigationTab = navigator.tab.value
 
     /** Toast text is built here rather than in the UI, so it needs the locale too. */
     private fun strings(): AppStrings =
@@ -229,6 +205,7 @@ class FeedViewModel(
     init {
         loadSavedSettings()
         observeFeedInvalidations()
+        observeTabSelections()
     }
 
 
@@ -304,7 +281,11 @@ class FeedViewModel(
                 )
             }
             savedArticles.load()
-            loadNewsWithCache()
+            when (currentTab) {
+                NavigationTab.COUNTRIES -> loadNewsForCountryWithCache(country)
+                NavigationTab.FOR_YOU -> loadNewsWithCache()
+                NavigationTab.PROFILE -> Unit
+            }
         }
     }
 
@@ -339,7 +320,6 @@ class FeedViewModel(
             is FeedUiEvent.SelectCategory -> handleSelectCategory(event.category)
             is FeedUiEvent.SelectCountry -> handleSelectCountry(event.country)
             is FeedUiEvent.SelectLanguage -> handleSelectLanguage(event.language)
-            is FeedUiEvent.SelectTab -> handleSelectTab(event.tab)
             is FeedUiEvent.ScrollToArticle -> handleScrollToArticle(event.index)
             FeedUiEvent.RefreshNews -> handleRefreshNews()
             FeedUiEvent.RetryLoading -> handleRetryLoading()
@@ -349,9 +329,21 @@ class FeedViewModel(
         }
     }
 
+    private fun observeTabSelections() {
+        feedScope.launch {
+            navigator.tabSelections.collect { tab ->
+                handleSelectTab(tab)
+            }
+        }
+    }
+
     private fun handleSelectCategory(category: NewsCategory) {
         if (category == mutableState.value.selectedCategory) return
-        val remembered = categoryFeedMemory.rememberAndFind(mutableState.value, category)
+        val remembered = categoryFeedMemory.rememberAndFind(
+            currentState = mutableState.value,
+            selectedCategory = category,
+            currentTab = currentTab,
+        )
         // The previous generation is invalidated before the restored feed is
         // published, so an answer from the category just left cannot land in
         // the gap and replace it.
@@ -419,7 +411,7 @@ class FeedViewModel(
     }
 
     private fun handleSelectTab(tab: NavigationTab) {
-        if (tab == mutableState.value.currentTab) {
+        if (tab == currentTab) {
             // Tapping the tab you are already on is how every feed app spells
             // "take me back to the top", and forty cards deep that is otherwise
             // forty swipes. Refreshing rather than only scrolling, because a
@@ -429,10 +421,10 @@ class FeedViewModel(
             if (tab != NavigationTab.PROFILE) handleRefreshNews()
             return
         }
+        currentTab = tab
         val needsLoading: Boolean = tab != NavigationTab.PROFILE
         mutableState.update { state ->
             state.copy(
-                currentTab = tab,
                 currentArticleIndex = 0,
                 errorMessage = null
             )
@@ -584,7 +576,7 @@ class FeedViewModel(
             country = currentState.selectedCountry.code,
             countryName = currentState.selectedCountry.displayName,
             language = currentState.selectedLanguage.code,
-            useCountry = currentState.currentTab == NavigationTab.COUNTRIES
+            useCountry = currentTab == NavigationTab.COUNTRIES
         )
     }
 
