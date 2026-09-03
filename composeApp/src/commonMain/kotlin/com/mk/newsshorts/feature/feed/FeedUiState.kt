@@ -1,12 +1,7 @@
 package com.mk.newsshorts.feature.feed
 
-import com.mk.newsshorts.core.model.article.ArticleOpenOrigin
 import com.mk.newsshorts.core.model.feed.CountryOption
 import com.mk.newsshorts.core.model.feed.LanguageOption
-import com.mk.newsshorts.presentation.mvi.NavigationTab
-import com.mk.newsshorts.core.model.config.RequiredUpdate
-import com.mk.newsshorts.core.model.security.SecurityNotice
-import com.mk.newsshorts.core.model.security.SecurityReason
 import com.mk.newsshorts.core.model.NewsArticle
 import com.mk.newsshorts.core.model.NewsCategory
 
@@ -20,7 +15,6 @@ data class FeedUiState(
     val isBackgroundRefreshing: Boolean = false,
     val selectedCountry: CountryOption = CountryOption.UNITED_STATES,
     val selectedLanguage: LanguageOption = LanguageOption.ENGLISH,
-    val currentTab: NavigationTab = NavigationTab.FOR_YOU,
     val isOfflineMode: Boolean = false,
     /**
      * The category row's order — the reader's picks first. Held in state rather

@@ -23,6 +23,7 @@ val presentationModule = module {
             authSession = get(),
             pendingSignInEmailStore = get(),
             signInLinkBus = get(),
+            navigator = get(),
             deleteAccountUseCase = get(),
             appLocaleCode = { settingsManager.preferences.value.appLocale },
         )
@@ -72,6 +73,7 @@ val presentationModule = module {
             notificationInboxClient = get(),
             notificationInboxStore = get(),
             notificationBus = get(),
+            navigator = get(),
             settingsManager = get<SettingsManager>(),
         )
     }
@@ -84,6 +86,7 @@ val presentationModule = module {
             syncPublisher = get(),
             feedInvalidator = get(),
             seenArticlesStore = get(),
+            navigator = get(),
         )
     }
     single(createdAtStart = false) {
@@ -99,6 +102,7 @@ val presentationModule = module {
             articleLookup = get(),
             sharePageResolver = get(),
             inboxReadMarker = get(),
+            navigator = get(),
         )
     }
 }

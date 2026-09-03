@@ -1,7 +1,7 @@
-package com.mk.newsshorts.presentation.mvi
+package com.mk.newsshorts.navigation
 
-import com.mk.newsshorts.core.model.article.ArticleOpenOrigin
 import com.mk.newsshorts.core.model.NewsArticle
+import com.mk.newsshorts.core.model.article.ArticleOpenOrigin
 
 sealed interface Overlay {
     data class Details(val article: NewsArticle, val origin: ArticleOpenOrigin) : Overlay
