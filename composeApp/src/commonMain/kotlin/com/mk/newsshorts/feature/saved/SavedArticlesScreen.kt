@@ -21,7 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.mk.newsshorts.core.model.NewsArticle
 import com.mk.newsshorts.presentation.localization.appStrings
-import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
+import com.mk.newsshorts.core.model.article.ArticleOpenOrigin
 import com.mk.newsshorts.feature.feed.FeedUiEvent
 import com.mk.newsshorts.presentation.ui.components.EmptySavedArticlesCard
 import com.mk.newsshorts.presentation.ui.components.OverlayTopBar

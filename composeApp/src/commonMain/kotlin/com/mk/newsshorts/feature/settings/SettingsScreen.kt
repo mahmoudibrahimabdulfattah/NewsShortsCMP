@@ -58,11 +58,11 @@ import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.localization.languageName
-import com.mk.newsshorts.presentation.mvi.LanguageOption
+import com.mk.newsshorts.core.model.feed.LanguageOption
 import com.mk.newsshorts.feature.feed.FeedUiEvent
 import com.mk.newsshorts.feature.feed.FeedUiState
-import com.mk.newsshorts.presentation.mvi.TextScale
-import com.mk.newsshorts.presentation.mvi.ThemeMode
+import com.mk.newsshorts.core.model.settings.TextScale
+import com.mk.newsshorts.core.model.settings.ThemeMode
 import com.mk.newsshorts.presentation.ui.components.FilterPill
 import com.mk.newsshorts.presentation.ui.components.SelectorRow
 import com.mk.newsshorts.presentation.ui.components.OverlayTopBar

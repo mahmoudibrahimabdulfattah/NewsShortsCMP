@@ -35,7 +35,7 @@ import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.feature.settings.SettingsUiEvent
 import com.mk.newsshorts.feature.settings.SettingsUiState
 import com.mk.newsshorts.presentation.localization.categoryName
-import com.mk.newsshorts.presentation.mvi.OnboardingStep
+import com.mk.newsshorts.core.model.onboarding.OnboardingStep
 import com.mk.newsshorts.presentation.ui.components.AppButton
 import com.mk.newsshorts.presentation.ui.components.AppButtonTone
 import com.mk.newsshorts.presentation.ui.components.FilterPill

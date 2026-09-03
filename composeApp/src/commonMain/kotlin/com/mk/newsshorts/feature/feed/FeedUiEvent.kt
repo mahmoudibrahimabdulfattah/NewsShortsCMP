@@ -1,8 +1,8 @@
 package com.mk.newsshorts.feature.feed
 
-import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
-import com.mk.newsshorts.presentation.mvi.CountryOption
-import com.mk.newsshorts.presentation.mvi.LanguageOption
+import com.mk.newsshorts.core.model.article.ArticleOpenOrigin
+import com.mk.newsshorts.core.model.feed.CountryOption
+import com.mk.newsshorts.core.model.feed.LanguageOption
 import com.mk.newsshorts.presentation.mvi.NavigationTab
 import com.mk.newsshorts.presentation.mvi.Overlay
 import com.mk.newsshorts.core.model.NewsArticle

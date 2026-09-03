@@ -22,8 +22,8 @@ import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.getStrings
 import com.mk.newsshorts.presentation.localization.urlInLanguage
-import com.mk.newsshorts.presentation.mvi.ArticleDetails
-import com.mk.newsshorts.presentation.mvi.ArticleOpenOrigin
+import com.mk.newsshorts.core.model.article.ArticleDetails
+import com.mk.newsshorts.core.model.article.ArticleOpenOrigin
 import com.mk.newsshorts.presentation.mvi.Overlay
 import com.mk.newsshorts.core.domain.sync.AccountSyncUseCase
 import com.mk.newsshorts.core.domain.sync.SyncOutcome

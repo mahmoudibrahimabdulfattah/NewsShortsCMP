@@ -5,7 +5,7 @@ import com.mk.newsshorts.core.domain.settings.SettingsPersistence
 import com.mk.newsshorts.core.domain.feed.FeedInvalidator
 import com.mk.newsshorts.core.domain.feed.InvalidationReason
 import com.mk.newsshorts.core.model.NewsCategory
-import com.mk.newsshorts.presentation.mvi.OnboardingStep
+import com.mk.newsshorts.core.model.onboarding.OnboardingStep
 import com.mk.newsshorts.presentation.viewmodel.BaseViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
