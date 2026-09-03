@@ -95,6 +95,9 @@ kotlin {
     }
     
     sourceSets {
+        commonMain.dependencies {
+            api(projects.core.contract)
+        }
         androidMain.dependencies {
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)

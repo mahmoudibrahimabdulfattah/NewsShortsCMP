@@ -1,6 +1,6 @@
 package com.mk.newsshorts.server.summarize
 
-import com.mk.newsshorts.server.model.NewsCategories
+import com.mk.newsshorts.core.contract.feed.NewsCategories
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.header

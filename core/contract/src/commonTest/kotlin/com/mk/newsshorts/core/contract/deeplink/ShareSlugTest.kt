@@ -5,12 +5,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 
 /**
- * The app only names the landing page; the server writes it. If these two
- * implementations drift, every shared link 404s and nothing else breaks — so
- * the failure would show up in a friend's chat window rather than in a build.
- *
- * The literals below are duplicated in the server's ShareSlugTest on purpose.
- * Changing the algorithm here must fail there too. Keep them in sync.
+ * The literals below pin the slug algorithm, not just its current call sites:
+ * every share link in the wild names a page with a slug produced here, so a
+ * one-bit change makes old links land on the wrong file or 404.
  */
 class ShareSlugTest {
 
@@ -46,5 +43,15 @@ class ShareSlugTest {
             ShareSlug.of("https://example.com/story"),
             ShareSlug.of("https://example.com/story/"),
         )
+    }
+
+    /** Base36 of a 64-bit hash: short enough to read back off a phone screen. */
+    @Test
+    fun `stays within thirteen characters`() {
+        listOf("", "a", "https://example.com/" + "x".repeat(400)).forEach { url ->
+            val slug = ShareSlug.of(url)
+            assertEquals(true, slug.length in 1..13, "$slug is ${slug.length} characters")
+            assertEquals(true, slug.all { it.isDigit() || it in 'a'..'z' }, slug)
+        }
     }
 }

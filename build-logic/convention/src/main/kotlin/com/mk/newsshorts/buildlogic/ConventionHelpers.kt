@@ -56,6 +56,53 @@ internal fun Project.configureNewsshortsKmpTargets() {
     }
 }
 
+internal fun Project.configureNewsshortsContractTargets(targetMode: String) {
+    val libs = libsCatalog()
+
+    extensions.configure<KotlinMultiplatformExtension>("kotlin") {
+        compilerOptions {
+            freeCompilerArgs.add("-Xexpect-actual-classes")
+        }
+
+        jvmToolchain(17)
+        if (targetMode == "jvm") {
+            jvm()
+        } else {
+            androidTarget {
+                compilerOptions {
+                    jvmTarget.set(JvmTarget.JVM_11)
+                }
+            }
+            iosArm64()
+            iosSimulatorArm64()
+            jvm()
+            js {
+                browser()
+            }
+            wasmJs {
+                browser()
+            }
+        }
+
+        sourceSets.named("commonMain") {
+            dependencies {
+                implementation(libs.requiredLibrary("kotlinx-serialization-json"))
+            }
+        }
+        sourceSets.named("commonTest") {
+            dependencies {
+                implementation(libs.requiredLibrary("kotlin-test"))
+            }
+        }
+    }
+
+    if (targetMode != "jvm" && HostManager.hostIsMac) {
+        tasks.named("check") {
+            dependsOn("iosSimulatorArm64Test")
+        }
+    }
+}
+
 internal fun Project.configureAndroidLibrary() {
     val libs = libsCatalog()
 

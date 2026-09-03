@@ -7,7 +7,7 @@ data class AppConfigDto(
     val minSupportedVersionCode: Int = 1,
     val latestVersionCode: Int = 1,
     val storeUrl: String = "",
-    /** "allow", "warn" or "block" — see [com.mk.newsshorts.core.model.security.IntegrityPolicy]. */
+    /** "allow", "warn" or "block", matching the app's integrity policy values. */
     val rootPolicy: String = "warn",
     /**
      * Same values, for emulators and phones with developer options on. Defaults

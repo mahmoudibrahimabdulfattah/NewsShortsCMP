@@ -1,6 +1,6 @@
 package com.mk.newsshorts.server.feed
 
-import com.mk.newsshorts.server.model.FeedArticleDto
+import com.mk.newsshorts.core.contract.feed.FeedArticleDto
 import com.mk.newsshorts.server.store.interleaveBySource
 import kotlin.test.Test
 import kotlin.test.assertEquals

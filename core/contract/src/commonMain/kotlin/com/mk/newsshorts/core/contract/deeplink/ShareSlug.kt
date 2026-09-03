@@ -3,18 +3,19 @@ package com.mk.newsshorts.core.contract.deeplink
 /**
  * The path segment an article's landing page is published under.
  *
- * A copy of the server's `com.mk.newsshorts.server.share.ShareSlug`, which is
- * what actually writes the page. The app only names it — so if these two ever
- * disagree, every shared link 404s. They are kept in step by the same literal
- * asserted in both test suites, the same way the deep link format is.
- *
  * Derived from the article's URL and not from its feed id: the id comes from an
  * autoincrement column in a database CI restores from a cache, and if that cache
  * is lost the ids restart at 1 — a link already sitting in someone's chat would
  * then open a different story. A hash of the URL cannot do that.
  *
- * FNV-1a, hand-rolled over unsigned arithmetic, because it has to produce the
- * same digits on every target with nothing platform-specific underneath it.
+ * The URL is hashed exactly as stored, with no canonicalising beyond trimming.
+ * The server's `Articles.url` is unique and reaches the app verbatim in the
+ * feed JSON, so the two sides are already hashing identical bytes; normalising
+ * would only add a second thing to keep in step.
+ *
+ * FNV-1a, hand-rolled over unsigned arithmetic, because the server and every
+ * app target have to produce the same digits with nothing platform-specific
+ * underneath them.
  */
 object ShareSlug {
 

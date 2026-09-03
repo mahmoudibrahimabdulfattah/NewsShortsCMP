@@ -4,7 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.mk.newsshorts.server.config.FeedCatalog
-import com.mk.newsshorts.server.model.NewsCategories
+import com.mk.newsshorts.core.contract.feed.NewsCategories
 import com.mk.newsshorts.server.store.ArticleStore
 import com.mk.newsshorts.server.summarize.ClassifyInput
 import com.mk.newsshorts.server.summarize.Classifier

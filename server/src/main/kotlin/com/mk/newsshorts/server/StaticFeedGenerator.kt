@@ -1,23 +1,23 @@
 package com.mk.newsshorts.server
 
-import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.Json
+import com.mk.newsshorts.core.contract.deeplink.ShareSlug
+import com.mk.newsshorts.core.contract.feed.FeedArticleDto
+import com.mk.newsshorts.core.contract.feed.FeedResponse
+import com.mk.newsshorts.core.contract.notifications.NotificationsResponse
 import com.mk.newsshorts.server.config.FeedCatalog
 import com.mk.newsshorts.server.feed.FeedPageNames
 import com.mk.newsshorts.server.feed.repaginate
 import com.mk.newsshorts.server.ingest.IngestionPipeline
 import com.mk.newsshorts.server.ingest.RssFetcher
-import com.mk.newsshorts.server.model.FeedArticleDto
-import com.mk.newsshorts.server.model.FeedResponse
 import com.mk.newsshorts.server.push.BreakingNewsPusher
-import com.mk.newsshorts.server.push.NotificationsResponse
 import com.mk.newsshorts.server.push.PushNotifier
 import com.mk.newsshorts.server.share.SharePage
-import com.mk.newsshorts.server.share.ShareSlug
 import com.mk.newsshorts.server.share.SharedArticle
 import com.mk.newsshorts.server.store.ArticleStore
 import com.mk.newsshorts.server.summarize.buildClassifier
 import com.mk.newsshorts.server.summarize.buildSummarizer
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.io.File
 

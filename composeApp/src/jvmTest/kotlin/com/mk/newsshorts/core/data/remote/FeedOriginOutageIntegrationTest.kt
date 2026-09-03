@@ -1,5 +1,7 @@
 package com.mk.newsshorts.core.data.remote
 
+import com.mk.newsshorts.core.contract.feed.FeedArticleDto
+import com.mk.newsshorts.core.contract.feed.FeedResponse
 import com.mk.newsshorts.core.domain.OriginPreferenceStore
 import com.mk.newsshorts.core.model.NewsCategory
 import com.mk.newsshorts.core.model.NewsResult
@@ -70,9 +72,9 @@ class FeedOriginOutageIntegrationTest {
         }
 
     private fun healthyFeed(): String = Json.encodeToString(
-        BackendFeedResponse(
+        FeedResponse(
             articles = listOf(
-                BackendArticleDto(
+                FeedArticleDto(
                     id = 1L,
                     title = "Mirror headline",
                     summary = "The mirror kept the feed readable.",

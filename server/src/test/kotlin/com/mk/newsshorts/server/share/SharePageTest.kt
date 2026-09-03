@@ -1,5 +1,6 @@
 package com.mk.newsshorts.server.share
 
+import com.mk.newsshorts.core.contract.deeplink.ShareSlug
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals

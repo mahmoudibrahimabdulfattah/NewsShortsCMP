@@ -1,7 +1,8 @@
 package com.mk.newsshorts.core.data.remote
 
+import com.mk.newsshorts.core.contract.notifications.NotificationsResponse
+import com.mk.newsshorts.core.contract.notifications.SentNotification
 import io.ktor.client.call.body
-import kotlinx.serialization.Serializable
 
 /**
  * What the backend has pushed, so the app can show a reader what they missed.
@@ -21,29 +22,10 @@ class NotificationInboxClient(
     private val apiConfig: ApiConfig,
 ) {
 
-    suspend fun fetch(language: String): List<SentNotificationDto> =
+    suspend fun fetch(language: String): List<SentNotification> =
         runCatching {
             originClient.get(apiConfig.notificationsPath(language))
-                .body<NotificationsResponseDto>()
+                .body<NotificationsResponse>()
                 .notifications
         }.getOrElse { emptyList() }
 }
-
-@Serializable
-data class NotificationsResponseDto(
-    val notifications: List<SentNotificationDto> = emptyList(),
-)
-
-/**
- * [deepLink] is the same `newsshorts://article` link the notification itself
- * carried, so a tap here and a tap on the notification reach the article
- * through one parser.
- */
-@Serializable
-data class SentNotificationDto(
-    val sentAt: Long = 0,
-    val tier: String = "",
-    val title: String = "",
-    val body: String = "",
-    val deepLink: String = "",
-)

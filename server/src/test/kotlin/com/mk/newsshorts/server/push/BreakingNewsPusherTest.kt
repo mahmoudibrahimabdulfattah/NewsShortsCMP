@@ -1,7 +1,7 @@
 package com.mk.newsshorts.server.push
 
 import kotlinx.coroutines.runBlocking
-import com.mk.newsshorts.server.model.FeedArticleDto
+import com.mk.newsshorts.core.contract.feed.FeedArticleDto
 import com.mk.newsshorts.server.store.ArticleStore
 import com.mk.newsshorts.server.store.TextSource
 import com.mk.newsshorts.server.store.TextWriteResult

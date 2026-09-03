@@ -1,7 +1,7 @@
 package com.mk.newsshorts.server.push
 
+import com.mk.newsshorts.core.contract.feed.FeedArticleDto
 import com.mk.newsshorts.server.config.FeedCatalog
-import com.mk.newsshorts.server.model.FeedArticleDto
 import com.mk.newsshorts.server.store.ArticleStore
 import org.slf4j.LoggerFactory
 import kotlin.time.Duration.Companion.days
