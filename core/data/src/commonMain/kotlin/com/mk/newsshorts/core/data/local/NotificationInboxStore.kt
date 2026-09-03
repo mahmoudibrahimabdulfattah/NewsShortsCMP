@@ -147,8 +147,11 @@ data class InboxReadState(
         sentAt <= readAllBefore || articleKey(articleUrl) in readArticles
 }
 
-/** Stable within an install, which is all this has to be. */
-internal fun articleKey(articleUrl: String): Int = articleUrl.trim().hashCode()
+/**
+ * Identity used by the inbox read and dismissed sets, so callers must key
+ * articles the same way.
+ */
+fun articleKey(articleUrl: String): Int = articleUrl.trim().hashCode()
 
 /**
  * Anything unreadable reads as nothing read.

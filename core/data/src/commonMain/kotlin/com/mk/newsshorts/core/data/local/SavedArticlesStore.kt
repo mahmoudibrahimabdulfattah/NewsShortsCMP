@@ -112,11 +112,13 @@ class SavedArticlesStore(
 }
 
 /**
+ * Observable saved-article storage cap, shared by the real store and fakes so
+ * tests cannot pass with lists the real store would truncate.
+ *
  * Applied on the way to disk rather than in the repository, so the cap is one
- * number in one place — and a top-level function so a test can check it without
- * a [SettingsStorage]. Same shape as `orderedWithCap` in SeenArticlesStore.
+ * number in one place. Same shape as `orderedWithCap` in SeenArticlesStore.
  */
-internal fun cappedForStorage(articles: List<NewsArticle>): List<NewsArticle> =
+fun cappedForStorage(articles: List<NewsArticle>): List<NewsArticle> =
     articles.take(MAX_SAVED)
 
 /** Bounded so the bookmark list can't grow past what the store can hold. */

@@ -150,16 +150,9 @@ internal fun Project.configureNewsshortsAppDependencies() {
         sourceSets.named("commonMain") {
             dependencies {
                 implementation(libs.requiredLibrary("kotlinx-coroutinesCore"))
-                implementation(libs.requiredLibrary("kotlinx-serialization-json"))
-                implementation(libs.requiredBundle("ktor-client-common"))
                 implementation(libs.requiredBundle("koin-common"))
                 implementation(libs.requiredLibrary("coil-compose"))
                 implementation(libs.requiredLibrary("coil-network-ktor3"))
-            }
-        }
-        sourceSets.named("commonTest") {
-            dependencies {
-                implementation(libs.requiredLibrary("ktor-client-mock"))
             }
         }
     }

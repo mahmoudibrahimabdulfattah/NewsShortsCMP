@@ -5,11 +5,10 @@ plugins {
 kotlin {
     sourceSets {
         commonMain.dependencies {
+            api(projects.core.domain)
+            api(projects.core.data)
             api(projects.core.model)
-            api(libs.kotlinx.coroutinesCore)
-        }
-        commonTest.dependencies {
-            implementation(projects.core.testing)
+            api(libs.kotlin.test)
         }
     }
 }

@@ -36,6 +36,8 @@ plugins {
 include(":composeApp")
 include(":core:config")
 include(":core:contract")
+include(":core:data")
 include(":core:model")
 include(":core:domain")
+include(":core:testing")
 include(":server")

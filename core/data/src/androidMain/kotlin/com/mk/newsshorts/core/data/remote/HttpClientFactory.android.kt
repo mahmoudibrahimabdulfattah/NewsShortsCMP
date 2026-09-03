@@ -9,4 +9,4 @@ actual fun createPlatformHttpClient(): HttpClient {
 
 
 /** The build type, from the generated BuildConfig — not from the device. */
-actual fun isDebugBuild(): Boolean = com.mk.newsshorts.BuildConfig.DEBUG
+actual fun isDebugBuild(): Boolean = com.mk.newsshorts.core.data.BuildConfig.DEBUG
