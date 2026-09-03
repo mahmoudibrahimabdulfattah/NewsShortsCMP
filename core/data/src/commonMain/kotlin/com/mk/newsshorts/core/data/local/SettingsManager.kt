@@ -171,8 +171,3 @@ class SettingsManager(
         private const val KEY_PREFERRED_CATEGORIES: String = "preferred_categories"
     }
 }
-
-expect class SettingsStorage {
-    fun getString(key: String, defaultValue: String): String
-    fun putString(key: String, value: String)
-}

@@ -20,12 +20,3 @@ interface RemoteSyncClient {
     /** Removes this reader's synced data — the server half of account deletion. */
     suspend fun deleteUserData(uid: String): SyncDelete
 }
-
-/** Used on every target without a Firestore backend — there is no remote copy to strand. */
-object NoOpRemoteSyncClient : RemoteSyncClient {
-    override suspend fun fetchSavedArticles(uid: String): SyncFetch<List<NewsArticle>> = SyncFetch.Unavailable
-    override suspend fun pushSavedArticles(uid: String, articles: List<NewsArticle>) = Unit
-    override suspend fun fetchSettings(uid: String): SyncFetch<SyncedSettings> = SyncFetch.Unavailable
-    override suspend fun pushSettings(uid: String, settings: SyncedSettings) = Unit
-    override suspend fun deleteUserData(uid: String): SyncDelete = SyncDelete.Success
-}

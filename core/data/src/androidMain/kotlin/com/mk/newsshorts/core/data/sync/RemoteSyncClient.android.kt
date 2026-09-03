@@ -5,7 +5,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
-import com.mk.newsshorts.core.domain.sync.NoOpRemoteSyncClient
+import com.mk.newsshorts.core.data.platform.NoOpRemoteSyncClient
 import com.mk.newsshorts.core.domain.sync.RemoteSyncClient
 import com.mk.newsshorts.core.model.sync.SyncDelete
 import com.mk.newsshorts.core.model.sync.SyncFetch

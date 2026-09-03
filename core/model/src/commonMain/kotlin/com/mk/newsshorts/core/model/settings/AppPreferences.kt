@@ -25,9 +25,8 @@ data class AppPreferences(
 )
 
 /**
- * Takes the reader rather than a `SettingsStorage`, which is an `expect class`
- * with no actual in commonTest — so the decoding can be tested on every target
- * without one.
+ * Takes the reader rather than a storage implementation, so decoding can be
+ * tested on every target without a backing store.
  */
 fun readAppPreferences(getString: (key: String, fallback: String) -> String): AppPreferences {
     fun flag(key: String): Boolean =

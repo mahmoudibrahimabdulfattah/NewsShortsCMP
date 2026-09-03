@@ -6,12 +6,11 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.mk.newsshorts.di.initializeKoin
-import com.mk.newsshorts.di.platformModule
 import java.awt.Desktop
 import java.net.URI
 
 fun main() {
-    initializeKoin(platformModules = listOf(platformModule))
+    initializeKoin(platformModules = emptyList())
     application {
         Window(
             onCloseRequest = ::exitApplication,

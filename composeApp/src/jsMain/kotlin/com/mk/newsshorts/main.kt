@@ -5,11 +5,10 @@ import androidx.compose.ui.window.ComposeViewport
 import kotlinx.browser.document
 import kotlinx.browser.window
 import com.mk.newsshorts.di.initializeKoin
-import com.mk.newsshorts.di.platformModule
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
-    initializeKoin(platformModules = listOf(platformModule))
+    initializeKoin(platformModules = emptyList())
     val rootElement = document.getElementById("root") ?: return
     ComposeViewport(rootElement) {
         App(

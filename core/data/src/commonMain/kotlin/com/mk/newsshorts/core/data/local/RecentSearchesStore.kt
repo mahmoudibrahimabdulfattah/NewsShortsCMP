@@ -2,7 +2,6 @@ package com.mk.newsshorts.core.data.local
 
 import com.mk.newsshorts.core.domain.search.RecentSearches
 import com.mk.newsshorts.core.model.search.normalizeForSearch
-import com.mk.newsshorts.core.data.local.SettingsStorage
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 

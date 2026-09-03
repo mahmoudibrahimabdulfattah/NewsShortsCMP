@@ -47,7 +47,7 @@ packages are already acyclic, so they carry build risk but no design risk.
 | 4 | `:core:contract` + server de-duplication | **done** |
 | 5 | `:core:config`, `:core:model`, `:core:domain` | **done** |
 | 6a | `:core:data` + `:core:testing` (moves only) | **done** |
-| 6b | `SettingsStorage` to an interface; collapse the no-op platform modules | not started |
+| 6b | `SettingsStorage` to an interface; collapse the no-op platform modules | **done** |
 | 7 | `:core:localization` + `:core:ui` | not started |
 | 8 | `:core:navigation` + `Navigator` | not started |
 | 9 | The six `:feature:*` modules | not started |
@@ -295,3 +295,52 @@ that module. `newsshorts.kmp.library` registers it unconditionally now.
 is skipped rather than failing. Resist writing `project.path == ":core:x"` into a
 convention plugin — a shared plugin that knows one project's name becomes a
 switch over the project list by phase 9.
+
+**Phase 6b — a package rename had already silently wiped desktop settings,
+twice.** `SettingsStorage.jvm.kt` used
+`Preferences.userNodeForPackage(SettingsStorage::class.java)`, and
+`userNodeForPackage` derives the node path from the class's **package**. That
+package moved in `46a0e0c` ("Move the app onto its real package name") and again
+in `fe49ef5` (phase 3, `data.local` → `core.data.local`). Each move rehomed every
+desktop reader's settings to a fresh empty node. Nothing failed, nothing logged,
+the app just started on defaults.
+
+The node is now the literal `com/mk/newsshorts` under `userRoot()`, and the
+constructor copies keys across from the two historical node paths when the
+pinned node is empty — newest first, never overwriting. The general rule worth
+carrying: **a storage location is not a code location.** Anything that derives a
+persisted path, key, table or file name from a package, class or file name is a
+refactor away from discarding user data, and the build stays green while it
+happens.
+
+Android, iOS and JS were unaffected — `SharedPreferences` is named by an
+explicit string, and `NSUserDefaults.standardUserDefaults` and `localStorage`
+are keyed by the key alone.
+
+**Phase 6b — the key contract test.** `SettingsStorageKeyContractTest` in
+`:core:data` asserts the persisted key strings as *literals* and drives the real
+writers to produce them. A test that compares a constant against itself passes
+no matter what the constant says, which is exactly the failure it exists to
+catch. It covers the settings keys, the notification tiers, the store keys
+(`saved_articles`, `recent_searches`, `seen_articles`, `notification_inbox_read`,
+`notification_inbox_dismissed`, `pending_sign_in_email`,
+`preferred_backend_origin`) and the news-cache prefixes. All of them were
+cross-checked against a real device's `news_shorts_prefs.xml`.
+
+**Phase 6b — the expect/actual pair moved rather than disappeared.** The plan
+wanted `SettingsStorage`'s `expect class` gone. It is gone, but a small
+`expect fun platformSettingsStorage(koin: Koin): SettingsStorage` took its place,
+because the storage genuinely differs per platform — the plan says so itself —
+and a `commonMain` binding cannot name `NSUserDefaults` or `java.util.prefs`.
+The win is real but smaller than the plan implies: an `expect fun` instead of an
+`expect class` (no `-Xexpect-actual-classes` warning), five one-line actuals
+instead of four 26-line no-op DI modules, and the no-op clients now shared
+classes in `:core:data`.
+
+**Phase 6b — wasm persistence is named, not fixed.** wasmJs binds
+`InMemorySettingsStorage`, which is what its `actual` always was. Settings still
+do not survive a reload on wasm; the difference is that the class now says so.
+
+**Still open after phase 6:** `isDebugBuild()` hardcodes `true` on ios, jvm, js
+and wasmJs, so release desktop and web run with Ktor body logging on and skip the
+device-integrity check.

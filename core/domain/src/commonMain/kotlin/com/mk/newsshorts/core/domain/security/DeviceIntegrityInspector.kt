@@ -6,8 +6,3 @@ import com.mk.newsshorts.core.model.security.DeviceIntegrity
 interface DeviceIntegrityInspector {
     fun inspect(): DeviceIntegrity
 }
-
-/** Used on targets with nothing meaningful to check. */
-object PermissiveDeviceIntegrityInspector : DeviceIntegrityInspector {
-    override fun inspect(): DeviceIntegrity = DeviceIntegrity()
-}

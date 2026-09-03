@@ -11,10 +11,11 @@ fun initializeKoin(
 ): KoinApplication {
     return startKoin {
         appDeclaration()
+        // Common modules bind the no-op defaults; platform modules come last
+        // so Android's real clients and Context-backed storage override them.
         modules(
-            platformModules +
-            listOf(dataModule, domainModule, presentationModule)
+            listOf(dataModule, domainModule, presentationModule) +
+                platformModules
         )
     }
 }
-
