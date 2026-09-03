@@ -1,11 +1,8 @@
 package com.mk.newsshorts.core.domain.auth
 
-import com.mk.newsshorts.core.model.auth.AuthFailure
 import com.mk.newsshorts.core.model.auth.AuthResult
 import com.mk.newsshorts.core.model.auth.AuthUser
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Sign-in is optional everywhere it appears: every screen in this app already
@@ -55,19 +52,4 @@ interface AuthClient {
      * `AccountDeletionClient` for what else it triggers.
      */
     suspend fun deleteAccount(): AuthResult
-}
-
-/** Used on every target except Android, where no sign-in provider ships. */
-object NoOpAuthClient : AuthClient {
-    override val currentUser: StateFlow<AuthUser?> = MutableStateFlow(null).asStateFlow()
-
-    private val unsupported = AuthResult.Error(AuthFailure.UNSUPPORTED_PLATFORM)
-
-    override suspend fun signInWithGoogle(): AuthResult = unsupported
-    override suspend fun sendSignInLink(email: String, languageCode: String): AuthResult =
-        unsupported
-    override fun isSignInLink(link: String): Boolean = false
-    override suspend fun completeSignInWithLink(email: String, link: String): AuthResult = unsupported
-    override suspend fun signOut() = Unit
-    override suspend fun deleteAccount(): AuthResult = unsupported
 }

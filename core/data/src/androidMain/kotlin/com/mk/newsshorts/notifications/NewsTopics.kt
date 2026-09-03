@@ -11,8 +11,8 @@ import com.google.firebase.messaging.FirebaseMessaging
  */
 object NewsTopics {
 
-    private const val PREFS = "news_topics"
-    private const val KEY_LANGUAGE = "subscribed_language"
+    internal const val PREFS = "news_topics"
+    internal const val KEY_LANGUAGE = "subscribed_language"
 
     private fun topicFor(language: String): String = "news_$language"
 

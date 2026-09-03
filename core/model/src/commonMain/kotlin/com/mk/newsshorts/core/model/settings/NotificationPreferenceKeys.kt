@@ -4,8 +4,8 @@ package com.mk.newsshorts.core.model.settings
  * The `SettingsStorage` keys for the notification switches, shared between
  * [SettingsManager] (read by the app) and `NewsMessagingService` (read by a
  * system-instantiated Android service that cannot go through Koin, so it opens
- * `SettingsStorage` directly). One object means the two call sites cannot drift
- * apart on a key name.
+ * the Android storage directly). One object means the two call sites cannot
+ * drift apart on a key name.
  *
  * Values are the string `"true"`/`"false"` rather than a boolean type, matching
  * `SettingsStorage`'s string-only API and the existing pattern in

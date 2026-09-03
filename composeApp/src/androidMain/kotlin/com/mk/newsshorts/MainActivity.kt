@@ -18,7 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
 import com.mk.newsshorts.di.initializeKoin
-import com.mk.newsshorts.di.platformModule
+import com.mk.newsshorts.di.androidPlatformModule
 import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
 import com.mk.newsshorts.config.BuildConfig
@@ -32,7 +32,7 @@ import org.koin.android.ext.android.inject
 class NewsShortsApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        initializeKoin(platformModules = listOf(platformModule)) {
+        initializeKoin(platformModules = listOf(androidPlatformModule)) {
             androidContext(this@NewsShortsApplication)
         }
     }

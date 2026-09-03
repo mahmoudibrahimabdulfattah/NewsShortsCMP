@@ -13,7 +13,7 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.mk.newsshorts.MainActivity
 import com.mk.newsshorts.core.model.settings.NotificationPreferenceKeys
-import com.mk.newsshorts.core.data.local.SettingsStorage
+import com.mk.newsshorts.core.data.local.AndroidSettingsStorage
 import com.mk.newsshorts.core.model.deeplink.ArticleDeepLinks
 import com.mk.newsshorts.navigation.NotificationBus
 import com.mk.newsshorts.core.model.inbox.InboxNotification
@@ -128,7 +128,7 @@ class NewsMessagingService : FirebaseMessagingService() {
      * The in-app on/off switches, checked alongside the OS-level one at [39].
      *
      * This service is instantiated by the system, not by Koin, so it reads
-     * `SettingsStorage` directly rather than taking it as a constructor
+     * `AndroidSettingsStorage` directly rather than taking it as a constructor
      * argument — there is nothing to inject it. The key names come from
      * [NotificationPreferenceKeys] so this and the Settings screen can never
      * name the same switch two different things.
@@ -137,7 +137,7 @@ class NewsMessagingService : FirebaseMessagingService() {
      * new tier this build does not know about should not go silent for it.
      */
     private fun isAllowedByInAppSettings(tier: String?): Boolean {
-        val settingsStorage = SettingsStorage(applicationContext)
+        val settingsStorage = AndroidSettingsStorage(applicationContext)
         fun flag(key: String) =
             settingsStorage.getString(key, NotificationPreferenceKeys.DEFAULT_ENABLED) == "true"
 

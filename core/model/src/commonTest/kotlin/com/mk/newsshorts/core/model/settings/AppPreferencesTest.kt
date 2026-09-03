@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
  */
 class AppPreferencesTest {
 
-    /** Stands in for `SettingsStorage`, which is an expect class commonTest cannot build. */
+    /** Stands in for the real settings store without needing a platform backing store. */
     private fun storage(vararg entries: Pair<String, String>): (String, String) -> String {
         val map = entries.toMap()
         return { key, fallback -> map[key] ?: fallback }

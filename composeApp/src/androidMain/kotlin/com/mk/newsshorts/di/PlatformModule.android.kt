@@ -5,6 +5,7 @@ import com.mk.newsshorts.core.domain.analytics.AnalyticsReporter
 import com.mk.newsshorts.analytics.createAnalyticsReporter
 import com.mk.newsshorts.core.domain.auth.AuthClient
 import com.mk.newsshorts.auth.createAuthClient
+import com.mk.newsshorts.core.data.local.AndroidSettingsStorage
 import com.mk.newsshorts.core.data.local.SettingsStorage
 import com.mk.newsshorts.notifications.FirebasePushSubscriber
 import com.mk.newsshorts.core.domain.notifications.PushSubscriber
@@ -15,8 +16,8 @@ import com.mk.newsshorts.core.data.sync.createRemoteSyncClient
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 
-val platformModule = module {
-    single { SettingsStorage(context = androidContext()) }
+val androidPlatformModule = module {
+    single<SettingsStorage> { AndroidSettingsStorage(context = androidContext()) }
     single<AnalyticsReporter> { createAnalyticsReporter(androidContext()) }
     single<PushSubscriber> { FirebasePushSubscriber(androidContext()) }
     single<DeviceIntegrityInspector> {

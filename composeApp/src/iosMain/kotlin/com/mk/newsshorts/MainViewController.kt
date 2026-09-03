@@ -2,7 +2,6 @@ package com.mk.newsshorts
 
 import androidx.compose.ui.window.ComposeUIViewController
 import com.mk.newsshorts.di.initializeKoin
-import com.mk.newsshorts.di.platformModule
 import platform.Foundation.NSURL
 import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIApplication
@@ -23,7 +22,7 @@ fun MainViewController() = ComposeUIViewController(
 
 private fun initializeKoinOnce() {
     if (!isKoinInitialized) {
-        initializeKoin(platformModules = listOf(platformModule))
+        initializeKoin(platformModules = emptyList())
         isKoinInitialized = true
     }
 }

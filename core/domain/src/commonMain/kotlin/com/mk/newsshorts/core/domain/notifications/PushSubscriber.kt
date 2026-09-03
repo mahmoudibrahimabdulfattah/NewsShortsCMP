@@ -18,9 +18,3 @@ interface PushSubscriber {
      */
     fun unsubscribeAll()
 }
-
-/** Used on targets without push support. */
-object NoOpPushSubscriber : PushSubscriber {
-    override fun subscribeToLanguage(language: String) = Unit
-    override fun unsubscribeAll() = Unit
-}

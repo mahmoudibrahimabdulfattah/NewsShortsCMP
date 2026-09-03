@@ -13,10 +13,21 @@ import com.mk.newsshorts.core.data.local.SeenArticlesStore
 import com.mk.newsshorts.core.data.local.SettingsManager
 import com.mk.newsshorts.core.domain.OriginPreferenceStore
 import com.mk.newsshorts.core.data.local.SettingsOriginPreferenceStore
+import com.mk.newsshorts.core.data.local.SettingsStorage
+import com.mk.newsshorts.core.data.platform.NoOpAnalyticsReporter
+import com.mk.newsshorts.core.data.platform.NoOpAuthClient
+import com.mk.newsshorts.core.data.platform.NoOpDeviceIntegrityInspector
+import com.mk.newsshorts.core.data.platform.NoOpPushSubscriber
+import com.mk.newsshorts.core.data.platform.NoOpRemoteSyncClient
 import com.mk.newsshorts.core.data.remote.ApiConfig
 import com.mk.newsshorts.core.data.remote.DefaultRemoteConfigClient
 import com.mk.newsshorts.core.data.remote.OriginFailoverClient
+import com.mk.newsshorts.core.domain.analytics.AnalyticsReporter
+import com.mk.newsshorts.core.domain.auth.AuthClient
 import com.mk.newsshorts.core.domain.config.RemoteConfigClient
+import com.mk.newsshorts.core.domain.notifications.PushSubscriber
+import com.mk.newsshorts.core.domain.security.DeviceIntegrityInspector
+import com.mk.newsshorts.core.domain.sync.RemoteSyncClient
 import com.mk.newsshorts.core.data.remote.NewsApiClient
 import com.mk.newsshorts.core.data.remote.NotificationInboxClient
 import com.mk.newsshorts.core.data.remote.SharePageResolver
@@ -35,6 +46,12 @@ import com.mk.newsshorts.navigation.SignInLinkBus
 import org.koin.dsl.module
 
 val dataModule = module {
+    single<SettingsStorage>(createdAtStart = false) { platformSettingsStorage(getKoin()) }
+    single<AnalyticsReporter>(createdAtStart = false) { NoOpAnalyticsReporter }
+    single<PushSubscriber>(createdAtStart = false) { NoOpPushSubscriber }
+    single<DeviceIntegrityInspector>(createdAtStart = false) { NoOpDeviceIntegrityInspector }
+    single<AuthClient>(createdAtStart = false) { NoOpAuthClient }
+    single<RemoteSyncClient>(createdAtStart = false) { NoOpRemoteSyncClient }
     // Not lazy: a cold-start deep link is posted before anything else resolves.
     single(createdAtStart = true) { DeepLinkBus() }
     single(createdAtStart = true) { NotificationBus() }

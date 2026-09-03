@@ -37,9 +37,8 @@ private data class SavedArticleDto(
 /**
  * The disk half of bookmarking, behind an interface.
  *
- * The real implementation needs a [SettingsStorage], which is an `expect class`
- * with no actual in commonTest — so without this seam nothing that persists
- * bookmarks could be tested on any target.
+ * The real implementation needs a [SettingsStorage], so this seam lets tests
+ * cover bookmark persistence without a platform backing store.
  */
 interface SavedArticlesLocalStore {
     fun load(): List<NewsArticle>
