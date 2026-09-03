@@ -1,7 +1,7 @@
 package com.mk.newsshorts.server.config
 
 import com.mk.newsshorts.server.model.FeedSource
-import com.mk.newsshorts.server.model.NewsCategories
+import com.mk.newsshorts.core.contract.feed.NewsCategories
 
 /**
  * RSS sources, grouped by language. Adding a language, category, or country is

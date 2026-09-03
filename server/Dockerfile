@@ -1,10 +1,13 @@
-# Build stage — only the :server module, so the image never needs the Android SDK.
+# Build stage — only :server and the JVM contract module, so the image never
+# needs the Android SDK.
 FROM gradle:8.14-jdk17 AS build
 WORKDIR /build
 COPY gradle/libs.versions.toml gradle/libs.versions.toml
+COPY build-logic build-logic
+COPY core/contract core/contract
 COPY server/deploy/settings.gradle.kts settings.gradle.kts
 COPY server server
-RUN gradle :server:installDist --no-daemon
+RUN gradle :server:installDist -Pnewsshorts.contract.targets=jvm --no-daemon
 
 # Run stage
 FROM eclipse-temurin:17-jre

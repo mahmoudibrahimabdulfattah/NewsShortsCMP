@@ -1,10 +1,11 @@
 package com.mk.newsshorts.server.store
 
+import com.mk.newsshorts.core.contract.deeplink.ShareSlug
+import com.mk.newsshorts.core.contract.feed.FeedArticleDto
+import com.mk.newsshorts.core.contract.feed.NewsCategories
+import com.mk.newsshorts.core.contract.notifications.SentNotification
 import com.mk.newsshorts.server.feed.FeedLayout
 import com.mk.newsshorts.server.feed.FeedPage
-import com.mk.newsshorts.server.model.FeedArticleDto
-import com.mk.newsshorts.server.model.NewsCategories
-import com.mk.newsshorts.server.push.SentNotification
 import com.mk.newsshorts.server.share.SharedArticle
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.JoinType
@@ -213,9 +214,9 @@ object PushLog : Table("push_log") {
  * description, no country, no join.
  *
  * Keyed by the slug the page is published under rather than by article id, for
- * the reason [com.mk.newsshorts.server.share.ShareSlug] exists — an id from a
- * restored database can name a different story, and this table outlives far
- * more restores than the feed does.
+ * the reason [ShareSlug] exists — an id from a restored database can name a
+ * different story, and this table outlives far more restores than the feed
+ * does.
  */
 object SharedArticles : Table("shared_articles") {
     val slug = varchar("slug", 16)

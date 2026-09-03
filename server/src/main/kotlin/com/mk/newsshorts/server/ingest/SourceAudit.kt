@@ -1,6 +1,6 @@
 package com.mk.newsshorts.server.ingest
 
-import com.mk.newsshorts.server.model.NewsCategories
+import com.mk.newsshorts.core.contract.feed.NewsCategories
 import java.net.URI
 
 data class RejectedSource(val sourceName: String, val reason: String)

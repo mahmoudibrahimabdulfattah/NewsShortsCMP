@@ -28,6 +28,8 @@ kotlin {
 }
 
 dependencies {
+    implementation(projects.core.contract)
+
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
     implementation(libs.ktor.server.contentNegotiation)

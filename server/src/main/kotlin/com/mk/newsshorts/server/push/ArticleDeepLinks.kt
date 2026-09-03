@@ -1,6 +1,7 @@
 package com.mk.newsshorts.server.push
 
-import com.mk.newsshorts.server.model.FeedArticleDto
+import com.mk.newsshorts.core.contract.deeplink.ArticleDeepLinks as ContractArticleDeepLinks
+import com.mk.newsshorts.core.contract.feed.FeedArticleDto
 import java.io.ByteArrayOutputStream
 import java.net.URI
 import java.net.URLEncoder
@@ -11,13 +12,13 @@ import java.nio.charset.CodingErrorAction
  * Builds the `newsshorts://article` link a notification carries, so tapping it
  * opens the article inside the app rather than in a browser.
  *
- * The client parses the same shape; the two modules cannot share code, so the
- * format is pinned by a literal asserted in both test suites.
+ * The client parses the same shape, so the format is pinned by literals in the
+ * server builder tests and shared constants in the contract module.
  */
 object ArticleDeepLinks {
 
-    const val SCHEME: String = "newsshorts"
-    const val HOST: String = "article"
+    const val SCHEME: String = ContractArticleDeepLinks.SCHEME
+    const val HOST: String = ContractArticleDeepLinks.HOST
 
     /**
      * FCM rejects a data payload over 4096 bytes with a 400, which surfaces

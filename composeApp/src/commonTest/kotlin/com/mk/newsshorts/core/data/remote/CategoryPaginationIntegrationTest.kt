@@ -1,5 +1,7 @@
 package com.mk.newsshorts.core.data.remote
 
+import com.mk.newsshorts.core.contract.feed.FeedArticleDto
+import com.mk.newsshorts.core.contract.feed.FeedResponse
 import com.mk.newsshorts.core.data.mapper.NewsMapper
 import com.mk.newsshorts.core.domain.OriginPreferenceStore
 import com.mk.newsshorts.core.domain.feed.appendPage
@@ -65,9 +67,9 @@ class CategoryPaginationIntegrationTest {
         client.close()
     }
 
-    private fun response(range: IntRange, nextPage: String?) = BackendFeedResponse(
+    private fun response(range: IntRange, nextPage: String?) = FeedResponse(
         articles = range.map { index ->
-            BackendArticleDto(
+            FeedArticleDto(
                 id = index.toLong(),
                 title = "Sport $index",
                 summary = "Summary $index",

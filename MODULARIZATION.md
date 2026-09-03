@@ -21,6 +21,13 @@ re-proposed.
 ./gradlew check :composeApp:assembleDebug -x lintDebug
 ```
 
+From phase 4 on, a change to `:core:contract`, `build-logic` or `server/Dockerfile`
+also needs the deploy path checked, which that command cannot see:
+
+```bash
+./server/deploy/verify-image-build.sh
+```
+
 Not `./gradlew build`, and not a bare `./gradlew check`. Both fail on `master`
 for reasons that predate this work — see *The verification baseline* in the plan
 for why, and for what to do instead of checking for a configuration-cache hit.
@@ -37,7 +44,7 @@ packages are already acyclic, so they carry build risk but no design risk.
 | 1 | Shared services; delete VM-in-VM injection (in place) | **done** |
 | 2 | Decompose `NewsViewModel` and `NewsUiState` (in place) | **done** |
 | 3 | Break the package cycles (package moves only) | **done** |
-| 4 | `:core:contract` + `:core:testing` + server de-duplication | not started |
+| 4 | `:core:contract` + server de-duplication | **done** |
 | 5 | `:core:config`, `:core:model`, `:core:domain` | not started |
 | 6 | `:core:data` | not started |
 | 7 | `:core:localization` + `:core:ui` | not started |
@@ -138,3 +145,60 @@ tests failed with `UncompletedCoroutinesError` naming a coroutine, while their
 assertions passed. The real cause was that routing them through the real caller
 also started a hydration, and hydration waits for a local list the test never
 loaded. Print the values before believing the message.
+
+**Phase 4 — `:core:testing` moved to phase 6.** The plan put it here, arguing
+the shared fakes need a home before the tests that use them move out. They
+cannot have one yet: `FakeAuthClient`, `FakeRemoteSyncClient` and
+`FakeSavedArticlesLocalStore` implement interfaces that still live in
+`:composeApp`, so a `:core:testing` module would depend on `:composeApp` while
+`:composeApp`'s own tests depend on it — a Gradle project cycle. It lands in
+phase 6, once `:core:domain` and `:core:data` are real modules.
+
+**Phase 4 — the deploy break a green build cannot see.** `:server` now depends
+on `:core:contract`, and the image has no Android SDK, so the contract's
+convention plugin gates its targets on `-Pnewsshorts.contract.targets=jvm`. The
+gating was correct on the first try and the deploy still failed:
+
+```text
+Could not find com.android.tools.build:gradle:8.11.2.
+    Required by: project :core:contract > project :build-logic:convention
+```
+
+`build-logic/convention` declares `implementation(libs.android.gradlePlugin)`,
+so AGP is a *runtime* dependency of the convention plugin jar and lands on the
+plugin classpath of every project applying any plugin from it — including one
+that never applies AGP. `build-logic`'s own settings have `google()` so the
+plugin compiles; the deploy settings did not, so the consuming build could not
+resolve it. `server/deploy/settings.gradle.kts` now carries the same filtered
+`google()` the root settings use. The image resolves the AGP jar and still
+never needs the SDK; those are two different things.
+
+There is no docker on this machine, so `server/deploy/verify-image-build.sh`
+copies exactly the paths the Dockerfile COPYs into a clean tree with the SDK
+environment variables unset and runs the same command. It was green on `master`
+before the phase started, which is what made the failure above trustworthy.
+Keep its COPY list in step with the Dockerfile.
+
+**Phase 4 — the two `ArticleDeepLinks` are not duplicates.** The server's builds
+and parses links with `java.net.URLEncoder` and `java.net.URI`; the contract's
+holds constants and the share-page URL helpers. Rewriting the server's
+percent-encoding in common Kotlin to merge them would change the bytes of links
+already sitting in people's chat windows. Only `SCHEME` and `HOST` were shared,
+which the server now references rather than redeclaring.
+
+**Phase 4 — how the slug was proven unchanged.** The plan asked for a
+byte-identical `generateStaticFeed` diff, which is not achievable: that task
+fetches live RSS and summarises it, so two runs never match. What actually
+needed proving was the slug, so the corpus was generated from an independently
+written implementation of FNV-1a/base36 rather than from the Kotlin under
+change, and run through the merged `ShareSlug` on both `jvmTest` and
+`iosSimulatorArm64Test`. Twelve URLs including Arabic and percent-encoded ones,
+all matching — and matching the literals the two old suites pinned. Reach for
+an independent implementation whenever the acceptance criterion is "this exact
+value must not move".
+
+**Phase 4 — `NewsCategory` was not rewritten to derive from `NewsCategories`.**
+The enum's declaration order drives the reader's category tabs; the contract
+set's order drives the server's feed iteration. Deriving either from the other
+would silently reorder something a reader sees. A test asserts they match as
+**sets**, so membership cannot drift while each keeps its own order.

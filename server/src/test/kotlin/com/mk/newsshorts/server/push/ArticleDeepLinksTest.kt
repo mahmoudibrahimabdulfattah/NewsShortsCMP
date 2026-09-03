@@ -1,6 +1,6 @@
 package com.mk.newsshorts.server.push
 
-import com.mk.newsshorts.server.model.FeedArticleDto
+import com.mk.newsshorts.core.contract.feed.FeedArticleDto
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals

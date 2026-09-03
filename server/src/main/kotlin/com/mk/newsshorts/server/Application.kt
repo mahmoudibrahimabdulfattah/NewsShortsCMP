@@ -1,5 +1,15 @@
 package com.mk.newsshorts.server
 
+import com.mk.newsshorts.core.contract.feed.FeedResponse
+import com.mk.newsshorts.server.config.FeedCatalog
+import com.mk.newsshorts.server.feed.FeedLayout
+import com.mk.newsshorts.server.feed.FeedPageNames
+import com.mk.newsshorts.server.feed.repaginate
+import com.mk.newsshorts.server.ingest.IngestionPipeline
+import com.mk.newsshorts.server.ingest.RssFetcher
+import com.mk.newsshorts.server.store.ArticleStore
+import com.mk.newsshorts.server.summarize.buildClassifier
+import com.mk.newsshorts.server.summarize.buildSummarizer
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
@@ -15,16 +25,6 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import kotlinx.serialization.json.Json
-import com.mk.newsshorts.server.config.FeedCatalog
-import com.mk.newsshorts.server.feed.FeedLayout
-import com.mk.newsshorts.server.feed.FeedPageNames
-import com.mk.newsshorts.server.feed.repaginate
-import com.mk.newsshorts.server.ingest.IngestionPipeline
-import com.mk.newsshorts.server.ingest.RssFetcher
-import com.mk.newsshorts.server.model.FeedResponse
-import com.mk.newsshorts.server.store.ArticleStore
-import com.mk.newsshorts.server.summarize.buildClassifier
-import com.mk.newsshorts.server.summarize.buildSummarizer
 
 fun main(args: Array<String>) {
     val dbPath = System.getenv("DB_PATH") ?: "news.db"

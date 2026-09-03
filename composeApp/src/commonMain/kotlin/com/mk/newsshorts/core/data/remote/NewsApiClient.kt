@@ -1,11 +1,12 @@
 package com.mk.newsshorts.core.data.remote
 
-import io.ktor.client.call.body
-import io.ktor.http.HttpStatusCode
+import com.mk.newsshorts.core.contract.feed.FeedResponse
 import com.mk.newsshorts.core.model.FeedLanguage
 import com.mk.newsshorts.core.model.NewsCategory
 import com.mk.newsshorts.core.model.NewsError
 import com.mk.newsshorts.core.model.NewsResult
+import io.ktor.client.call.body
+import io.ktor.http.HttpStatusCode
 
 /**
  * Client for the News Shorts backend. The backend aggregates RSS sources and
@@ -90,7 +91,7 @@ class NewsApiClient(
             when {
                 response.status == HttpStatusCode.NotFound -> NewsResult.Error(NewsError.NotFound)
                 response.status.value >= 500 -> NewsResult.Error(NewsError.ServerError)
-                else -> NewsResult.Success(response.body<BackendFeedResponse>().toNewsApiResponse())
+                else -> NewsResult.Success(response.body<FeedResponse>().toNewsApiResponse())
             }
         } catch (exception: Exception) {
             NewsResult.Error(exception.toNewsError())
@@ -103,7 +104,7 @@ class NewsApiClient(
             if (response.status.value >= 500) {
                 NewsResult.Error(NewsError.ServerError)
             } else {
-                NewsResult.Success(response.body<BackendFeedResponse>().toNewsApiResponse())
+                NewsResult.Success(response.body<FeedResponse>().toNewsApiResponse())
             }
         } catch (exception: Exception) {
             NewsResult.Error(exception.toNewsError())
@@ -117,7 +118,7 @@ class NewsApiClient(
         else -> NewsError.UnknownError(message ?: "Unknown error occurred")
     }
 
-    private fun BackendFeedResponse.toNewsApiResponse(): NewsApiResponse =
+    private fun FeedResponse.toNewsApiResponse(): NewsApiResponse =
         NewsApiResponse(
             status = "ok",
             totalResults = total.toInt(),

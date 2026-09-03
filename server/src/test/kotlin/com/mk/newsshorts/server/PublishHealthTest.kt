@@ -1,6 +1,6 @@
 package com.mk.newsshorts.server
 
-import com.mk.newsshorts.server.model.FeedArticleDto
+import com.mk.newsshorts.core.contract.feed.FeedArticleDto
 import java.io.File
 import java.nio.file.Files
 import kotlinx.serialization.json.Json
