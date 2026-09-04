@@ -26,7 +26,7 @@ costs half an hour. Verify in stages instead, most important first — Android,
 then iOS, then the rest — so a break shows up in minutes:
 
 ```bash
-./gradlew :composeApp:assembleDebug testDebugUnitTest
+./gradlew :composeApp:assembleDebug testDebugUnitTest lintDebug
 ```
 
 ```bash
@@ -72,7 +72,7 @@ packages are already acyclic, so they carry build risk but no design risk.
 | 8 | `:core:navigation` + `Navigator` | **done** |
 | 9 | The six `:feature:*` modules | **done** |
 | 10 | DI restructure + `viewModel { }` switch | **done** |
-| 11 | Optional cleanups | not started |
+| 11 | Optional cleanups | **done** |
 
 ## Notes
 
@@ -547,3 +547,50 @@ asks for them in `:core:ui`, but each returns a feature's ViewModel type, and
 `:core:ui` sits below the features — the dependency would be a cycle. They stay
 in `:composeApp`, which is the composition root and the one module that can
 name every feature.
+
+**Phase 11 — `check` no longer needs `-x lintDebug`.** Since phase 0 every phase
+ran with lint switched off because of four `RestrictedApi` errors in
+`TopStoryWidget`, which meant no lint regression anywhere in the project could
+be caught for the whole migration.
+
+The fix is a scoped `@SuppressLint("RestrictedApi")`, not a rewrite. I first
+tried replacing `ColorProvider(R.color.…)` with a public day/night overload —
+**that overload does not exist.** Glance 1.2.0 offers only `ColorProvider(Color)`
+and the restricted `ColorProvider(resId)`; checking `javap` on the actual
+artifact settled it after the compiler rejected the guess. Resolving
+`values/` against `values-night/` in app code instead would move the day/night
+decision out of the resource system and evaluate it in the app's configuration
+rather than the host launcher's, which is a behaviour change to avoid for a
+lint warning. The suppression is on the one composable, so anything else
+restricted still fails.
+
+Turning lint on for every module then surfaced a second error, and it is an
+artifact of the split: `MissingPermission` on `FirebaseAnalytics.getInstance` in
+`:core:data`, because lint checks a library's manifest in isolation and a
+library has none. All three permissions are in the app's merged manifest —
+INTERNET from `:composeApp`, `ACCESS_NETWORK_STATE` and `WAKE_LOCK` merged in by
+firebase-analytics itself. Verified against `processDebugMainManifest` output
+before suppressing, not assumed.
+
+**Phase 11 — `isDebugBuild()` now fails closed.** The jvm, ios, js and wasmJs
+actuals returned a hardcoded `true`, justified by "no shipped build of this
+target exists yet" — which stays true right up until one ships, and nothing
+would fail to say so. `AppGateViewModel` skips the device-integrity check when
+this is true, so the flag is dangerous in exactly one direction.
+
+iOS asks Kotlin/Native (`Platform.isDebugBinary`), which actually knows. The
+others default to release; the JVM desktop build opts into debug through a
+system property, because a property nobody sets cannot be on by accident in a
+distributed build.
+
+**Phase 11 — two smaller ones.** `NewsMapper`'s parse fallback returned a
+hardcoded December 2024 timestamp, so an article with an unparseable date was
+dated to a fixed point in the past; it uses `currentTimeMillis()` from
+`:core:model` now. And wasmJs settings persist: phase 6b named the in-memory
+storage honestly, this gives the target `localStorage` like js, which needed
+`kotlinx-browser` since wasm's stdlib does not carry `kotlinx.browser` the way
+the JS one does.
+
+**Not done, deliberately:** the per-feature `AppStrings` split, which the plan
+gates on measured incremental build times, and moving effects to carry semantic
+values instead of localized prose, which the plan calls its own project.

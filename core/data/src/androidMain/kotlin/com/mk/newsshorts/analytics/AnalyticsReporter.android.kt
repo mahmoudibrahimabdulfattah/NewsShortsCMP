@@ -1,5 +1,6 @@
 package com.mk.newsshorts.analytics
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
 import com.google.firebase.FirebaseApp
@@ -39,6 +40,14 @@ private class FirebaseAnalyticsReporter(
     }
 }
 
+/**
+ * Lint flags `MissingPermission` here because it checks this module's manifest
+ * in isolation, and a library has none — but INTERNET, ACCESS_NETWORK_STATE and
+ * WAKE_LOCK are all present in the app's merged manifest (the first from
+ * :composeApp, the other two merged in by firebase-analytics itself). Verified
+ * against composeApp's processDebugMainManifest output rather than assumed.
+ */
+@SuppressLint("MissingPermission")
 fun createAnalyticsReporter(context: Context): AnalyticsReporter {
     if (FirebaseApp.getApps(context).isEmpty()) return NoOpAnalyticsReporter
     return FirebaseAnalyticsReporter(

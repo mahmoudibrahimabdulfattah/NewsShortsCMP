@@ -1,5 +1,6 @@
 package com.mk.newsshorts.widget
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -74,6 +75,20 @@ class TopStoryWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = TopStoryWidget()
 }
 
+/**
+ * [ColorProvider] taking a resource id is annotated `@RestrictedApi` to
+ * androidx's own library group, which is why `check` had to run with
+ * `-x lintDebug` from phase 0 onward — four errors, all of them this call.
+ *
+ * Suppressed rather than replaced. Glance 1.2.0 offers no public alternative
+ * that keeps the behaviour: the only other overload takes a resolved `Color`,
+ * and resolving `values/` against `values-night/` ourselves would move the
+ * day/night decision out of the resource system and into app code, evaluated
+ * in the app's configuration rather than the host launcher's. The restriction
+ * is over-broad for a colour resource; the suppression is scoped to this one
+ * composable so anything else restricted still fails the build.
+ */
+@SuppressLint("RestrictedApi")
 @Composable
 private fun TopStoryContent(
     context: Context,
