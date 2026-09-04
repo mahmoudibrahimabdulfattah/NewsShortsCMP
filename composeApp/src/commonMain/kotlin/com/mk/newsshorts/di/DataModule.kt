@@ -30,6 +30,7 @@ import com.mk.newsshorts.core.domain.security.DeviceIntegrityInspector
 import com.mk.newsshorts.core.domain.sync.RemoteSyncClient
 import com.mk.newsshorts.core.data.remote.NewsApiClient
 import com.mk.newsshorts.core.data.remote.NotificationInboxClient
+import com.mk.newsshorts.core.domain.notifications.NotificationInboxFeed
 import com.mk.newsshorts.core.data.remote.SharePageResolver
 import com.mk.newsshorts.core.data.remote.createHttpClient
 import com.mk.newsshorts.core.data.repository.DefaultSavedArticlesRepository
@@ -73,7 +74,9 @@ val dataModule = module {
         DefaultRemoteConfigClient(originClient = get(), apiConfig = get())
     }
     single(createdAtStart = false) { SharePageResolver(httpClient = get()) }
-    single(createdAtStart = false) { NotificationInboxClient(originClient = get(), apiConfig = get()) }
+    single<NotificationInboxFeed>(createdAtStart = false) {
+        NotificationInboxClient(originClient = get(), apiConfig = get())
+    }
     single(createdAtStart = false) { NewsLocalDataSource(settingsStorage = get()) }
     single<ArticleLookup>(createdAtStart = false) { get<NewsLocalDataSource>() }
     single(createdAtStart = false) { SettingsManager(settingsStorage = get()) }
