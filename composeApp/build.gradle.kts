@@ -96,6 +96,12 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(projects.core.config)
+            api(projects.feature.auth)
+            api(projects.feature.feed)
+            api(projects.feature.inbox)
+            api(projects.feature.saved)
+            api(projects.feature.search)
+            api(projects.feature.settings)
             api(projects.core.contract)
             api(projects.core.data)
             api(projects.core.model)

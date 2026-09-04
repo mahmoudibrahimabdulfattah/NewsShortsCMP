@@ -10,7 +10,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-configureNewsshortsKmpTargets()
+configureNewsshortsKmpTargets(produceExecutables = true)
 configureNewsshortsComposeDependencies()
 configureNewsshortsAppDependencies()
 registerPackageLayeringCheck()

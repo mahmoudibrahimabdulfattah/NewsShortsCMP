@@ -1,7 +1,5 @@
 package com.mk.newsshorts.feature.saved
 
-import com.mk.newsshorts.feature.saved.SavedArticlesUiEvent
-import com.mk.newsshorts.presentation.viewmodel.AppShellUiEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,8 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.mk.newsshorts.core.model.NewsArticle
 import com.mk.newsshorts.presentation.localization.appStrings
-import com.mk.newsshorts.core.model.article.ArticleOpenOrigin
-import com.mk.newsshorts.feature.feed.FeedUiEvent
 import com.mk.newsshorts.presentation.ui.components.EmptySavedArticlesCard
 import com.mk.newsshorts.presentation.ui.components.OverlayTopBar
 import com.mk.newsshorts.presentation.ui.components.SavedArticleCard
@@ -38,7 +34,8 @@ import com.mk.newsshorts.presentation.ui.components.SavedArticleCard
 @Composable
 fun SavedArticlesScreen(
     uiState: SavedArticlesUiState,
-    onShellEvent: (AppShellUiEvent) -> Unit,
+    onBack: () -> Unit,
+    onOpenArticle: (NewsArticle) -> Unit,
     onSavedEvent: (SavedArticlesUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -49,7 +46,7 @@ fun SavedArticlesScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            OverlayTopBar(title = strings.savedArticles, onBack = { onShellEvent(AppShellUiEvent.CloseOverlay) })
+            OverlayTopBar(title = strings.savedArticles, onBack = onBack)
             if (!uiState.hasArticles) {
                 EmptySavedArticlesCard(
                     strings = strings,
@@ -69,9 +66,7 @@ fun SavedArticlesScreen(
                     items(uiState.articles, key = { it.articleUrl.value }) { article ->
                         SavedArticleCard(
                             article = article,
-                            onClick = {
-                                onShellEvent(AppShellUiEvent.OpenArticleDetails(article, ArticleOpenOrigin.SAVED))
-                            },
+                            onClick = { onOpenArticle(article) },
                             onRemove = { onSavedEvent(SavedArticlesUiEvent.Remove(article)) }
                         )
                     }

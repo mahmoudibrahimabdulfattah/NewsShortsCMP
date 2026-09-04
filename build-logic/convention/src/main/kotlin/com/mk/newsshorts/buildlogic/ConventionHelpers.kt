@@ -6,6 +6,8 @@ import org.gradle.api.Project
 import org.gradle.api.artifacts.VersionCatalog
 import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.services.BuildService
+import org.gradle.api.services.BuildServiceParameters
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.SourceTask
 import org.gradle.api.tasks.TaskAction
@@ -18,7 +20,13 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.konan.target.HostManager
 
-internal fun Project.configureNewsshortsKmpTargets() {
+/**
+ * [produceExecutables] is true only for the application. A library has no entry
+ * point, so linking a production JS and Wasm bundle for it produces something
+ * nothing loads — and, with thirteen modules, enough parallel link tasks to
+ * exhaust the Kotlin daemon's heap.
+ */
+internal fun Project.configureNewsshortsKmpTargets(produceExecutables: Boolean = false) {
     val libs = libsCatalog()
 
     extensions.configure<KotlinMultiplatformExtension>("kotlin") {
@@ -37,9 +45,9 @@ internal fun Project.configureNewsshortsKmpTargets() {
         jvm()
         js {
             browser()
-            binaries.executable()
+            if (produceExecutables) binaries.executable()
         }
-        configureWasmJsTarget()
+        configureWasmJsTarget(produceExecutables)
 
         sourceSets.named("commonTest") {
             dependencies {
@@ -48,6 +56,8 @@ internal fun Project.configureNewsshortsKmpTargets() {
             }
         }
     }
+
+    throttleJsAndWasmLinkTasks()
 
     if (HostManager.hostIsMac) {
         tasks.named("check") {
@@ -95,6 +105,8 @@ internal fun Project.configureNewsshortsContractTargets(targetMode: String) {
             }
         }
     }
+
+    if (targetMode != "jvm") throttleJsAndWasmLinkTasks()
 
     if (targetMode != "jvm" && HostManager.hostIsMac) {
         tasks.named("check") {
@@ -153,6 +165,65 @@ internal fun Project.configureNewsshortsAppDependencies() {
                 implementation(libs.requiredBundle("koin-common"))
                 implementation(libs.requiredLibrary("coil-compose"))
                 implementation(libs.requiredLibrary("coil-network-ktor3"))
+            }
+        }
+    }
+}
+
+/**
+ * Serialises the JS and Wasm link tasks against each other.
+ *
+ * Each one links a whole bundle and wants most of the Kotlin daemon's heap. Two
+ * at once do not fit, and the failure is not a clean one: the machine swaps and
+ * a task that would take ninety seconds grinds for an hour before dying with
+ * `OutOfMemoryError`. Measured on this repo, serialised wasm tests finish in
+ * 1m34 where the parallel run failed after 5m19.
+ *
+ * A shared build service rather than lowering `org.gradle.workers.max`, so
+ * everything else in the build still runs in parallel — only these tasks queue.
+ */
+abstract class LinkTaskThrottle : BuildService<BuildServiceParameters.None>
+
+internal fun Project.throttleJsAndWasmLinkTasks() {
+    val throttle = gradle.sharedServices.registerIfAbsent(
+        "newsshortsLinkTaskThrottle",
+        LinkTaskThrottle::class.java,
+    ) {
+        maxParallelUsages.set(1)
+    }
+
+    tasks.matching { task ->
+        val name = task.name
+        name.startsWith("compile") &&
+            (name.endsWith("KotlinJs") || name.endsWith("KotlinWasmJs")) &&
+            name.contains("Executable")
+    }.configureEach {
+        usesService(throttle)
+    }
+}
+
+internal fun Project.configureNewsshortsFeatureDependencies() {
+    val libs = libsCatalog()
+
+    extensions.configure<KotlinMultiplatformExtension>("kotlin") {
+        sourceSets.named("commonMain") {
+            dependencies {
+                // What a feature *is*, expressed as dependencies: the shared
+                // components and theme it draws with, the vocabulary it names
+                // other screens by, the domain it calls, and the strings it
+                // shows. Anything a module needs beyond this set belongs in its
+                // own build file, where it can be seen.
+                api(project(":core:ui"))
+                api(project(":core:navigation"))
+                api(project(":core:domain"))
+                api(project(":core:localization"))
+                implementation(project(":core:data"))
+                implementation(libs.requiredLibrary("koin-core"))
+            }
+        }
+        sourceSets.named("commonTest") {
+            dependencies {
+                implementation(project(":core:testing"))
             }
         }
     }
@@ -256,9 +327,9 @@ abstract class PackageLayeringCheckTask : SourceTask() {
 }
 
 @OptIn(ExperimentalWasmDsl::class)
-private fun KotlinMultiplatformExtension.configureWasmJsTarget() {
+private fun KotlinMultiplatformExtension.configureWasmJsTarget(produceExecutables: Boolean) {
     wasmJs {
         browser()
-        binaries.executable()
+        if (produceExecutables) binaries.executable()
     }
 }

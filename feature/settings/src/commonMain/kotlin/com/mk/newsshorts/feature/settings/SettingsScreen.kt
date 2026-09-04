@@ -1,6 +1,5 @@
 package com.mk.newsshorts.feature.settings
 
-import com.mk.newsshorts.presentation.viewmodel.AppShellUiEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -59,8 +58,6 @@ import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.localization.languageName
 import com.mk.newsshorts.core.model.feed.LanguageOption
-import com.mk.newsshorts.feature.feed.FeedUiEvent
-import com.mk.newsshorts.feature.feed.FeedUiState
 import com.mk.newsshorts.core.model.settings.TextScale
 import com.mk.newsshorts.core.model.settings.ThemeMode
 import com.mk.newsshorts.presentation.ui.components.FilterPill
@@ -76,13 +73,13 @@ private const val ANIMATION_DURATION_MILLIS: Int = 200
  */
 @Composable
 fun SettingsScreen(
-    newsUiState: FeedUiState,
+    newsLanguage: LanguageOption,
     settingsUiState: SettingsUiState,
     authUser: AuthUser?,
     authInProgress: Boolean,
     authError: AuthFailure?,
-    onFeedEvent: (FeedUiEvent) -> Unit,
-    onShellEvent: (AppShellUiEvent) -> Unit,
+    onNewsLanguageSelected: (LanguageOption) -> Unit,
+    onBack: () -> Unit,
     onSettingsEvent: (SettingsUiEvent) -> Unit,
     onOpenSignIn: () -> Unit,
     onSignOut: () -> Unit,
@@ -97,7 +94,7 @@ fun SettingsScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            OverlayTopBar(title = strings.settings, onBack = { onShellEvent(AppShellUiEvent.CloseOverlay) })
+            OverlayTopBar(title = strings.settings, onBack = onBack)
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 // The app draws behind the system navigation bar, so the last
@@ -116,8 +113,8 @@ fun SettingsScreen(
                 item {
                     Spacer(modifier = Modifier.height(28.dp))
                     NewsLanguageSection(
-                        selectedLanguage = newsUiState.selectedLanguage,
-                        onLanguageSelected = { onFeedEvent(FeedUiEvent.SelectLanguage(it)) },
+                        selectedLanguage = newsLanguage,
+                        onLanguageSelected = onNewsLanguageSelected,
                     )
                 }
                 item {

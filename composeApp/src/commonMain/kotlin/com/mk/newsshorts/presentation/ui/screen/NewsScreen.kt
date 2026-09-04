@@ -76,6 +76,7 @@ import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.localization.countryName
 import com.mk.newsshorts.core.model.article.ArticleOpenOrigin
 import com.mk.newsshorts.navigation.NavigationTab
+import com.mk.newsshorts.feature.feed.NewsCard
 import com.mk.newsshorts.feature.feed.FeedUiEffect
 import com.mk.newsshorts.feature.feed.FeedUiEvent
 import com.mk.newsshorts.feature.feed.FeedUiState
@@ -87,7 +88,6 @@ import com.mk.newsshorts.presentation.ui.components.CategoryRow
 import com.mk.newsshorts.presentation.ui.components.CountrySelector
 import com.mk.newsshorts.presentation.ui.components.ErrorScreen
 import com.mk.newsshorts.presentation.ui.components.LoadingScreen
-import com.mk.newsshorts.presentation.ui.components.NewsCard
 import com.mk.newsshorts.presentation.ui.components.ProfileScreen
 import com.mk.newsshorts.presentation.ui.theme.NewsShortsTheme
 import com.mk.newsshorts.presentation.ui.theme.ImageryScrim
