@@ -21,6 +21,26 @@ re-proposed.
 ./gradlew check :composeApp:assembleDebug -x lintDebug
 ```
 
+At thirteen modules a full `check` is slow enough that a failure late in it
+costs half an hour. Verify in stages instead, most important first — Android,
+then iOS, then the rest — so a break shows up in minutes:
+
+```bash
+./gradlew :composeApp:assembleDebug testDebugUnitTest
+```
+
+```bash
+./gradlew iosSimulatorArm64Test
+```
+
+```bash
+./gradlew jvmTest checkPackageLayering :server:test
+```
+
+```bash
+./gradlew jsTest wasmJsTest
+```
+
 From phase 4 on, a change to `:core:contract`, `build-logic` or `server/Dockerfile`
 also needs the deploy path checked, which that command cannot see:
 
@@ -50,7 +70,7 @@ packages are already acyclic, so they carry build risk but no design risk.
 | 6b | `SettingsStorage` to an interface; collapse the no-op platform modules | **done** |
 | 7 | `:core:localization` + `:core:ui` | **done** |
 | 8 | `:core:navigation` + `Navigator` | **done** |
-| 9 | The six `:feature:*` modules | not started |
+| 9 | The six `:feature:*` modules | **done** |
 | 10 | DI restructure + `viewModel { }` switch | not started |
 | 11 | Optional cleanups | not started |
 
@@ -432,3 +452,49 @@ comment describes ("a refresh replaces the feed and the pager follows
 question, not something this phase changed. There is no `FeedViewModel` test
 fixture to settle it — the class has around a dozen dependencies. Worth building
 one in phase 9, when the feed becomes its own module.
+
+**Phase 9 — the plan contradicts itself on two screens.** It says "no feature
+depends on another feature" and then places `ProfileScreen` in
+`:feature:settings` — but that screen is a menu over auth, saved *and* feed, so
+as a feature module it is three forbidden edges. It stays in `:composeApp`, for
+exactly the reason the plan already gives for keeping onboarding there: it is a
+shell route. `ArticleDetailsScreen` did move into `:feature:feed`, after its
+`onShellEvent`/`onSavedEvent` parameters became four plain callbacks.
+
+`SavedArticleCard` and `EmptySavedArticlesCard` went to `:core:ui`, not
+`:feature:saved`, because `:feature:search` draws them too — and search
+depending on saved is the exact edge this phase exists to forbid. When two
+features want the same component, it belongs below both of them, not in
+whichever one seems to own it.
+
+Every cross-feature edge turned out to be the same shape: a screen taking
+another feature's `UiState` or `UiEvent` so the shell could wire it up. The cure
+is always plain parameters and callbacks, with the shell translating at the call
+site — `OverlayHost` is where knowing that a saved-article tap carries
+`ArticleOpenOrigin.SAVED` actually belongs.
+
+**Phase 9 — the build ran out of memory three times, and the third was my own
+fault.** None of it was a code error.
+
+- `configureNewsshortsKmpTargets` called `binaries.executable()` for every
+  module, so twelve libraries were linking production JS and Wasm bundles that
+  nothing loads. Executables are opt-in now, and only `newsshorts.kmp.app` opts
+  in. This was the phase 4 fix for `:core:contract`, which should have been
+  generalised then. Five failures became three, and 40 minutes became 17.
+- The rest were `compileTestDevelopmentExecutableKotlin{Js,WasmJs}` — *test*
+  bundle links, which that flag does not govern.
+- **Raising `kotlin.daemon.jvmargs` to 6.5 GB made it worse.** On a 16 GB
+  machine also running Android Studio and an emulator, that heap does not exist:
+  free memory fell to 0.7 GB and a task that fails in ten minutes ground for an
+  hour and 38 instead. Memory settings here are a budget, not a wish.
+
+The fix is fewer heavy tasks at once, not a bigger heap. `LinkTaskThrottle` in
+build-logic is a shared build service with `maxParallelUsages = 1` wired to the
+JS and Wasm executable link tasks, so those queue while everything else still
+runs in parallel. Measured: serialised wasm tests finish in 1m34 where the
+parallel run failed after 5m19. A forced cold relink of both targets with
+`--rerun-tasks --no-build-cache` now passes in 5m40 with zero
+`OutOfMemoryError`.
+
+Note what was *not* done: dropping the JS or Wasm targets would have fixed the
+memory problem by deleting test coverage on two of the six platforms.
