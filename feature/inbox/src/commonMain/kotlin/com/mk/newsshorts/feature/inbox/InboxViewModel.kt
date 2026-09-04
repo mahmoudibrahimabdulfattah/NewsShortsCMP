@@ -5,7 +5,7 @@ import com.mk.newsshorts.core.data.local.InboxReadState
 import com.mk.newsshorts.core.data.local.NotificationInboxStore
 import com.mk.newsshorts.core.domain.settings.SettingsPersistence
 import com.mk.newsshorts.core.data.local.articleKey
-import com.mk.newsshorts.core.data.remote.NotificationInboxClient
+import com.mk.newsshorts.core.domain.notifications.NotificationInboxFeed
 import com.mk.newsshorts.core.model.FeedLanguage
 import com.mk.newsshorts.core.model.deeplink.ArticleDeepLink
 import com.mk.newsshorts.core.model.deeplink.ArticleDeepLinks
@@ -15,6 +15,7 @@ import com.mk.newsshorts.navigation.NotificationBus
 import com.mk.newsshorts.navigation.Overlay
 import com.mk.newsshorts.presentation.viewmodel.BaseViewModel
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -84,12 +85,18 @@ sealed interface InboxUiEffect {
 }
 
 class InboxViewModel(
-    private val notificationInboxClient: NotificationInboxClient,
+    private val notificationInboxClient: NotificationInboxFeed,
     private val notificationInboxStore: NotificationInboxStore,
     private val notificationBus: NotificationBus,
     private val navigator: Navigator,
     private val settingsManager: SettingsPersistence,
     private val scopeOverride: CoroutineScope? = null,
+    /**
+     * Injected so a test can drive the cold-start retry without waiting on
+     * virtual time: a `delay` inside `backgroundScope` never advances, and this
+     * ViewModel has to run there because it collects settings forever.
+     */
+    private val retryDelayMillis: Long = RETRY_DELAY_MILLIS,
 ) : BaseViewModel() {
     private val mutableState = MutableStateFlow(
         InboxUiState(
@@ -140,11 +147,25 @@ class InboxViewModel(
     private fun refreshNotificationInbox(language: String, pulled: Boolean = false) {
         if (pulled) mutableState.update { it.copy(isRefreshing = true) }
         inboxScope.launch {
-            val sent = notificationInboxClient.fetch(language)
-            // An empty answer is a failure as often as it is an empty inbox -
-            // the client cannot tell them apart - so the list stands rather
-            // than being wiped by a bad connection. The spinner still stops.
-            if (sent.isEmpty()) {
+            var sent = notificationInboxClient.fetch(language)
+            // Retry only while nothing has ever loaded. A launch with no
+            // network used to leave the badge empty for the whole session:
+            // the fetch failed, the list stayed empty, and the only thing that
+            // tried again was opening the inbox — so the mark that exists to
+            // tell a reader about what they have not seen appeared only after
+            // they went looking. Once a list is on screen a failure can be left
+            // alone, because the reader can still read what they have.
+            var attempt = 0
+            while (sent == null && mutableState.value.notifications.isEmpty() &&
+                attempt < COLD_START_RETRIES
+            ) {
+                delay(retryDelayMillis * (attempt + 1))
+                attempt++
+                sent = notificationInboxClient.fetch(language)
+            }
+            // Null is a failure; an empty list is a reader with no
+            // notifications. Neither wipes what is already on screen.
+            if (sent.isNullOrEmpty()) {
                 mutableState.update { it.copy(isRefreshing = false) }
                 return@launch
             }
@@ -277,4 +298,14 @@ class InboxViewModel(
 
     private fun currentNewsLanguage(): String =
         FeedLanguage.resolve(settingsManager.preferences.value.newsLanguage)
+
+    private companion object {
+        /**
+         * Enough to cover a launch that beats the network coming up, which is
+         * the case this exists for. Not a general retry policy: after these the
+         * next refresh is the reader's own.
+         */
+        const val COLD_START_RETRIES = 3
+        const val RETRY_DELAY_MILLIS = 2_000L
+    }
 }
