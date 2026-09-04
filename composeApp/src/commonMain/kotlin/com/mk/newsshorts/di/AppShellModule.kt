@@ -4,6 +4,7 @@ import com.mk.newsshorts.core.data.local.SettingsManager
 import com.mk.newsshorts.feature.appgate.AppGateViewModel
 import com.mk.newsshorts.feature.onboarding.OnboardingViewModel
 import com.mk.newsshorts.presentation.viewmodel.AppShellViewModel
+import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
 /**
@@ -15,7 +16,7 @@ import org.koin.dsl.module
  * feature module to live in.
  */
 val appShellModule = module {
-    single(createdAtStart = false) {
+    viewModel {
         AppGateViewModel(
             remoteConfigClient = get(),
             deviceIntegrityInspector = get(),
@@ -23,14 +24,14 @@ val appShellModule = module {
             analytics = get(),
         )
     }
-    single(createdAtStart = false) {
+    viewModel {
         OnboardingViewModel(
             onboardingStore = get<SettingsManager>(),
             settings = get<SettingsManager>(),
             feedInvalidator = get(),
         )
     }
-    single(createdAtStart = false) {
+    viewModel {
         AppShellViewModel(
             settingsManager = get(),
             analytics = get(),

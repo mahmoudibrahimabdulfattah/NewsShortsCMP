@@ -1,5 +1,6 @@
 package com.mk.newsshorts.feature.onboarding
 
+import androidx.lifecycle.viewModelScope
 import com.mk.newsshorts.core.data.local.OnboardingPersistence
 import com.mk.newsshorts.core.domain.settings.SettingsPersistence
 import com.mk.newsshorts.core.domain.feed.FeedInvalidator

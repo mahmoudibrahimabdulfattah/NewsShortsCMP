@@ -1,5 +1,6 @@
 package com.mk.newsshorts.feature.appgate
 
+import androidx.lifecycle.viewModelScope
 import com.mk.newsshorts.core.model.analytics.AnalyticsEvent
 import com.mk.newsshorts.core.domain.analytics.AnalyticsReporter
 import com.mk.newsshorts.config.BuildConfig

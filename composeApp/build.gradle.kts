@@ -95,6 +95,7 @@ kotlin {
     
     sourceSets {
         commonMain.dependencies {
+            implementation(libs.koin.composeViewModel)
             api(projects.core.config)
             api(projects.feature.auth)
             api(projects.feature.feed)

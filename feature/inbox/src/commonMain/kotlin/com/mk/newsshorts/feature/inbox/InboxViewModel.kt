@@ -1,5 +1,6 @@
 package com.mk.newsshorts.feature.inbox
 
+import androidx.lifecycle.viewModelScope
 import com.mk.newsshorts.core.data.local.InboxReadState
 import com.mk.newsshorts.core.data.local.NotificationInboxStore
 import com.mk.newsshorts.core.domain.settings.SettingsPersistence

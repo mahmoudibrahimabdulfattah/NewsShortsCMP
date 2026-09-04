@@ -5,10 +5,11 @@ import com.mk.newsshorts.core.domain.saved.SavedArticles
 import com.mk.newsshorts.feature.saved.SavedArticlesViewModel
 import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.localization.getStrings
+import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
 val savedModule = module {
-    single(createdAtStart = false) {
+    viewModel {
         val settingsManager = get<SettingsManager>()
         SavedArticlesViewModel(
             repository = get<SavedArticles>(),

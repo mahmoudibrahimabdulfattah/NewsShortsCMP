@@ -1,10 +1,11 @@
 package com.mk.newsshorts.feature.feed.di
 
 import com.mk.newsshorts.feature.feed.FeedViewModel
+import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
 val feedModule = module {
-    single(createdAtStart = false) {
+    viewModel {
         FeedViewModel(
             getTopHeadlinesUseCase = get(),
             settingsManager = get(),
