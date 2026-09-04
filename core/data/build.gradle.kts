@@ -46,6 +46,9 @@ kotlin {
         val wasmJsMain by getting {
             dependencies {
                 implementation(libs.ktor.client.js)
+                // localStorage: the wasm target has no kotlinx.browser in its
+                // stdlib the way the JS one does.
+                implementation(libs.kotlinx.browser)
             }
         }
     }

@@ -2,6 +2,7 @@ package com.mk.newsshorts.core.data.mapper
 
 import com.mk.newsshorts.core.data.remote.ArticleDto
 import com.mk.newsshorts.core.data.remote.NewsApiResponse
+import com.mk.newsshorts.core.model.time.currentTimeMillis
 import com.mk.newsshorts.core.model.ArticleAuthor
 import com.mk.newsshorts.core.model.ArticleContent
 import com.mk.newsshorts.core.model.ArticleDescription
@@ -64,7 +65,7 @@ object NewsMapper {
             PublishedTimestamp(epochMillis)
         } catch (exception: Exception) {
             // Fallback to current timestamp if parsing fails
-            PublishedTimestamp(getCurrentTimeMillis())
+            PublishedTimestamp(currentTimeMillis())
         }
     }
 
@@ -73,13 +74,13 @@ object NewsMapper {
         // Format: "2024-12-24T10:30:00Z" or "2024-12-24T10:30:00.000Z"
         val cleanDate: String = dateString.replace("Z", "").replace("z", "")
         val parts: List<String> = cleanDate.split("T")
-        if (parts.size != 2) return getCurrentTimeMillis()
+        if (parts.size != 2) return currentTimeMillis()
         val dateParts: List<String> = parts[0].split("-")
         val timeParts: List<String> = parts[1].split(":")
-        if (dateParts.size != 3 || timeParts.size < 2) return getCurrentTimeMillis()
-        val year: Int = dateParts[0].toIntOrNull() ?: return getCurrentTimeMillis()
-        val month: Int = dateParts[1].toIntOrNull() ?: return getCurrentTimeMillis()
-        val day: Int = dateParts[2].toIntOrNull() ?: return getCurrentTimeMillis()
+        if (dateParts.size != 3 || timeParts.size < 2) return currentTimeMillis()
+        val year: Int = dateParts[0].toIntOrNull() ?: return currentTimeMillis()
+        val month: Int = dateParts[1].toIntOrNull() ?: return currentTimeMillis()
+        val day: Int = dateParts[2].toIntOrNull() ?: return currentTimeMillis()
         val hour: Int = timeParts[0].toIntOrNull() ?: 0
         val minute: Int = timeParts[1].toIntOrNull() ?: 0
         val second: Int = timeParts.getOrNull(2)?.split(".")?.get(0)?.toIntOrNull() ?: 0
@@ -109,10 +110,5 @@ object NewsMapper {
 
     private fun isLeapYear(year: Int): Boolean {
         return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
-    }
-
-    private fun getCurrentTimeMillis(): Long {
-        // Default to Dec 24, 2024 timestamp
-        return 1735084800000L
     }
 }
