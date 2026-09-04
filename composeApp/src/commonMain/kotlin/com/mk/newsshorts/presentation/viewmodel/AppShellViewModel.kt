@@ -1,5 +1,6 @@
 package com.mk.newsshorts.presentation.viewmodel
 
+import androidx.lifecycle.viewModelScope
 import com.mk.newsshorts.core.model.analytics.AnalyticsEvent
 import com.mk.newsshorts.core.domain.analytics.AnalyticsReporter
 import com.mk.newsshorts.core.domain.auth.AuthSession

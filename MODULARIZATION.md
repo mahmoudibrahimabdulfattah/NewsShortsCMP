@@ -71,7 +71,7 @@ packages are already acyclic, so they carry build risk but no design risk.
 | 7 | `:core:localization` + `:core:ui` | **done** |
 | 8 | `:core:navigation` + `Navigator` | **done** |
 | 9 | The six `:feature:*` modules | **done** |
-| 10 | DI restructure + `viewModel { }` switch | not started |
+| 10 | DI restructure + `viewModel { }` switch | **done** |
 | 11 | Optional cleanups | not started |
 
 ## Notes
@@ -498,3 +498,52 @@ parallel run failed after 5m19. A forced cold relink of both targets with
 
 Note what was *not* done: dropping the JS or Wasm targets would have fixed the
 memory problem by deleting test coverage on two of the six platforms.
+
+**Phase 10 — `viewModel { }` needed `BaseViewModel` to stop being an `expect`
+class, and Android could not have told us.** The switch compiled and ran fine on
+Android, then failed on iOS, JS and Wasm with `Return type mismatch: expected
+'ViewModel', actual 'FeedViewModel'`. The DSL requires `T : androidx ViewModel`,
+and `BaseViewModel`'s actual only extended one on Android — everywhere else it
+was a plain class.
+
+`lifecycle-viewmodel` is multiplatform now
+(`org.jetbrains.androidx.lifecycle:lifecycle-viewmodel`), so `BaseViewModel` is
+a single common class over `androidx.lifecycle.ViewModel` and the five actuals
+are gone. That also settles a real inconsistency the plan noticed: Android
+deliberately never cancelled its scope while iOS, JS and Wasm always did. Now
+`androidx.lifecycle.viewModelScope` is cleared by the same rule on all six.
+
+The lesson for the phases that remain: **an `expect`/`actual` class is a place
+where platforms are allowed to disagree about a type's supertype**, so any
+library API with a bound on that type will compile on the platform whose actual
+satisfies it and fail on the rest. Build Android first for speed, but never read
+Android green as the phase being green.
+
+**Phase 10 — the scope leak is gone.** `BaseViewModel.android.kt` used to
+document why it must *not* cancel: the definitions were `single`, so one
+instance served the process, the first Activity destruction called `onCleared`,
+and Koin then handed the same dead-scoped instance back with no second `init` —
+every coroutine in the app stopped after the reader backed out once. Not
+cancelling fixed the symptom and leaked the scope for the process lifetime.
+With `viewModel { }` the store hands back a fresh instance, so cancelling is
+correct again.
+
+What made this safe is everything from phases 1-8: no ViewModel owns state that
+has to outlive it any more — `SettingsManager`, the saved-articles repository,
+`AuthSession`, `Navigator` and the buses are all singletons. Verified on device:
+back out to the launcher, return, switch tabs — fresh content loads, so the
+scope is alive; and the selected tab survives a rotation, because the
+`Navigator` owns it rather than the ViewModel.
+
+**Phase 10 — `viewModel { }` definitions resolve through a plain `get()`.**
+Worth knowing, because iOS, JS and Wasm retrieve with
+`remember { KoinPlatform.getKoin().get<T>() }` rather than `koinViewModel()`. A
+throwaway JVM probe confirmed it before the switch was made rather than after.
+Each `provideXViewModel` is called from exactly one composable, so the
+factory-like scoping does not split an instance in two.
+
+**Phase 10 — where the plan's `provideXViewModel` placement cannot work.** It
+asks for them in `:core:ui`, but each returns a feature's ViewModel type, and
+`:core:ui` sits below the features — the dependency would be a cycle. They stay
+in `:composeApp`, which is the composition root and the one module that can
+name every feature.

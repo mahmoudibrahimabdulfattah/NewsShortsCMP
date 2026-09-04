@@ -219,6 +219,8 @@ internal fun Project.configureNewsshortsFeatureDependencies() {
                 api(project(":core:localization"))
                 implementation(project(":core:data"))
                 implementation(libs.requiredLibrary("koin-core"))
+                // The viewModel { } DSL each feature declares its ViewModel with.
+                implementation(libs.requiredLibrary("koin-composeViewModel"))
             }
         }
         sourceSets.named("commonTest") {

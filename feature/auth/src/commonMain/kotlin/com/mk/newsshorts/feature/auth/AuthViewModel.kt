@@ -1,5 +1,6 @@
 package com.mk.newsshorts.feature.auth
 
+import androidx.lifecycle.viewModelScope
 import com.mk.newsshorts.core.domain.auth.AuthClient
 import com.mk.newsshorts.core.model.auth.AuthFailure
 import com.mk.newsshorts.core.model.auth.AuthResult

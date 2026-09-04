@@ -1,5 +1,6 @@
 package com.mk.newsshorts.feature.search
 
+import androidx.lifecycle.viewModelScope
 import com.mk.newsshorts.core.model.search.isSearchable
 import com.mk.newsshorts.core.model.analytics.AnalyticsEvent
 import com.mk.newsshorts.core.domain.analytics.AnalyticsReporter
