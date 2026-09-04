@@ -52,7 +52,6 @@ import com.mk.newsshorts.feature.saved.SavedArticlesUiState
 import com.mk.newsshorts.presentation.localization.AppStrings
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.core.model.article.ArticleOpenOrigin
-import com.mk.newsshorts.feature.feed.FeedUiEvent
 import com.mk.newsshorts.navigation.Overlay
 
 /**

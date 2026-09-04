@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.backhandler.BackHandler
+import com.mk.newsshorts.core.model.article.ArticleOpenOrigin
 import com.mk.newsshorts.feature.auth.AuthUiEvent
 import com.mk.newsshorts.feature.auth.AuthUiState
 import com.mk.newsshorts.feature.auth.SignInScreen
@@ -28,7 +29,7 @@ import com.mk.newsshorts.feature.settings.SettingsUiEvent
 import com.mk.newsshorts.feature.settings.SettingsUiState
 import com.mk.newsshorts.navigation.Navigator
 import com.mk.newsshorts.navigation.Overlay
-import com.mk.newsshorts.presentation.ui.screen.ArticleDetailsScreen
+import com.mk.newsshorts.feature.feed.ArticleDetailsScreen
 import com.mk.newsshorts.presentation.ui.screen.LicensesScreen
 import com.mk.newsshorts.presentation.viewmodel.AppShellUiEvent
 
@@ -87,20 +88,22 @@ fun OverlayHost(
                 isSaved = savedArticlesUiState.articles.any {
                     it.articleUrl == topOverlay.article.articleUrl
                 },
-                onShellEvent = onShellEvent,
-                onSavedEvent = onSavedEvent,
+                onBack = { onShellEvent(AppShellUiEvent.CloseOverlay) },
+                onShare = { onShellEvent(AppShellUiEvent.ShareArticle(topOverlay.article)) },
+                onToggleSaved = { onSavedEvent(SavedArticlesUiEvent.Toggle(topOverlay.article)) },
+                onOpenSource = { onShellEvent(AppShellUiEvent.OpenArticleSource) },
                 modifier = Modifier.fillMaxSize()
             )
         }
         Overlay.Settings -> {
             SettingsScreen(
-                newsUiState = uiState,
+                newsLanguage = uiState.selectedLanguage,
                 settingsUiState = settingsUiState,
                 authUser = authUiState.authUser,
                 authInProgress = authUiState.authInProgress,
                 authError = authUiState.authError,
-                onFeedEvent = onFeedEvent,
-                onShellEvent = onShellEvent,
+                onNewsLanguageSelected = { onFeedEvent(FeedUiEvent.SelectLanguage(it)) },
+                onBack = { onShellEvent(AppShellUiEvent.CloseOverlay) },
                 onSettingsEvent = onSettingsEvent,
                 onOpenSignIn = { navigator.open(Overlay.SignIn) },
                 onSignOut = { onAuthEvent(AuthUiEvent.SignOut) },
@@ -112,7 +115,10 @@ fun OverlayHost(
         Overlay.SavedArticles -> {
             SavedArticlesScreen(
                 uiState = savedArticlesUiState,
-                onShellEvent = onShellEvent,
+                onBack = { onShellEvent(AppShellUiEvent.CloseOverlay) },
+                onOpenArticle = { article ->
+                    onShellEvent(AppShellUiEvent.OpenArticleDetails(article, ArticleOpenOrigin.SAVED))
+                },
                 onSavedEvent = onSavedEvent,
                 modifier = Modifier.fillMaxSize()
             )

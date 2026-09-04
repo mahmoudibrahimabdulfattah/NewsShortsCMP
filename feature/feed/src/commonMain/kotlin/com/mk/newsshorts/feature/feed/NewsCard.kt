@@ -1,4 +1,10 @@
-package com.mk.newsshorts.presentation.ui.components
+package com.mk.newsshorts.feature.feed
+
+import com.mk.newsshorts.presentation.ui.components.AppButton
+import com.mk.newsshorts.presentation.ui.components.feedSummaryMaxLines
+import com.mk.newsshorts.presentation.ui.components.feedTitleMaxLines
+import com.mk.newsshorts.presentation.ui.components.formatPublishedTime
+import com.mk.newsshorts.presentation.ui.components.isolateBidi
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween

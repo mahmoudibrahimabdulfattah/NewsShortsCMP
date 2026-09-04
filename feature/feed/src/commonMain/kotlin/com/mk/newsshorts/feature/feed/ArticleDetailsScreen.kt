@@ -1,7 +1,5 @@
-package com.mk.newsshorts.presentation.ui.screen
+package com.mk.newsshorts.feature.feed
 
-import com.mk.newsshorts.feature.saved.SavedArticlesUiEvent
-import com.mk.newsshorts.presentation.viewmodel.AppShellUiEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,7 +45,6 @@ import coil3.compose.AsyncImage
 import com.mk.newsshorts.core.model.NewsArticle
 import com.mk.newsshorts.presentation.localization.appStrings
 import com.mk.newsshorts.presentation.localization.categoryName
-import com.mk.newsshorts.feature.feed.FeedUiEvent
 import com.mk.newsshorts.presentation.ui.components.formatPublishedTime
 import com.mk.newsshorts.presentation.ui.components.isolateBidi
 import com.mk.newsshorts.presentation.ui.components.AppButton
@@ -68,8 +65,10 @@ import com.mk.newsshorts.presentation.ui.theme.PillShape
 fun ArticleDetailsScreen(
     article: NewsArticle,
     isSaved: Boolean,
-    onShellEvent: (AppShellUiEvent) -> Unit,
-    onSavedEvent: (SavedArticlesUiEvent) -> Unit,
+    onBack: () -> Unit,
+    onShare: () -> Unit,
+    onToggleSaved: () -> Unit,
+    onOpenSource: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -82,9 +81,9 @@ fun ArticleDetailsScreen(
     ) {
         DetailsTopBar(
             isSaved = isSaved,
-            onBack = { onShellEvent(AppShellUiEvent.CloseOverlay) },
-            onShare = { onShellEvent(AppShellUiEvent.ShareArticle(article)) },
-            onSave = { onSavedEvent(SavedArticlesUiEvent.Toggle(article)) },
+            onBack = onBack,
+            onShare = onShare,
+            onSave = onToggleSaved,
         )
         DetailsHeroImage(imageUrl = article.imageUrl?.value)
 
@@ -128,7 +127,7 @@ fun ArticleDetailsScreen(
             Spacer(modifier = Modifier.height(28.dp))
             AppButton(
                 text = strings.readAtSource,
-                onClick = { onShellEvent(AppShellUiEvent.OpenArticleSource) },
+                onClick = onOpenSource,
                 icon = Icons.AutoMirrored.Filled.OpenInNew,
                 modifier = Modifier.fillMaxWidth(),
             )
