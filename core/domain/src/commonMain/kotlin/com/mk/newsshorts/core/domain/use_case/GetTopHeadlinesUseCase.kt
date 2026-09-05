@@ -3,6 +3,7 @@ package com.mk.newsshorts.core.domain.use_case
 import com.mk.newsshorts.core.model.FeedPage
 import com.mk.newsshorts.core.model.NewsCategory
 import com.mk.newsshorts.core.model.NewsResult
+import com.mk.newsshorts.core.model.feed.CountryOption
 import com.mk.newsshorts.core.domain.repository.NewsRepository
 
 class GetTopHeadlinesUseCase(
@@ -84,8 +85,8 @@ class GetTopHeadlinesUseCase(
 
 data class GetTopHeadlinesRequest(
     val category: NewsCategory = NewsCategory.GENERAL,
-    val country: String = "gb",
-    val countryName: String = "United Kingdom",
+    val country: String = CountryOption.EGYPT.code,
+    val countryName: String = CountryOption.EGYPT.displayName,
     val language: String? = null,
     val useCountry: Boolean = false
 )

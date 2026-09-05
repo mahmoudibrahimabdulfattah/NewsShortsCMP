@@ -31,6 +31,7 @@ import com.mk.newsshorts.core.model.NewsResult
 import com.mk.newsshorts.core.domain.use_case.GetTopHeadlinesRequest
 import com.mk.newsshorts.core.domain.use_case.GetTopHeadlinesUseCase
 import com.mk.newsshorts.core.model.analytics.AnalyticsEvent
+import com.mk.newsshorts.core.model.settings.AppPreferences
 import com.mk.newsshorts.core.domain.analytics.AnalyticsReporter
 import com.mk.newsshorts.presentation.localization.AppLocale
 import com.mk.newsshorts.presentation.localization.AppStrings
@@ -176,6 +177,14 @@ internal fun FeedUiState.withLoadedFeed(
     )
 }
 
+private fun AppPreferences.languageOption(): LanguageOption {
+    val language = FeedLanguage.resolve(newsLanguage)
+    return LanguageOption.entries.find { it.code == language } ?: LanguageOption.ENGLISH
+}
+
+private fun AppPreferences.countryOption(): CountryOption =
+    CountryOption.entries.find { it.code == selectedCountry } ?: CountryOption.EGYPT
+
 class FeedViewModel(
     private val getTopHeadlinesUseCase: GetTopHeadlinesUseCase,
     private val settingsManager: SettingsManager,
@@ -191,7 +200,14 @@ class FeedViewModel(
     private val feedScope: CoroutineScope
         get() = scopeOverride ?: viewModelScope
 
-    private val mutableState: MutableStateFlow<FeedUiState> = MutableStateFlow(FeedUiState())
+    private val mutableState: MutableStateFlow<FeedUiState> = MutableStateFlow(
+        settingsManager.preferences.value.let { preferences ->
+            FeedUiState(
+                selectedCountry = preferences.countryOption(),
+                selectedLanguage = preferences.languageOption(),
+            )
+        }
+    )
     val uiState: StateFlow<FeedUiState> = mutableState.asStateFlow()
 
     private val mutableEffect: MutableSharedFlow<FeedUiEffect> = MutableSharedFlow()
@@ -221,11 +237,8 @@ class FeedViewModel(
 
     private fun handleFeedInvalidation(reason: InvalidationReason) {
         val preferences = settingsManager.preferences.value
-        val resolvedLanguage = FeedLanguage.resolve(preferences.newsLanguage)
-        val newsLanguage = LanguageOption.entries.find { it.code == resolvedLanguage }
-            ?: LanguageOption.ENGLISH
-        val country = CountryOption.entries.find { it.code == preferences.selectedCountry }
-            ?: mutableState.value.selectedCountry
+        val newsLanguage = preferences.languageOption()
+        val country = preferences.countryOption()
         val languageChanged = newsLanguage != mutableState.value.selectedLanguage
 
         if (languageChanged) categoryFeedMemory.clear()
@@ -270,11 +283,8 @@ class FeedViewModel(
             // One snapshot: reading nine separate flows left a window where
             // half of them had been answered and half had not.
             val stored = settingsManager.preferences.value
-            val resolvedLanguage = FeedLanguage.resolve(stored.newsLanguage)
-            val newsLanguage: LanguageOption =
-                LanguageOption.entries.find { it.code == resolvedLanguage } ?: LanguageOption.ENGLISH
-            val country: CountryOption = CountryOption.entries.find { it.code == stored.selectedCountry }
-                ?: CountryOption.UNITED_KINGDOM
+            val newsLanguage = stored.languageOption()
+            val country = stored.countryOption()
             val preferred: List<String> = settingsManager.preferredCategories()
             mutableState.update { state ->
                 state.copy(

@@ -96,7 +96,9 @@ class InboxColdStartRetryTest {
     }
 
     private class FixedSettings : SettingsPersistence {
-        private val state = MutableStateFlow(AppPreferences(newsLanguage = "ar"))
+        private val state = MutableStateFlow(
+            AppPreferences(newsLanguage = "ar", appLocale = "ar", selectedCountry = "eg")
+        )
         override val preferences: StateFlow<AppPreferences> = state.asStateFlow()
         override suspend fun saveAppLocale(localeCode: String) = Unit
         override suspend fun saveThemeMode(mode: String) = Unit

@@ -28,6 +28,7 @@ import com.mk.newsshorts.MainActivity
 import com.mk.newsshorts.R
 import com.mk.newsshorts.core.data.local.SettingsManager
 import com.mk.newsshorts.core.model.FeedLanguage
+import com.mk.newsshorts.core.model.feed.CountryOption
 import com.mk.newsshorts.core.model.NewsArticle
 import com.mk.newsshorts.core.model.NewsCategory
 import com.mk.newsshorts.core.model.NewsResult
@@ -54,9 +55,14 @@ class TopStoryWidget : GlanceAppWidget() {
             val koin = GlobalContext.get()
             val settingsManager = koin.get<SettingsManager>()
             val getTopHeadlines = koin.get<GetTopHeadlinesUseCase>()
-            val language = FeedLanguage.resolve(settingsManager.preferences.value.newsLanguage)
+            val preferences = settingsManager.preferences.value
+            val language = FeedLanguage.resolve(preferences.newsLanguage)
+            val country = CountryOption.entries.find { it.code == preferences.selectedCountry }
+                ?: CountryOption.EGYPT
             val request = GetTopHeadlinesRequest(
                 category = NewsCategory.GENERAL,
+                country = country.code,
+                countryName = country.displayName,
                 language = language,
                 useCountry = false,
             )

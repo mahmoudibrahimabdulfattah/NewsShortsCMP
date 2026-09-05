@@ -230,7 +230,12 @@ class OnboardingViewModelTest {
 
     private class FixedSettings(notificationsEnabled: Boolean) : SettingsPersistence {
         private val state = MutableStateFlow(
-            AppPreferences(notificationsEnabled = notificationsEnabled)
+            AppPreferences(
+                newsLanguage = "en",
+                appLocale = "en",
+                selectedCountry = "eg",
+                notificationsEnabled = notificationsEnabled,
+            )
         )
         override val preferences: StateFlow<AppPreferences> = state.asStateFlow()
         override suspend fun saveAppLocale(localeCode: String) = Unit

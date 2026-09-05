@@ -3,12 +3,13 @@ package com.mk.newsshorts.core.domain.repository
 import com.mk.newsshorts.core.model.FeedPage
 import com.mk.newsshorts.core.model.NewsCategory
 import com.mk.newsshorts.core.model.NewsResult
+import com.mk.newsshorts.core.model.feed.CountryOption
 import com.mk.newsshorts.core.model.search.SearchIndex
 
 interface NewsRepository {
     suspend fun fetchTopHeadlines(
         category: NewsCategory,
-        country: String = "gb"
+        country: String = CountryOption.EGYPT.code,
     ): NewsResult<FeedPage>
 
     suspend fun fetchTopHeadlinesByCountry(
