@@ -614,3 +614,31 @@ button wired to nothing renders perfectly and logs nothing. Rendering proves
 composition; only pressing proves wiring — and for anything that leaves the app,
 `adb logcat | grep "START u0 {act="` shows whether the intent actually fired,
 which a screenshot cannot.
+
+**Post-modularization device sweep.** Every feature was exercised by hand on the
+emulator once the phases were done, against the real Firebase project rather
+than a fake, and the state each check reads was verified on disk rather than on
+screen: `shared_prefs/news_shorts_prefs.xml` for settings and bookmarks, and
+`databases/firestore.*` for what actually reached the server. Reading the file
+is what distinguishes "the toggle moved" from "the toggle was written".
+
+Covered: Google sign-in through Credential Manager, sign-out, sign-in-link send
+(to an RFC 2606 `.invalid` address, so the whole Firebase call path runs and no
+mail is delivered to anyone), the pending-email store and its reset, saved
+articles added and removed, settings changed and read back after a force-stop,
+app language and country switched and reverted, notification toggles, the inbox,
+search, article details, share, and read-from-source. Bookmarks and settings
+survive sign-out and come back on sign-in, which is the union merge in
+`AccountSyncUseCase` doing its job.
+
+`uiautomator dump` beats screenshots for this. It gives element text with exact
+device-pixel bounds, so a tap can be aimed by name instead of by eye, and it
+reads back what the screen says without spending an image on it.
+
+**An ANR here was the machine, not the app.** Typing into search hung long
+enough for the system to offer to kill the app — but `lowmemorykiller` was
+culling system processes at the same moment and the Pixel Launcher was ANR-ing
+too, both of them starved by a Gradle daemon on a 16GB host. After
+`./gradlew --stop`, the same search returned six results instantly. Worth
+remembering before reading a UI hang on this emulator as an app defect:
+check `logcat | grep lowmemorykiller` first.
