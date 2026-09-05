@@ -99,20 +99,33 @@ class IngestionPipeline(
                 val candidates = (claimed + article.candidateCategories)
                     .filterTo(linkedSetOf(), NewsCategories.all::contains)
                     .ifEmpty { linkedSetOf(NewsCategories.GENERAL) }
+                // A source with no country of its own belongs in the general
+                // feed, which excludes country-tagged articles — so it is
+                // inserted untagged FIRST, fixing `articles.country` as null,
+                // and its extra tabs are added as memberships afterwards.
+                // Reversing the order would tag it and drop it out of the
+                // general feed entirely.
+                val countries: List<String?> = if (source.country == null) {
+                    listOf<String?>(null) + source.additionalCountries
+                } else {
+                    source.countries.toList()
+                }
                 var articleInserted = false
                 candidates.forEach { category ->
-                    val id = store.insertIfNew(
-                        title = article.title,
-                        url = article.url,
-                        description = article.description,
-                        imageUrl = article.imageUrl,
-                        sourceName = source.name,
-                        language = source.language,
-                        category = category,
-                        country = source.country,
-                        publishedAt = article.publishedAtMillis,
-                    )
-                    if (id != null) articleInserted = true
+                    countries.forEach { country ->
+                        val id = store.insertIfNew(
+                            title = article.title,
+                            url = article.url,
+                            description = article.description,
+                            imageUrl = article.imageUrl,
+                            sourceName = source.name,
+                            language = source.language,
+                            category = category,
+                            country = country,
+                            publishedAt = article.publishedAtMillis,
+                        )
+                        if (id != null) articleInserted = true
+                    }
                 }
                 if (articleInserted) inserted++
             }

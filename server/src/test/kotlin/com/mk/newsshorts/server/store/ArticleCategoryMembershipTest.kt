@@ -107,7 +107,7 @@ class ArticleCategoryMembershipTest {
                     ) VALUES
                         (1, 'Sports source title', 'https://example.com/legacy-sports',
                          'Sports description', NULL, NULL, 'Source',
-                         'en', 'sports', NULL, 2000, 1000),
+                         'en', 'sports', 'eg', 2000, 1000),
                         (2, 'Tech source title', 'https://example.com/legacy-tech',
                          'Tech description', NULL, NULL, 'Source',
                          'en', 'tech', NULL, 1000, 1000)
@@ -346,6 +346,20 @@ class ArticleCategoryMembershipTest {
         assertEquals(countAfterFirstStartup, countAfterSecondStartup)
         assertEquals(firstFeed, secondFeed)
         assertEquals(2, countAfterSecondStartup)
+        db.delete()
+    }
+
+    @Test
+    fun `country membership backfill preserves a legacy country feed`() {
+        val db = newDb("article-countries-legacy")
+        createLegacyArticlesDb(db)
+
+        val store = ArticleStore(db.absolutePath)
+
+        assertEquals(
+            listOf(1L),
+            store.feed("en", null, limit = 10, offset = 0, country = "eg").first.map { it.id },
+        )
         db.delete()
     }
 

@@ -62,6 +62,14 @@ object ArticleCategories : Table("article_categories") {
     override val primaryKey = PrimaryKey(articleId, category)
 }
 
+/** Country feeds where an article URL is allowed to appear. */
+object ArticleCountries : Table("article_countries") {
+    val articleId = long("article_id")
+    val country = varchar("country", 8).index()
+
+    override val primaryKey = PrimaryKey(articleId, country)
+}
+
 /** Categories an article is allowed to appear in after content verification. */
 object VerifiedArticleCategories : Table("verified_article_categories") {
     val articleId = long("article_id").index()
@@ -267,12 +275,18 @@ class ArticleStore(dbPath: String) {
             SchemaUtils.createMissingTablesAndColumns(
                 Articles, ArticleTexts, PushLog, FeedPages, FeedPlaced, FeedPageState,
                 SharedArticles, PushHistory, ArticleCategories, VerifiedArticleCategories,
-                ArticleClassifications, CategoryPublishReadiness,
+                ArticleCountries, ArticleClassifications, CategoryPublishReadiness,
             )
             exec(
                 """
                 INSERT OR IGNORE INTO article_categories (article_id, category)
                 SELECT id, category FROM articles
+                """.trimIndent()
+            )
+            exec(
+                """
+                INSERT OR IGNORE INTO article_countries (article_id, country)
+                SELECT id, country FROM articles WHERE country IS NOT NULL
                 """.trimIndent()
             )
             // Expand-only migration: every cached article starts in General
@@ -532,6 +546,12 @@ class ArticleStore(dbPath: String) {
                 it[articleId] = id
                 it[VerifiedArticleCategories.category] = NewsCategories.GENERAL
             }
+            country?.let { countryCode ->
+                ArticleCountries.insertIgnore {
+                    it[articleId] = id
+                    it[ArticleCountries.country] = countryCode
+                }
+            }
             return@transaction id
         }
 
@@ -539,9 +559,16 @@ class ArticleStore(dbPath: String) {
             .where { Articles.url eq url }
             .singleOrNull()
             ?.let { existing ->
+                val existingId = existing[Articles.id]
                 ArticleCategories.insertIgnore {
-                    it[articleId] = existing[Articles.id]
+                    it[articleId] = existingId
                     it[ArticleCategories.category] = category
+                }
+                country?.let { countryCode ->
+                    ArticleCountries.insertIgnore {
+                        it[articleId] = existingId
+                        it[ArticleCountries.country] = countryCode
+                    }
                 }
             }
         null
@@ -631,6 +658,7 @@ class ArticleStore(dbPath: String) {
         if (stale.isEmpty()) return@transaction 0
         ArticleTexts.deleteWhere { ArticleTexts.articleId inList stale }
         ArticleCategories.deleteWhere { ArticleCategories.articleId inList stale }
+        ArticleCountries.deleteWhere { ArticleCountries.articleId inList stale }
         VerifiedArticleCategories.deleteWhere { VerifiedArticleCategories.articleId inList stale }
         ArticleClassifications.deleteWhere { ArticleClassifications.articleId inList stale }
         Articles.deleteWhere { Articles.id inList stale }
@@ -1015,13 +1043,24 @@ class ArticleStore(dbPath: String) {
                     Articles.id,
                     VerifiedArticleCategories.articleId,
                 )
-            })
+            }).let { categoryJoin ->
+                if (country == null) {
+                    categoryJoin
+                } else {
+                    categoryJoin.join(
+                        ArticleCountries,
+                        JoinType.INNER,
+                        Articles.id,
+                        ArticleCountries.articleId,
+                    )
+                }
+            }
                 .join(ArticleTexts, JoinType.INNER, onColumn = Articles.id, otherColumn = ArticleTexts.articleId)
                 .selectAll()
                 .also { query ->
                     language?.let { query.andWhere { ArticleTexts.language eq it } }
                     category?.let { query.andWhere { VerifiedArticleCategories.category eq it } }
-                    country?.let { query.andWhere { Articles.country eq it } }
+                    country?.let { query.andWhere { ArticleCountries.country eq it } }
                     if (excludeCountryTagged) query.andWhere { Articles.country.isNull() }
                     query.andWhere { ArticleTexts.textSource neq TextSource.UNSERVED }
                 }

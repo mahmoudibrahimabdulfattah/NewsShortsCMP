@@ -9,7 +9,7 @@ enum class CountryOption(
     UNITED_KINGDOM(displayName = "United Kingdom", code = "gb", flag = "🇬🇧"),
     EGYPT(displayName = "Egypt", code = "eg", flag = "🇪🇬"),
     SAUDI_ARABIA(displayName = "Saudi Arabia", code = "sa", flag = "🇸🇦"),
-    UAE(displayName = "UAE", code = "ae", flag = "🇦🇪"),
+    UAE(displayName = "UAE & Gulf", code = "ae", flag = "🇦🇪"),
     GERMANY(displayName = "Germany", code = "de", flag = "🇩🇪"),
     FRANCE(displayName = "France", code = "fr", flag = "🇫🇷"),
     INDIA(displayName = "India", code = "in", flag = "🇮🇳"),

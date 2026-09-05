@@ -48,7 +48,14 @@ object FeedCatalog {
         // ---- Arabic: countries ----
         FeedSource("اليوم السابع", "https://www.youm7.com/rss/SectionRss?SectionID=65", "ar", "general", country = "eg"),
         FeedSource("المصري اليوم", "https://www.almasryalyoum.com/rss/rssfeeds", "ar", "general", country = "eg"),
-        FeedSource("الشرق الأوسط", "https://aawsat.com/feed", "ar", "general", country = "sa"),
+        FeedSource(
+            "الشرق الأوسط",
+            "https://aawsat.com/feed",
+            "ar",
+            "general",
+            country = "sa",
+            additionalCountries = setOf("ae"),
+        ),
 
         // ---- English: general ----
         FeedSource("BBC News", "https://feeds.bbci.co.uk/news/world/rss.xml", "en", "general"),
@@ -59,6 +66,7 @@ object FeedCatalog {
             "https://www.voanews.com/api/zrbopl-vomx-tpeovm_",
             "en",
             "general",
+            additionalCountries = setOf("ae"),
             excludeThirdPartyCredits = true,
         ),
 
@@ -126,7 +134,14 @@ object FeedCatalog {
         ),
         FeedSource("BBC UK", "https://feeds.bbci.co.uk/news/uk/rss.xml", "en", "general", country = "gb"),
         FeedSource("Egypt Independent", "https://www.egyptindependent.com/feed/", "en", "general", country = "eg"),
-        FeedSource("Saudi Gazette", "https://saudigazette.com.sa/rssFeed/74", "en", "general", country = "sa"),
+        FeedSource(
+            "Saudi Gazette",
+            "https://saudigazette.com.sa/rssFeed/74",
+            "en",
+            "general",
+            country = "sa",
+            additionalCountries = setOf("ae"),
+        ),
         FeedSource("The National", "https://www.thenationalnews.com/arc/outboundfeeds/rss/?outputType=xml", "en", "general", country = "ae"),
         FeedSource("DW", "https://rss.dw.com/rdf/rss-en-all", "en", "general", country = "de"),
         FeedSource("The Local Germany", "https://www.thelocal.de/feeds/rss.php", "en", "general", country = "de"),
@@ -145,7 +160,7 @@ object FeedCatalog {
     // The client exposes every category even when its only current source is in
     // another language, so generation and health checks must do the same.
     val categories: Set<String> = NewsCategories.all
-    val countries: Set<String> = sources.mapNotNull { it.country }.toSet()
+    val countries: Set<String> = sources.flatMapTo(linkedSetOf()) { it.countries }
 
     /**
      * Every country feed is offered in all of these, translating where a
