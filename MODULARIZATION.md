@@ -594,3 +594,23 @@ the JS one does.
 **Not done, deliberately:** the per-feature `AppStrings` split, which the plan
 gates on measured incremental build times, and moving effects to carry semantic
 values instead of localized prose, which the plan calls its own project.
+
+**A ViewModel's effects are dead until something collects them.** `NewsScreen`
+collected the feed's, settings', saved's and inbox's `uiEffect` — and not the
+shell's. `AppShellViewModel` owns sharing and opening an article's source, so
+both went into a `Channel` nobody read: the share button did nothing on the feed
+and in article details, and neither did "read from source". Broken since phase 2
+split the shell out of the feed, and shipped through nine further phases.
+
+Nothing catches this. The `when` inside each collector is exhaustive, so a *new*
+effect type on an already-collected flow fails the build — but a flow with no
+collector at all compiles, runs, and silently drops everything. The audit worth
+repeating: list every `val uiEffect` and match each to a `.uiEffect.collect`.
+Six declared, six collected, is the state now.
+
+**Smoke tests have to press the buttons.** Every phase here was checked on the
+emulator, and the check was "does the screen render and is logcat clean". A
+button wired to nothing renders perfectly and logs nothing. Rendering proves
+composition; only pressing proves wiring — and for anything that leaves the app,
+`adb logcat | grep "START u0 {act="` shows whether the intent actually fired,
+which a screenshot cannot.
