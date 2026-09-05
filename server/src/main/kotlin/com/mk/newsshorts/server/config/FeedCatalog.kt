@@ -53,6 +53,14 @@ object FeedCatalog {
         // ---- English: general ----
         FeedSource("BBC News", "https://feeds.bbci.co.uk/news/world/rss.xml", "en", "general"),
         FeedSource("The Guardian", "https://www.theguardian.com/world/rss", "en", "general"),
+        // VOA's opaque API feed IDs here and below come from its /rssfeeds index.
+        FeedSource(
+            "VOA Middle East",
+            "https://www.voanews.com/api/zrbopl-vomx-tpeovm_",
+            "en",
+            "general",
+            excludeThirdPartyCredits = true,
+        ),
 
         // ---- English: categories ----
         FeedSource("BBC Technology", "https://feeds.bbci.co.uk/news/technology/rss.xml", "en", "technology"),
@@ -61,6 +69,35 @@ object FeedCatalog {
         FeedSource("BBC Health", "https://feeds.bbci.co.uk/news/health/rss.xml", "en", "health"),
         FeedSource("BBC Entertainment", "https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml", "en", "entertainment"),
         FeedSource("BBC Sport", "https://feeds.bbci.co.uk/sport/rss.xml", "en", "sports"),
+        FeedSource(
+            "VOA Technology",
+            "https://www.voanews.com/api/zyritl-vomx-tpettmq",
+            "en",
+            "technology",
+            excludeThirdPartyCredits = true,
+        ),
+        FeedSource(
+            "VOA Economy",
+            "https://www.voanews.com/api/zyboql-vomx-tpetvmi",
+            "en",
+            "business",
+            excludeThirdPartyCredits = true,
+        ),
+        FeedSource(
+            "VOA Science & Health",
+            "https://www.voanews.com/api/ztbopl-vomx-tpekvmm",
+            "en",
+            "health",
+            additionalCategories = setOf("science"),
+            excludeThirdPartyCredits = true,
+        ),
+        FeedSource(
+            "VOA Arts & Culture",
+            "https://www.voanews.com/api/zpbovl-vomx-tpe_vmr",
+            "en",
+            "entertainment",
+            excludeThirdPartyCredits = true,
+        ),
         FeedSource("Sky Sports", "https://www.skysports.com/rss/12040", "en", "sports"),
         FeedSource("TechCrunch", "https://techcrunch.com/feed/", "en", "technology"),
         FeedSource("Engadget", "https://www.engadget.com/rss.xml", "en", "technology"),
@@ -79,6 +116,14 @@ object FeedCatalog {
         // ---- English: countries ----
         // Every country the app offers needs at least one source; readers who
         // picked the other language get these translated.
+        FeedSource(
+            "VOA",
+            "https://www.voanews.com/api/zqboml-vomx-tpeivmy",
+            "en",
+            "general",
+            country = "us",
+            excludeThirdPartyCredits = true,
+        ),
         FeedSource("BBC UK", "https://feeds.bbci.co.uk/news/uk/rss.xml", "en", "general", country = "gb"),
         FeedSource("Egypt Independent", "https://www.egyptindependent.com/feed/", "en", "general", country = "eg"),
         FeedSource("Saudi Gazette", "https://saudigazette.com.sa/rssFeed/74", "en", "general", country = "sa"),

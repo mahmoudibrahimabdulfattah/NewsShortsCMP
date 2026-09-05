@@ -69,7 +69,9 @@ class IngestionPipeline(
     suspend fun runCycle(): CycleReport {
         var inserted = 0
         val emptySources = mutableListOf<String>()
+        val fullyFilteredSources = mutableListOf<String>()
         val snapshots = FeedCatalog.sources.map { source -> fetcher.fetch(source) }
+        val thirdPartyCreditsDropped = snapshots.sumOf { it.thirdPartyCreditsDropped }
         val audit = auditSources(snapshots)
         val rejectedSections = audit.rejected.mapTo(mutableSetOf()) { it.sourceName }
         snapshots.forEach { snapshot ->
@@ -77,7 +79,17 @@ class IngestionPipeline(
             val articles = snapshot.articles
             // Sites behind bot protection answer 200 with an HTML challenge, so
             // a dead source looks identical to a quiet one unless it is named.
-            if (articles.isEmpty()) emptySources += source.name
+            // A source whose items were all filtered did return something, so it
+            // is not "empty" — but it still published nothing, and if its feed
+            // ever changes shape so the credit matcher swallows everything, that
+            // has to be as loud as a dead feed rather than one info line.
+            if (articles.isEmpty()) {
+                if (snapshot.thirdPartyCreditsDropped == 0) {
+                    emptySources += source.name
+                } else {
+                    fullyFilteredSources += source.name
+                }
+            }
             // A rejected feed is still carrying the publisher's real news — it
             // is only lying about which section it is. Dropping it would throw
             // away the articles to punish the label, so the section claim is
@@ -106,6 +118,13 @@ class IngestionPipeline(
             }
         }
         log.info("Fetched ${FeedCatalog.sources.size} feeds, $inserted new articles")
+        log.info("Dropped $thirdPartyCreditsDropped items with third-party agency credits")
+        if (fullyFilteredSources.isNotEmpty()) {
+            log.warn(
+                "${fullyFilteredSources.size} feeds published nothing because every item " +
+                    "carried a third-party credit: ${fullyFilteredSources.joinToString()}"
+            )
+        }
         if (emptySources.isNotEmpty()) {
             log.warn("${emptySources.size} feeds returned nothing: ${emptySources.joinToString()}")
         }

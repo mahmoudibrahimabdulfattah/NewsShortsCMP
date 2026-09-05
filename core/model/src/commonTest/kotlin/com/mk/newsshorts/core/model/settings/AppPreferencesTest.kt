@@ -45,8 +45,19 @@ class AppPreferencesTest {
     }
 
     @Test
-    fun `an English US device falls back to Egypt for an unavailable country`() {
+    fun `an English US device keeps its supported region`() {
         val prefs = preferences()
+
+        assertEquals("en", prefs.newsLanguage)
+        assertEquals("en", prefs.appLocale)
+        assertEquals("us", prefs.selectedCountry)
+    }
+
+    @Test
+    fun `a device in an unavailable region falls back to Egypt`() {
+        val prefs = preferences(
+            deviceLocale = DeviceLocale(languageTag = "en-NZ", region = "nz"),
+        )
 
         assertEquals("en", prefs.newsLanguage)
         assertEquals("en", prefs.appLocale)

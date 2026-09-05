@@ -17,6 +17,7 @@ data class SourceSnapshot(
     val source: FeedSource,
     val articles: List<RawArticle>,
     val effectiveUrl: String,
+    val thirdPartyCreditsDropped: Int = 0,
 )
 
 fun interface FeedFetcher {
@@ -56,10 +57,22 @@ class RssFetcher : FeedFetcher {
         try {
             val opened = open(source.url)
             val feed = opened.stream.use { SyndFeedInput().build(XmlReader(it)) }
+            var thirdPartyCreditsDropped = 0
+            val articles = feed.entries.mapNotNull { entry ->
+                val descriptionHtml = entry.descriptionHtml()
+                val descriptionText = descriptionHtml?.stripHtml()
+                if (shouldExcludeForThirdPartyCredits(source, entry.title.orEmpty(), descriptionText)) {
+                    thirdPartyCreditsDropped++
+                    null
+                } else {
+                    entry.toRawArticle(source, descriptionHtml)
+                }
+            }
             SourceSnapshot(
                 source = source,
-                articles = feed.entries.mapNotNull { entry -> entry.toRawArticle(source) },
+                articles = articles,
                 effectiveUrl = opened.effectiveUrl,
+                thirdPartyCreditsDropped = thirdPartyCreditsDropped,
             )
         } catch (e: Exception) {
             log.warn("Fetch failed for ${source.name}: ${e.message}")
@@ -89,23 +102,27 @@ class RssFetcher : FeedFetcher {
         return OpenedFeed(connection.inputStream, connection.url.toString())
     }
 
-    private fun SyndEntry.toRawArticle(source: FeedSource): RawArticle? {
+    private fun SyndEntry.toRawArticle(source: FeedSource, descriptionHtml: String?): RawArticle? {
         val link = link?.trim().takeUnless { it.isNullOrEmpty() } ?: return null
         val title = title?.trim().takeUnless { it.isNullOrEmpty() } ?: return null
-        // Some feeds leave <description> empty and put the article body in
-        // <content:encoded> instead; without it those entries reach the
-        // summarizer with nothing but a headline.
-        val descriptionHtml = description?.value?.takeUnless { it.isBlank() }
-            ?: contents.firstOrNull { !it.value.isNullOrBlank() }?.value
+        val descriptionText = descriptionHtml?.stripHtml()
         return RawArticle(
             title = title,
             url = link,
-            description = descriptionHtml?.stripHtml()?.take(2000),
+            description = descriptionText?.take(2000),
             imageUrl = extractImage(descriptionHtml),
             publishedAtMillis = (publishedDate ?: updatedDate)?.time ?: System.currentTimeMillis(),
             source = source,
             candidateCategories = inferArticleCategories(categories.map { it.name }, link),
         )
+    }
+
+    private fun SyndEntry.descriptionHtml(): String? {
+        // Some feeds leave <description> empty and put the article body in
+        // <content:encoded> instead; without it those entries reach the
+        // summarizer with nothing but a headline.
+        return description?.value?.takeUnless { it.isBlank() }
+            ?: contents.firstOrNull { !it.value.isNullOrBlank() }?.value
     }
 
     private fun SyndEntry.extractImage(descriptionHtml: String?): String? {
@@ -128,6 +145,40 @@ class RssFetcher : FeedFetcher {
         private const val MAX_REDIRECTS = 5
     }
 }
+
+internal fun shouldExcludeForThirdPartyCredits(
+    source: FeedSource,
+    title: String,
+    description: String?,
+): Boolean = source.excludeThirdPartyCredits && carriesThirdPartyAgencyCredit(title, description)
+
+private fun carriesThirdPartyAgencyCredit(title: String, description: String?): Boolean {
+    val text = listOfNotNull(title, description).joinToString(" ")
+    return LONG_AGENCY_CREDIT.containsMatchIn(text) ||
+        VOA_SHARED_REPORTING_CREDIT.containsMatchIn(text) ||
+        SHORT_AGENCY_CREDIT.containsMatchIn(text)
+}
+
+private const val TOKEN_START = "(?<![\\p{L}\\p{N}_])"
+private const val TOKEN_END = "(?![\\p{L}\\p{N}_])"
+
+private val LONG_AGENCY_CREDIT = Regex(
+    "$TOKEN_START(?:(?:the\\s+)?associated\\s+press|reuters|agence\\s+france-presse)$TOKEN_END",
+    RegexOption.IGNORE_CASE,
+)
+private val VOA_SHARED_REPORTING_CREDIT = Regex(
+    "$TOKEN_START(?:some\\s+information\\s+for\\s+this\\s+report\\s+came\\s+from)$TOKEN_END" +
+        ".{0,300}$TOKEN_START(?:AP|AFP)$TOKEN_END",
+    setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+)
+private val SHORT_AGENCY_CREDIT = Regex(
+    "(?:$TOKEN_START(?:from|via|by|according\\s+to|credited\\s+to|reporting\\s+by|" +
+        "with\\s+reporting\\s+from|information\\s+from)$TOKEN_END.{0,80}" +
+        "$TOKEN_START(?:AP|AFP)$TOKEN_END)|" +
+        "(?:$TOKEN_START(?:AP|AFP)$TOKEN_END.{0,80}" +
+        "$TOKEN_START(?:contributed|reported|reporting|provided|news\\s+agency)$TOKEN_END)",
+    setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+)
 
 private val LABEL_TOKEN = Regex("[^\\p{L}\\p{N}_]+")
 

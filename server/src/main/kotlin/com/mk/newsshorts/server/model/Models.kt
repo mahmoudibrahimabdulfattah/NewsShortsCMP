@@ -9,6 +9,8 @@ data class FeedSource(
     val country: String? = null,
     /** Extra sections for a genuinely combined feed such as science + health. */
     val additionalCategories: Set<String> = emptySet(),
+    /** Drop feed items credited to third-party agencies before ingestion. */
+    val excludeThirdPartyCredits: Boolean = false,
 ) {
     val categories: Set<String>
         get() = linkedSetOf(category).apply { addAll(additionalCategories) }

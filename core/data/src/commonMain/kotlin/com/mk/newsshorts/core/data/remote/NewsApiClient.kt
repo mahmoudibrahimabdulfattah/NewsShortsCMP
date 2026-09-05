@@ -150,6 +150,7 @@ class NewsApiClient(
             "eg", "egypt" -> "eg"
             "sa", "saudi arabia" -> "sa"
             "ae", "uae" -> "ae"
+            "us", "united states" -> "us"
             "gb", "uk", "united kingdom" -> "gb"
             "de", "germany" -> "de"
             "fr", "france" -> "fr"
