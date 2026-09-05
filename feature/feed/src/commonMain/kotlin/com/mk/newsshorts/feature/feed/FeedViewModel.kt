@@ -21,6 +21,7 @@ import com.mk.newsshorts.core.domain.feed.shouldLoadNextPage
 import com.mk.newsshorts.core.domain.ranking.deprioritiseSeen
 import com.mk.newsshorts.core.domain.sync.SyncPublisher
 import com.mk.newsshorts.core.model.sync.toSyncedSettings
+import com.mk.newsshorts.core.model.FeedLanguage
 import com.mk.newsshorts.core.model.FeedPage
 import com.mk.newsshorts.core.model.NewsArticle
 import com.mk.newsshorts.core.model.NewsCategory
@@ -220,8 +221,9 @@ class FeedViewModel(
 
     private fun handleFeedInvalidation(reason: InvalidationReason) {
         val preferences = settingsManager.preferences.value
-        val newsLanguage = LanguageOption.entries.find { it.code == preferences.newsLanguage }
-            ?: mutableState.value.selectedLanguage
+        val resolvedLanguage = FeedLanguage.resolve(preferences.newsLanguage)
+        val newsLanguage = LanguageOption.entries.find { it.code == resolvedLanguage }
+            ?: LanguageOption.ENGLISH
         val country = CountryOption.entries.find { it.code == preferences.selectedCountry }
             ?: mutableState.value.selectedCountry
         val languageChanged = newsLanguage != mutableState.value.selectedLanguage
@@ -268,10 +270,11 @@ class FeedViewModel(
             // One snapshot: reading nine separate flows left a window where
             // half of them had been answered and half had not.
             val stored = settingsManager.preferences.value
-            val newsLanguage: LanguageOption = LanguageOption.entries.find { it.code == stored.newsLanguage }
-                ?: LanguageOption.ENGLISH
+            val resolvedLanguage = FeedLanguage.resolve(stored.newsLanguage)
+            val newsLanguage: LanguageOption =
+                LanguageOption.entries.find { it.code == resolvedLanguage } ?: LanguageOption.ENGLISH
             val country: CountryOption = CountryOption.entries.find { it.code == stored.selectedCountry }
-                ?: CountryOption.UNITED_STATES
+                ?: CountryOption.UNITED_KINGDOM
             val preferred: List<String> = settingsManager.preferredCategories()
             mutableState.update { state ->
                 state.copy(

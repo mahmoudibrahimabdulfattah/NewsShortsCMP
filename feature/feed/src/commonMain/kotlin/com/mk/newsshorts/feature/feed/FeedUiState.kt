@@ -13,7 +13,7 @@ data class FeedUiState(
     val errorMessage: String? = null,
     val isRefreshing: Boolean = false,
     val isBackgroundRefreshing: Boolean = false,
-    val selectedCountry: CountryOption = CountryOption.UNITED_STATES,
+    val selectedCountry: CountryOption = CountryOption.UNITED_KINGDOM,
     val selectedLanguage: LanguageOption = LanguageOption.ENGLISH,
     val isOfflineMode: Boolean = false,
     /**

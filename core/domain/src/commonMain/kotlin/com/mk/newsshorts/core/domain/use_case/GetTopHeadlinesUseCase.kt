@@ -84,8 +84,8 @@ class GetTopHeadlinesUseCase(
 
 data class GetTopHeadlinesRequest(
     val category: NewsCategory = NewsCategory.GENERAL,
-    val country: String = "us",
-    val countryName: String = "United States",
+    val country: String = "gb",
+    val countryName: String = "United Kingdom",
     val language: String? = null,
     val useCountry: Boolean = false
 )

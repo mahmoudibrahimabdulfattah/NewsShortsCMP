@@ -25,13 +25,20 @@ class AppPreferencesTest {
 
         assertEquals("en", prefs.newsLanguage)
         assertEquals("en", prefs.appLocale)
-        assertEquals("us", prefs.selectedCountry)
+        assertEquals("gb", prefs.selectedCountry)
         assertEquals("system", prefs.themeMode)
         assertEquals("default", prefs.textScale)
         assertTrue(prefs.notificationsEnabled)
         assertTrue(prefs.notifyBreaking)
         assertTrue(prefs.notifyTopStory)
         assertTrue(prefs.notifyReminder)
+    }
+
+    @Test
+    fun `a legacy news language resolves to the published default`() {
+        val prefs = readAppPreferences(storage(KEY_NEWS_LANGUAGE to "fr"))
+
+        assertEquals("en", prefs.newsLanguage)
     }
 
     @Test

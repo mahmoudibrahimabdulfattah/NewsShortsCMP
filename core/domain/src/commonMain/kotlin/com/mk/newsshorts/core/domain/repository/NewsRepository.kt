@@ -8,7 +8,7 @@ import com.mk.newsshorts.core.model.search.SearchIndex
 interface NewsRepository {
     suspend fun fetchTopHeadlines(
         category: NewsCategory,
-        country: String = "us"
+        country: String = "gb"
     ): NewsResult<FeedPage>
 
     suspend fun fetchTopHeadlinesByCountry(

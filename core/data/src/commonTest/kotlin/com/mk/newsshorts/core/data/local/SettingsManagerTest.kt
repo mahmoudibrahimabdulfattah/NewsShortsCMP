@@ -116,6 +116,17 @@ class SettingsManagerTest {
     }
 
     @Test
+    fun `applying a legacy remote language stores the published default`() = runTest {
+        val storage = InMemorySettingsStorage()
+        val manager = SettingsManager(storage)
+
+        manager.apply(chosen.copy(newsLanguage = "de"))
+
+        assertEquals("en", manager.preferences.value.newsLanguage)
+        assertEquals("en", SettingsManager(storage).preferences.value.newsLanguage)
+    }
+
+    @Test
     fun `a flag stored as anything but true reads as off`() = runTest {
         // The flags are strings on disk. A truncated or shape-changed write
         // must not read as enabled.

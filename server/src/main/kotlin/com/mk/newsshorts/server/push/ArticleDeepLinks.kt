@@ -77,7 +77,6 @@ object ArticleDeepLinks {
         url = article.url,
         title = article.title,
         summary = summary,
-        imageUrl = article.imageUrl,
         sourceName = article.sourceName,
         category = article.category,
         publishedAt = article.publishedAt,
@@ -98,7 +97,6 @@ object ArticleDeepLinks {
         url: String,
         title: String,
         summary: String,
-        imageUrl: String?,
         sourceName: String,
         category: String,
         publishedAt: Long,
@@ -108,7 +106,6 @@ object ArticleDeepLinks {
         append("?url=").append(encode(url))
         append("&title=").append(encode(title))
         if (summary.isNotEmpty()) append("&summary=").append(encode(summary))
-        imageUrl?.takeIf { it.isNotBlank() }?.let { append("&image=").append(encode(it)) }
         append("&source=").append(encode(sourceName))
         append("&category=").append(encode(category))
         append("&published=").append(publishedAt)

@@ -22,7 +22,6 @@
   }
   h1 { font-size: 26px; line-height: 1.35; margin: 16px 0 12px; }
   .meta { font-size: 14px; opacity: .7; margin-bottom: 18px; }
-  img.hero { width: 100%; border-radius: 14px; margin-bottom: 18px; display: none; }
   p.summary { font-size: 17px; opacity: .9; }
   .note { font-size: 13px; opacity: .5; margin: 18px 0 28px; }
   a.button {
@@ -42,7 +41,6 @@
   <span class="badge" id="category" hidden></span>
   <h1 id="title">…</h1>
   <div class="meta" id="meta"></div>
-  <img class="hero" id="hero" alt="">
   <p class="summary" id="summary"></p>
   <p class="note" id="note"></p>
 
@@ -65,7 +63,6 @@
   var articleUrl = webUrl(get("url"));
   var title = get("title");
   var summary = get("summary");
-  var image = webUrl(get("image"));
   var source = get("source");
   var category = get("category");
   var published = parseInt(get("published"), 10);
@@ -93,8 +90,6 @@
   text("title", title || copy.fallbackTitle);
   text("summary", summary);
   if (category) { var c = document.getElementById("category"); c.textContent = category; c.hidden = false; }
-  if (image) { var h = document.getElementById("hero"); h.src = image; h.style.display = "block"; }
-
   var meta = [];
   if (source) meta.push(source);
   if (published > 0) {

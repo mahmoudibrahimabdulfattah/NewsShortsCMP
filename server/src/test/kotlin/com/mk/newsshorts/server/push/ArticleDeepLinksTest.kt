@@ -36,7 +36,7 @@ class ArticleDeepLinksTest {
         assertEquals(
             "newsshorts://article?url=https%3A%2F%2Fwww.reuters.com%2Fworld%2Fexample" +
                 "&title=Test%20Headline&summary=A%20short%20summary." +
-                "&image=https%3A%2F%2Fexample.com%2Fa.jpg&source=Reuters" +
+                "&source=Reuters" +
                 "&category=technology&published=1754870000000",
             ArticleDeepLinks.build(article()),
         )
@@ -66,8 +66,8 @@ class ArticleDeepLinksTest {
     }
 
     @Test
-    fun `omits an absent image`() {
-        assertTrue("image=" !in ArticleDeepLinks.build(article(imageUrl = null)))
+    fun `omits publisher images`() {
+        assertTrue("image=" !in ArticleDeepLinks.build(article()))
     }
 
     @Test

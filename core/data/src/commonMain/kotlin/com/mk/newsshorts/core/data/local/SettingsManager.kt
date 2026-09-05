@@ -1,5 +1,6 @@
 package com.mk.newsshorts.core.data.local
 
+import com.mk.newsshorts.core.model.FeedLanguage
 import com.mk.newsshorts.core.model.settings.AppPreferences
 import com.mk.newsshorts.core.model.settings.DEFAULT_APP_LOCALE
 import com.mk.newsshorts.core.model.settings.DEFAULT_COUNTRY
@@ -56,8 +57,9 @@ class SettingsManager(
     override val preferences: StateFlow<AppPreferences> = preferencesState.asStateFlow()
 
     suspend fun saveNewsLanguage(languageCode: String) {
-        settingsStorage.putString(KEY_NEWS_LANGUAGE, languageCode)
-        preferencesState.update { it.copy(newsLanguage = languageCode) }
+        val language = FeedLanguage.resolve(languageCode)
+        settingsStorage.putString(KEY_NEWS_LANGUAGE, language)
+        preferencesState.update { it.copy(newsLanguage = language) }
     }
 
     override suspend fun saveAppLocale(localeCode: String) {
@@ -101,16 +103,17 @@ class SettingsManager(
     }
 
     suspend fun apply(preferences: AppPreferences) {
-        settingsStorage.putString(KEY_NEWS_LANGUAGE, preferences.newsLanguage)
-        settingsStorage.putString(KEY_APP_LOCALE, preferences.appLocale)
-        settingsStorage.putString(KEY_SELECTED_COUNTRY, preferences.selectedCountry)
-        settingsStorage.putString(KEY_THEME_MODE, preferences.themeMode)
-        settingsStorage.putString(KEY_TEXT_SCALE, preferences.textScale)
-        settingsStorage.putString(NotificationPreferenceKeys.ENABLED, preferences.notificationsEnabled.toString())
-        settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_BREAKING, preferences.notifyBreaking.toString())
-        settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_TOP_STORY, preferences.notifyTopStory.toString())
-        settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_REMINDER, preferences.notifyReminder.toString())
-        preferencesState.value = preferences
+        val resolved = preferences.copy(newsLanguage = FeedLanguage.resolve(preferences.newsLanguage))
+        settingsStorage.putString(KEY_NEWS_LANGUAGE, resolved.newsLanguage)
+        settingsStorage.putString(KEY_APP_LOCALE, resolved.appLocale)
+        settingsStorage.putString(KEY_SELECTED_COUNTRY, resolved.selectedCountry)
+        settingsStorage.putString(KEY_THEME_MODE, resolved.themeMode)
+        settingsStorage.putString(KEY_TEXT_SCALE, resolved.textScale)
+        settingsStorage.putString(NotificationPreferenceKeys.ENABLED, resolved.notificationsEnabled.toString())
+        settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_BREAKING, resolved.notifyBreaking.toString())
+        settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_TOP_STORY, resolved.notifyTopStory.toString())
+        settingsStorage.putString(NotificationPreferenceKeys.NOTIFY_REMINDER, resolved.notifyReminder.toString())
+        preferencesState.value = resolved
     }
 
     /**

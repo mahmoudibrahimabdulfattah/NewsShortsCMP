@@ -41,8 +41,9 @@ class SharePageTest {
 
         assertContains(html, """<meta property="og:title" content="Cairo metro line opens">""")
         assertContains(html, """<meta property="og:type" content="article">""")
-        assertContains(html, """<meta property="og:image" content="https://example.com/a.jpg">""")
-        assertContains(html, """<meta name="twitter:card" content="summary_large_image">""")
+        assertContains(html, """<meta name="twitter:card" content="summary">""")
+        assertFalse(html.contains("og:image"), "publisher image reached open graph markup")
+        assertFalse(html.contains("class=\"hero\""), "publisher image reached the rendered body")
         assertContains(html, "og:description")
         assertContains(html, "The third line opened this morning")
     }
@@ -59,13 +60,13 @@ class SharePageTest {
         assertContains(html, """<link rel="canonical" href="$expected">""")
     }
 
-    /** Without an image X shows a small card, and a large-image tag is a lie. */
+    /** Article image presence never changes the text-first X card. */
     @Test
     fun `falls back to a small twitter card when there is no image`() {
         val html = render(article(imageUrl = null))
 
         assertContains(html, """<meta name="twitter:card" content="summary">""")
-        assertFalse(html.contains("og:image"), "og:image was emitted without an image")
+        assertFalse(html.contains("og:image"), "og:image was emitted")
     }
 
     /**
@@ -91,12 +92,9 @@ class SharePageTest {
     /** The same allowlist the app applies before handing a URL to a browser. */
     @Test
     fun `drops urls that are not http`() {
-        val html = render(
-            article(url = "javascript:alert(1)", imageUrl = "data:text/html,<script>")
-        )
+        val html = render(article(url = "javascript:alert(1)"))
 
         assertFalse(html.contains("javascript:"), "a javascript: URL reached an href")
-        assertFalse(html.contains("data:text/html"), "a data: URL reached a src")
     }
 
     @Test
@@ -145,6 +143,7 @@ class SharePageTest {
         assertTrue(href.startsWith("newsshorts://article?"), href)
         assertContains(href, "src=share")
         assertContains(href, "url=https%3A%2F%2Fexample.com%2Fstory")
+        assertFalse(href.contains("image="), "publisher image reached the app hand-off link")
     }
 
     @Test

@@ -51,7 +51,6 @@ object SharePage {
         val copy = Copy.of(article.language)
         val canonical = urlFor(article, siteBaseUrl)
         val description = article.summary.trim().truncateOnWord(DESCRIPTION_CHARS)
-        val image = article.imageUrl?.takeIf { it.isWebUrl() }
         val source = article.url.takeIf { it.isWebUrl() }
         val published = Instant.ofEpochMilli(article.publishedAt)
 
@@ -77,19 +76,13 @@ object SharePage {
             property("og:title", article.title)
             property("og:description", description)
             property("og:url", canonical)
-            if (image != null) {
-                property("og:image", image)
-                property("og:image:alt", article.title)
-            }
             property("article:published_time", ISO_INSTANT_SECONDS.format(published))
             property("article:section", article.category)
 
-            // The only twitter tag worth its bytes: X reads og:title, og:description
-            // and og:image when the twitter equivalents are absent, and at tens of
-            // thousands of pages a second copy of the summary is real weight.
-            // summary_large_image only renders when there is an image; without one
-            // X falls back to a small card, which is what `summary` gives.
-            meta(name = "twitter:card", content = if (image != null) "summary_large_image" else "summary")
+            // X reads og:title and og:description when their twitter equivalents
+            // are absent. Publisher images are deliberately excluded, so every
+            // page requests the plain text-first summary card.
+            meta(name = "twitter:card", content = "summary")
 
             append("</head>\n<body>\n<main class=\"card\">\n")
             append("<div class=\"brand\"><span class=\"dot\"></span><span>")
@@ -101,10 +94,6 @@ object SharePage {
             append("<div class=\"meta\">")
                 .append(metaLine(article, published, copy).escapeHtml())
                 .append("</div>\n")
-            if (image != null) {
-                append("<img class=\"hero\" src=\"").append(image.escapeHtml())
-                    .append("\" alt=\"\" loading=\"lazy\">\n")
-            }
             if (article.summary.isNotBlank()) {
                 append("<p class=\"summary\">").append(article.summary.trim().escapeHtml()).append("</p>\n")
                 append("<p class=\"note\">").append(copy.note.escapeHtml()).append("</p>\n")
@@ -192,7 +181,6 @@ object SharePage {
             url = article.url,
             title = article.title,
             summary = article.summary,
-            imageUrl = article.imageUrl,
             sourceName = article.sourceName,
             category = article.category,
             publishedAt = article.publishedAt,
@@ -356,7 +344,6 @@ object SharePage {
         }
         h1 { font-size: 26px; line-height: 1.35; margin: 16px 0 12px; }
         .meta { font-size: 14px; opacity: .7; margin-bottom: 18px; }
-        img.hero { width: 100%; border-radius: 14px; margin-bottom: 18px; }
         p.summary { font-size: 17px; opacity: .9; }
         p.note { font-size: 13px; opacity: .5; margin: 18px 0 28px; }
         a.button {

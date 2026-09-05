@@ -47,6 +47,19 @@ class PushSubscriptionSynchronizerTest {
         assertEquals(emptyList(), pushSubscriber.subscribedLanguages)
     }
 
+    @Test
+    fun `a legacy language subscribes to the published default topic`() = runTest {
+        val settings = RecordingSettingsPersistence(
+            AppPreferences(newsLanguage = "de", notificationsEnabled = true),
+        )
+        val pushSubscriber = RecordingPushSubscriber()
+
+        PushSubscriptionSynchronizer(settings, pushSubscriber, backgroundScope)
+        runCurrent()
+
+        assertEquals(listOf("en"), pushSubscriber.subscribedLanguages)
+    }
+
     private class RecordingSettingsPersistence(
         initial: AppPreferences,
     ) : SettingsPersistence {

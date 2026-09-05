@@ -5,7 +5,6 @@ enum class CountryOption(
     val code: String,
     val flag: String
 ) {
-    UNITED_STATES(displayName = "United States", code = "us", flag = "🇺🇸"),
     UNITED_KINGDOM(displayName = "United Kingdom", code = "gb", flag = "🇬🇧"),
     EGYPT(displayName = "Egypt", code = "eg", flag = "🇪🇬"),
     SAUDI_ARABIA(displayName = "Saudi Arabia", code = "sa", flag = "🇸🇦"),

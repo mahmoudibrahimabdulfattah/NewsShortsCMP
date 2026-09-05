@@ -9,6 +9,9 @@ import com.mk.newsshorts.core.contract.feed.NewsCategories
  *
  * Every URL here was verified to return items; prefer section feeds of large
  * outlets, which are stable, over aggregators.
+ *
+ * Sources with express AI/ML or automated text-and-data-mining prohibitions
+ * are excluded by policy and require documented permission before re-entry.
  */
 object FeedCatalog {
 
@@ -60,7 +63,6 @@ object FeedCatalog {
         FeedSource("BBC Sport", "https://feeds.bbci.co.uk/sport/rss.xml", "en", "sports"),
         FeedSource("Sky Sports", "https://www.skysports.com/rss/12040", "en", "sports"),
         FeedSource("TechCrunch", "https://techcrunch.com/feed/", "en", "technology"),
-        FeedSource("Ars Technica", "https://arstechnica.com/feed/", "en", "technology"),
         FeedSource("Engadget", "https://www.engadget.com/rss.xml", "en", "technology"),
         FeedSource("The Guardian Science", "https://www.theguardian.com/science/rss", "en", "science"),
         FeedSource("The Guardian Sport", "https://www.theguardian.com/uk/sport/rss", "en", "sports"),
@@ -77,7 +79,6 @@ object FeedCatalog {
         // ---- English: countries ----
         // Every country the app offers needs at least one source; readers who
         // picked the other language get these translated.
-        FeedSource("NYT U.S.", "https://rss.nytimes.com/services/xml/rss/nyt/US.xml", "en", "general", country = "us"),
         FeedSource("BBC UK", "https://feeds.bbci.co.uk/news/uk/rss.xml", "en", "general", country = "gb"),
         FeedSource("Egypt Independent", "https://www.egyptindependent.com/feed/", "en", "general", country = "eg"),
         FeedSource("Saudi Gazette", "https://saudigazette.com.sa/rssFeed/74", "en", "general", country = "sa"),
@@ -87,10 +88,8 @@ object FeedCatalog {
         FeedSource("France 24", "https://www.france24.com/en/rss", "en", "general", country = "fr"),
         FeedSource("RFI", "https://www.rfi.fr/en/rss", "en", "general", country = "fr"),
         FeedSource("BBC India", "https://feeds.bbci.co.uk/news/world/asia/india/rss.xml", "en", "general", country = "in"),
-        FeedSource("The Hindu", "https://www.thehindu.com/news/national/feeder/default.rss", "en", "general", country = "in"),
         FeedSource("BBC China", "https://feeds.bbci.co.uk/news/world/asia/china/rss.xml", "en", "general", country = "cn"),
         FeedSource("China Daily", "https://www.chinadaily.com.cn/rss/china_rss.xml", "en", "general", country = "cn"),
-        FeedSource("South China Morning Post", "https://www.scmp.com/rss/91/feed", "en", "general", country = "cn"),
         FeedSource("The Japan Times", "https://www.japantimes.co.jp/feed/", "en", "general", country = "jp"),
         FeedSource("ABC News Australia", "https://www.abc.net.au/news/feed/51120/rss.xml", "en", "general", country = "au"),
         FeedSource("Global News", "https://globalnews.ca/feed/", "en", "general", country = "ca"),
