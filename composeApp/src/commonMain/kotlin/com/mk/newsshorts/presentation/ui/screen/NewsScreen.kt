@@ -1,5 +1,6 @@
 package com.mk.newsshorts.presentation.ui.screen
 
+import com.mk.newsshorts.presentation.viewmodel.AppShellUiEffect
 import com.mk.newsshorts.presentation.viewmodel.AppShellUiEvent
 import com.mk.newsshorts.presentation.viewmodel.AppShellViewModel
 import androidx.compose.animation.AnimatedVisibility
@@ -139,6 +140,19 @@ fun NewsScreen(
                     shareContent(effect.title, effect.url, effect.chooserTitle)
                 is FeedUiEffect.ShowToast -> showToast(effect.message)
                 FeedUiEffect.RequestNotificationPermission -> requestNotificationPermission()
+            }
+        }
+    }
+    // The shell owns sharing and opening an article's source, so its effects
+    // need a collector exactly like the feed's. Without one they were sent into
+    // a Channel nobody read: the share button did nothing on the feed and in
+    // article details, and so did "read from source".
+    LaunchedEffect(Unit) {
+        shellViewModel.uiEffect.collect { effect ->
+            when (effect) {
+                is AppShellUiEffect.OpenUrl -> openUrl(effect.url)
+                is AppShellUiEffect.ShareContent ->
+                    shareContent(effect.title, effect.url, effect.chooserTitle)
             }
         }
     }
