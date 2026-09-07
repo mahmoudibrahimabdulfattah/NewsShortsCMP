@@ -1,5 +1,6 @@
 package com.mk.newsshorts.core.model.settings
 
+import com.mk.newsshorts.core.model.locale.DeviceLocale
 import com.mk.newsshorts.core.model.sync.toSyncedSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,19 +14,28 @@ import kotlin.test.assertTrue
  */
 class AppPreferencesTest {
 
+    private val englishUs = DeviceLocale(languageTag = "en-US", region = "us")
+
     /** Stands in for the real settings store without needing a platform backing store. */
     private fun storage(vararg entries: Pair<String, String>): (String, String) -> String {
         val map = entries.toMap()
         return { key, fallback -> map[key] ?: fallback }
     }
 
-    @Test
-    fun `an empty store reads as the documented defaults`() {
-        val prefs = readAppPreferences(storage())
+    private fun preferences(
+        vararg entries: Pair<String, String>,
+        deviceLocale: DeviceLocale = englishUs,
+    ): AppPreferences = readAppPreferences(storage(*entries), deviceLocale)
 
-        assertEquals("en", prefs.newsLanguage)
-        assertEquals("en", prefs.appLocale)
-        assertEquals("us", prefs.selectedCountry)
+    @Test
+    fun `an Arabic Egypt device gets Arabic Egypt defaults`() {
+        val prefs = preferences(
+            deviceLocale = DeviceLocale(languageTag = "ar-EG", region = "eg"),
+        )
+
+        assertEquals("ar", prefs.newsLanguage)
+        assertEquals("ar", prefs.appLocale)
+        assertEquals("eg", prefs.selectedCountry)
         assertEquals("system", prefs.themeMode)
         assertEquals("default", prefs.textScale)
         assertTrue(prefs.notificationsEnabled)
@@ -35,23 +45,55 @@ class AppPreferencesTest {
     }
 
     @Test
-    fun `stored values win over every default`() {
-        val prefs = readAppPreferences(
-            storage(
-                KEY_NEWS_LANGUAGE to "ar",
-                KEY_APP_LOCALE to "ar",
-                KEY_SELECTED_COUNTRY to "eg",
-                KEY_THEME_MODE to "dark",
-                KEY_TEXT_SCALE to "large",
-                NotificationPreferenceKeys.ENABLED to "false",
-                NotificationPreferenceKeys.NOTIFY_BREAKING to "false",
-                NotificationPreferenceKeys.NOTIFY_TOP_STORY to "true",
-                NotificationPreferenceKeys.NOTIFY_REMINDER to "false",
-            )
+    fun `an unsupported device country falls back to United States`() {
+        val prefs = preferences(
+            deviceLocale = DeviceLocale(languageTag = "en-MX", region = "mx"),
         )
 
-        assertEquals("ar", prefs.newsLanguage)
-        assertEquals("eg", prefs.selectedCountry)
+        assertEquals("en", prefs.newsLanguage)
+        assertEquals("en", prefs.appLocale)
+        assertEquals("us", prefs.selectedCountry)
+    }
+
+    @Test
+    fun `a French France device falls back languages and keeps its supported region`() {
+        val prefs = preferences(
+            deviceLocale = DeviceLocale(languageTag = "fr-FR", region = "fr"),
+        )
+
+        assertEquals("en", prefs.newsLanguage)
+        assertEquals("en", prefs.appLocale)
+        assertEquals("fr", prefs.selectedCountry)
+    }
+
+    @Test
+    fun `a stored picker language is not replaced by the device default`() {
+        val prefs = preferences(
+            KEY_NEWS_LANGUAGE to "de",
+            deviceLocale = DeviceLocale(languageTag = "ar-EG", region = "eg"),
+        )
+
+        assertEquals("de", prefs.newsLanguage)
+    }
+
+    @Test
+    fun `stored values win over every default`() {
+        val prefs = preferences(
+            KEY_NEWS_LANGUAGE to "en",
+            KEY_APP_LOCALE to "en",
+            KEY_SELECTED_COUNTRY to "sa",
+            KEY_THEME_MODE to "dark",
+            KEY_TEXT_SCALE to "large",
+            NotificationPreferenceKeys.ENABLED to "false",
+            NotificationPreferenceKeys.NOTIFY_BREAKING to "false",
+            NotificationPreferenceKeys.NOTIFY_TOP_STORY to "true",
+            NotificationPreferenceKeys.NOTIFY_REMINDER to "false",
+            deviceLocale = DeviceLocale(languageTag = "ar-EG", region = "eg"),
+        )
+
+        assertEquals("en", prefs.newsLanguage)
+        assertEquals("en", prefs.appLocale)
+        assertEquals("sa", prefs.selectedCountry)
         assertEquals("dark", prefs.themeMode)
         assertEquals("large", prefs.textScale)
         assertFalse(prefs.notificationsEnabled)
@@ -64,9 +106,7 @@ class AppPreferencesTest {
     fun `anything that is not the string true is false`() {
         // The flags are stored as "true"/"false" strings, so a truncated or
         // shape-changed write must not read as enabled.
-        val prefs = readAppPreferences(
-            storage(NotificationPreferenceKeys.NOTIFY_BREAKING to "TRUE")
-        )
+        val prefs = preferences(NotificationPreferenceKeys.NOTIFY_BREAKING to "TRUE")
 
         assertFalse(prefs.notifyBreaking)
     }
@@ -103,12 +143,10 @@ class AppPreferencesTest {
         // from the UI state, which holds hardcoded defaults until
         // loadSavedSettings finishes. A sign-in landing first pushed English,
         // US and "system" over the reader's actual choices.
-        val stored = readAppPreferences(
-            storage(
-                KEY_NEWS_LANGUAGE to "ar",
-                KEY_SELECTED_COUNTRY to "eg",
-                KEY_THEME_MODE to "dark",
-            )
+        val stored = preferences(
+            KEY_NEWS_LANGUAGE to "ar",
+            KEY_SELECTED_COUNTRY to "eg",
+            KEY_THEME_MODE to "dark",
         )
 
         val synced = stored.toSyncedSettings()
@@ -120,7 +158,7 @@ class AppPreferencesTest {
 
     @Test
     fun `changing one preference leaves the rest of the snapshot alone`() {
-        val stored = readAppPreferences(storage(KEY_NEWS_LANGUAGE to "ar", KEY_THEME_MODE to "dark"))
+        val stored = preferences(KEY_NEWS_LANGUAGE to "ar", KEY_THEME_MODE to "dark")
 
         val afterThemeChange = stored.copy(themeMode = "light")
 

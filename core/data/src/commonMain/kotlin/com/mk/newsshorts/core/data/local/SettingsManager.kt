@@ -1,9 +1,7 @@
 package com.mk.newsshorts.core.data.local
 
+import com.mk.newsshorts.core.model.locale.DeviceLocale
 import com.mk.newsshorts.core.model.settings.AppPreferences
-import com.mk.newsshorts.core.model.settings.DEFAULT_APP_LOCALE
-import com.mk.newsshorts.core.model.settings.DEFAULT_COUNTRY
-import com.mk.newsshorts.core.model.settings.DEFAULT_NEWS_LANGUAGE
 import com.mk.newsshorts.core.model.settings.DEFAULT_TEXT_SCALE
 import com.mk.newsshorts.core.model.settings.DEFAULT_THEME_MODE
 import com.mk.newsshorts.core.model.settings.KEY_APP_LOCALE
@@ -43,10 +41,11 @@ interface OnboardingPersistence {
 }
 
 class SettingsManager(
-    private val settingsStorage: SettingsStorage
+    private val settingsStorage: SettingsStorage,
+    deviceLocale: DeviceLocale? = null,
 ) : SettingsPersistence, SecurityFlagPersistence, OnboardingPersistence {
     private val preferencesState: MutableStateFlow<AppPreferences> =
-        MutableStateFlow(readAppPreferences(settingsStorage::getString))
+        MutableStateFlow(readAppPreferences(settingsStorage::getString, deviceLocale))
 
     /**
      * One snapshot rather than nine flows. Read synchronously in the

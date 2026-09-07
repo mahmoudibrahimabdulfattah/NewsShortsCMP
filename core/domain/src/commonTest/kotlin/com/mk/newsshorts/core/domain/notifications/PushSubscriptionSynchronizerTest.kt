@@ -18,7 +18,12 @@ class PushSubscriptionSynchronizerTest {
     @Test
     fun `enabled preferences subscribe to the stored news language`() = runTest {
         val settings = RecordingSettingsPersistence(
-            AppPreferences(newsLanguage = "ar", notificationsEnabled = true),
+            AppPreferences(
+                newsLanguage = "ar",
+                appLocale = "ar",
+                selectedCountry = "eg",
+                notificationsEnabled = true,
+            ),
         )
         val pushSubscriber = RecordingPushSubscriber()
 
@@ -36,7 +41,12 @@ class PushSubscriptionSynchronizerTest {
     @Test
     fun `disabled preferences unsubscribe instead of subscribing`() = runTest {
         val settings = RecordingSettingsPersistence(
-            AppPreferences(newsLanguage = "ar", notificationsEnabled = false),
+            AppPreferences(
+                newsLanguage = "ar",
+                appLocale = "ar",
+                selectedCountry = "eg",
+                notificationsEnabled = false,
+            ),
         )
         val pushSubscriber = RecordingPushSubscriber()
 
