@@ -23,4 +23,5 @@ data class RawArticle(
     val source: FeedSource,
     /** Article-level section evidence from RSS taxonomy or a clear URL path. */
     val candidateCategories: Set<String> = emptySet(),
+    val publishedAtIsPublication: Boolean = true,
 )

@@ -70,6 +70,7 @@ class IngestionPipeline(
         var inserted = 0
         val emptySources = mutableListOf<String>()
         val snapshots = FeedCatalog.sources.map { source -> fetcher.fetch(source) }
+        val undatedSources = snapshots.filter { it.undatedArticlesRejected > 0 }
         val audit = auditSources(snapshots)
         val rejectedSections = audit.rejected.mapTo(mutableSetOf()) { it.sourceName }
         snapshots.forEach { snapshot ->
@@ -99,6 +100,7 @@ class IngestionPipeline(
                         category = category,
                         country = source.country,
                         publishedAt = article.publishedAtMillis,
+                        publishedAtIsPublication = article.publishedAtIsPublication,
                     )
                     if (id != null) articleInserted = true
                 }
@@ -108,6 +110,12 @@ class IngestionPipeline(
         log.info("Fetched ${FeedCatalog.sources.size} feeds, $inserted new articles")
         if (emptySources.isNotEmpty()) {
             log.warn("${emptySources.size} feeds returned nothing: ${emptySources.joinToString()}")
+        }
+        if (undatedSources.isNotEmpty()) {
+            log.warn(
+                "${undatedSources.size} feeds dropped undated entries: " +
+                    undatedSources.joinToString { "${it.source.name} (${it.undatedArticlesRejected})" }
+            )
         }
         if (audit.rejected.isNotEmpty()) {
             log.warn(

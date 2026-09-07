@@ -46,11 +46,13 @@ class BreakingNewsPusherTest {
         textSource: TextSource = TextSource.AI,
         title: String = "Headline",
         summary: String = "Summary",
+        publishedAtIsPublication: Boolean = true,
     ): Long {
         val id = store.insertIfNew(
             title = "Headline", url = url, description = "Body", imageUrl = null,
             sourceName = "Source", language = language, category = "general",
             country = null, publishedAt = publishedAt,
+            publishedAtIsPublication = publishedAtIsPublication,
         ) ?: error("article already existed: $url")
         store.putText(id, language, title, summary, textSource)
         return id
@@ -116,6 +118,22 @@ class BreakingNewsPusherTest {
         BreakingNewsPusher(store, notifier).run(now)
 
         assertEquals(PushTier.BREAKING, notifier.sent.first { it.first == "news_en" }.second.tier)
+    }
+
+    @Test
+    fun `an update-only fresh story is not labelled breaking`() = runBlocking {
+        seedArticle(
+            language = "en",
+            publishedAt = now - 30.minutes.inWholeMilliseconds,
+            publishedAtIsPublication = false,
+        )
+        val notifier = RecordingNotifier()
+
+        BreakingNewsPusher(store, notifier).run(now)
+
+        val message = notifier.sent.first { it.first == "news_en" }.second
+        assertEquals(PushTier.TOP_STORY, message.tier)
+        assertEquals("Headline", message.title)
     }
 
     @Test

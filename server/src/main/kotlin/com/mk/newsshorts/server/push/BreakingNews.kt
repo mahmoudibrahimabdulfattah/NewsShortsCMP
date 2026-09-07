@@ -85,9 +85,10 @@ class BreakingNewsPusher(
         val alreadySent = sentLinks.mapNotNullTo(HashSet(), ArticleDeepLinks::articleUrlOf)
         val article = newestUnsentGeneralStory(language, alreadySent)
         val age = article?.let { now - it.publishedAt }
+        val hasPublicationDate = article?.let { store.publishedAtIsPublication(it.id) } == true
 
         return when {
-            article != null && age != null && age <= breakingWindowMillis ->
+            article != null && age != null && hasPublicationDate && age <= breakingWindowMillis ->
                 article.toMessage(PushTier.BREAKING)
 
             article != null && age != null && age <= topStoryWindowMillis ->

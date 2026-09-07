@@ -42,6 +42,7 @@ object Articles : Table("articles") {
     val category = varchar("category", 32).index()
     val country = varchar("country", 8).nullable().index()
     val publishedAt = long("published_at").index()
+    val publishedAtIsPublication = bool("published_at_is_publication").default(true)
     val createdAt = long("created_at")
 
     override val primaryKey = PrimaryKey(id)
@@ -509,6 +510,7 @@ class ArticleStore(dbPath: String) {
         category: String,
         country: String?,
         publishedAt: Long,
+        publishedAtIsPublication: Boolean = true,
     ): Long? = transaction {
         val result = Articles.insertIgnore {
             it[Articles.title] = title
@@ -520,6 +522,7 @@ class ArticleStore(dbPath: String) {
             it[Articles.category] = category
             it[Articles.country] = country
             it[Articles.publishedAt] = publishedAt
+            it[Articles.publishedAtIsPublication] = publishedAtIsPublication
             it[createdAt] = System.currentTimeMillis()
         }
         val id = result.getOrNull(Articles.id)
@@ -545,6 +548,14 @@ class ArticleStore(dbPath: String) {
                 }
             }
         null
+    }
+
+    fun publishedAtIsPublication(articleId: Long): Boolean = transaction {
+        Articles.select(Articles.publishedAtIsPublication)
+            .where { Articles.id eq articleId }
+            .singleOrNull()
+            ?.get(Articles.publishedAtIsPublication)
+            ?: true
     }
 
     /**

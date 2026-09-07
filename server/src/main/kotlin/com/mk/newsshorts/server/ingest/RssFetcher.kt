@@ -17,6 +17,7 @@ data class SourceSnapshot(
     val source: FeedSource,
     val articles: List<RawArticle>,
     val effectiveUrl: String,
+    val undatedArticlesRejected: Int = 0,
 )
 
 fun interface FeedFetcher {
@@ -56,11 +57,7 @@ class RssFetcher : FeedFetcher {
         try {
             val opened = open(source.url)
             val feed = opened.stream.use { SyndFeedInput().build(XmlReader(it)) }
-            SourceSnapshot(
-                source = source,
-                articles = feed.entries.mapNotNull { entry -> entry.toRawArticle(source) },
-                effectiveUrl = opened.effectiveUrl,
-            )
+            toSnapshot(source, feed.entries, opened.effectiveUrl)
         } catch (e: Exception) {
             log.warn("Fetch failed for ${source.name}: ${e.message}")
             SourceSnapshot(source, emptyList(), source.url)
@@ -89,6 +86,27 @@ class RssFetcher : FeedFetcher {
         return OpenedFeed(connection.inputStream, connection.url.toString())
     }
 
+    internal fun toSnapshot(
+        source: FeedSource,
+        entries: List<SyndEntry>,
+        effectiveUrl: String,
+    ): SourceSnapshot {
+        var undatedArticlesRejected = 0
+        return SourceSnapshot(
+            source = source,
+            articles = entries.mapNotNull { entry ->
+                if (entry.publishedDate == null && entry.updatedDate == null) {
+                    undatedArticlesRejected++
+                    null
+                } else {
+                    entry.toRawArticle(source)
+                }
+            },
+            effectiveUrl = effectiveUrl,
+            undatedArticlesRejected = undatedArticlesRejected,
+        )
+    }
+
     private fun SyndEntry.toRawArticle(source: FeedSource): RawArticle? {
         val link = link?.trim().takeUnless { it.isNullOrEmpty() } ?: return null
         val title = title?.trim().takeUnless { it.isNullOrEmpty() } ?: return null
@@ -102,7 +120,8 @@ class RssFetcher : FeedFetcher {
             url = link,
             description = descriptionHtml?.stripHtml()?.take(2000),
             imageUrl = extractImage(descriptionHtml),
-            publishedAtMillis = (publishedDate ?: updatedDate)?.time ?: System.currentTimeMillis(),
+            publishedAtMillis = (publishedDate ?: updatedDate)?.time ?: return null,
+            publishedAtIsPublication = publishedDate != null,
             source = source,
             candidateCategories = inferArticleCategories(categories.map { it.name }, link),
         )
