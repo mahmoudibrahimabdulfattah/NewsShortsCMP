@@ -14,6 +14,7 @@ import com.mk.newsshorts.core.model.ArticleAuthor
 import com.mk.newsshorts.core.model.ArticleContent
 import com.mk.newsshorts.core.model.ArticleDescription
 import com.mk.newsshorts.core.model.ArticleId
+import com.mk.newsshorts.core.model.ArticleLicense
 import com.mk.newsshorts.core.model.ArticleTitle
 import com.mk.newsshorts.core.model.ArticleUrl
 import com.mk.newsshorts.core.model.ImageUrl
@@ -117,6 +118,10 @@ private class FirestoreSyncClient(private val db: FirebaseFirestore) : RemoteSyn
         "url" to articleUrl.value,
         "imageUrl" to imageUrl?.value,
         "sourceName" to source.name.value,
+        "author" to author?.value,
+        "licenseName" to license?.name,
+        "licenseUrl" to license?.url,
+        "textAttribution" to textAttribution,
         "category" to category.apiValue,
         "publishedAt" to publishedAt.epochMillis,
     )
@@ -127,6 +132,10 @@ private class FirestoreSyncClient(private val db: FirebaseFirestore) : RemoteSyn
         val title = this["title"] as String
         val summary = this["summary"] as? String ?: ""
         val sourceName = this["sourceName"] as? String ?: ""
+        val author = this["author"] as? String
+        val licenseName = this["licenseName"] as? String
+        val licenseUrl = this["licenseUrl"] as? String
+        val textAttribution = this["textAttribution"] as? String
         val imageUrl = this["imageUrl"] as? String
         val category = this["category"] as? String ?: "general"
         val publishedAt = (this["publishedAt"] as? Number)?.toLong() ?: 0L
@@ -135,7 +144,7 @@ private class FirestoreSyncClient(private val db: FirebaseFirestore) : RemoteSyn
             title = ArticleTitle(title),
             description = ArticleDescription(summary),
             content = ArticleContent(summary),
-            author = ArticleAuthor(sourceName),
+            author = author.clean()?.let { ArticleAuthor(it) },
             source = NewsSource(
                 id = SourceId(sourceName.lowercase().replace(" ", "-")),
                 name = SourceName(sourceName),
@@ -144,6 +153,10 @@ private class FirestoreSyncClient(private val db: FirebaseFirestore) : RemoteSyn
             articleUrl = ArticleUrl(url),
             publishedAt = PublishedTimestamp(publishedAt),
             category = NewsCategory.fromApiValue(category),
+            license = licenseName.clean()?.let { name ->
+                ArticleLicense(name = name, url = licenseUrl.clean())
+            },
+            textAttribution = textAttribution.clean(),
         )
     }.getOrNull()
 
@@ -158,3 +171,6 @@ fun createRemoteSyncClient(context: Context): RemoteSyncClient {
     if (FirebaseApp.getApps(context).isEmpty()) return NoOpRemoteSyncClient
     return FirestoreSyncClient(FirebaseFirestore.getInstance())
 }
+
+private fun String?.clean(): String? =
+    this?.trim()?.takeIf { it.isNotEmpty() }

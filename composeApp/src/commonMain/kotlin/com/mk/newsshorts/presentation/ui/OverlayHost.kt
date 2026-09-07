@@ -92,6 +92,7 @@ fun OverlayHost(
                 onShare = { onShellEvent(AppShellUiEvent.ShareArticle(topOverlay.article)) },
                 onToggleSaved = { onSavedEvent(SavedArticlesUiEvent.Toggle(topOverlay.article)) },
                 onOpenSource = { onShellEvent(AppShellUiEvent.OpenArticleSource) },
+                onOpenLicense = { onShellEvent(AppShellUiEvent.OpenArticleLicense) },
                 modifier = Modifier.fillMaxSize()
             )
         }

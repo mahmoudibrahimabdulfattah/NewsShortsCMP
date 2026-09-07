@@ -81,6 +81,10 @@ object ArticleDeepLinks {
         sourceName = article.sourceName,
         category = article.category,
         publishedAt = article.publishedAt,
+        author = article.author,
+        licenseName = article.licenseName,
+        licenseUrl = article.licenseUrl,
+        textAttribution = article.textAttribution,
     )
 
     /**
@@ -102,6 +106,10 @@ object ArticleDeepLinks {
         sourceName: String,
         category: String,
         publishedAt: Long,
+        author: String? = null,
+        licenseName: String? = null,
+        licenseUrl: String? = null,
+        textAttribution: String? = null,
         referrer: String? = null,
     ): String = buildString {
         append(SCHEME).append("://").append(HOST)
@@ -110,6 +118,10 @@ object ArticleDeepLinks {
         if (summary.isNotEmpty()) append("&summary=").append(encode(summary))
         imageUrl?.takeIf { it.isNotBlank() }?.let { append("&image=").append(encode(it)) }
         append("&source=").append(encode(sourceName))
+        author?.takeIf { it.isNotBlank() }?.let { append("&author=").append(encode(it)) }
+        licenseName?.takeIf { it.isNotBlank() }?.let { append("&license=").append(encode(it)) }
+        licenseUrl?.takeIf { it.isNotBlank() }?.let { append("&licenseUrl=").append(encode(it)) }
+        textAttribution?.takeIf { it.isNotBlank() }?.let { append("&textAttribution=").append(encode(it)) }
         append("&category=").append(encode(category))
         append("&published=").append(publishedAt)
         referrer?.takeIf { it.isNotBlank() }?.let { append("&src=").append(encode(it)) }

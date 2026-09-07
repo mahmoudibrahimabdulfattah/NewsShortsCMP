@@ -52,6 +52,7 @@ sealed interface AppShellUiEvent {
 
     /** Takes no argument so there is one source of truth for which URL opens. */
     data object OpenArticleSource : AppShellUiEvent
+    data object OpenArticleLicense : AppShellUiEvent
     data object OpenPrivacyPolicy : AppShellUiEvent
     data class ShareArticle(val article: NewsArticle) : AppShellUiEvent
 
@@ -116,6 +117,7 @@ class AppShellViewModel(
             is AppShellUiEvent.OpenArticleDetails ->
                 openArticleDetails(event.article, event.origin)
             AppShellUiEvent.OpenArticleSource -> openArticleSource()
+            AppShellUiEvent.OpenArticleLicense -> openArticleLicense()
             AppShellUiEvent.OpenPrivacyPolicy -> openUrl(privacyPolicyUrl())
             is AppShellUiEvent.ShareArticle -> shareArticle(event.article)
             is AppShellUiEvent.OpenDeepLink -> openDeepLink(event.link)
@@ -150,6 +152,15 @@ class AppShellViewModel(
         )
         openUrl(article.articleUrl.value)
     }
+
+    private fun openArticleLicense() {
+        val article = (navigator.overlays.value.lastOrNull() as? Overlay.Details)?.article ?: return
+        val licenseUrl = article.license?.url?.takeIf { it.isWebUrl() } ?: return
+        openUrl(licenseUrl)
+    }
+
+    private fun String.isWebUrl(): Boolean =
+        startsWith("http://", ignoreCase = true) || startsWith("https://", ignoreCase = true)
 
     /** The policy page picks its language from this, not from the browser. */
     private fun privacyPolicyUrl(): String =

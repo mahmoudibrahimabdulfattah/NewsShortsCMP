@@ -75,6 +75,8 @@ interface AppStrings {
     val unknownError: String
     val articleDetails: String
     val readAtSource: String
+    val bylinePrefix: String
+    val articleLicenseLabel: String
     val back: String
     val summaryDisclaimer: String
     val unableToOpenLink: String
@@ -266,6 +268,8 @@ object EnglishStrings : AppStrings {
     override val unknownError: String = "Unknown error"
     override val articleDetails: String = "Article"
     override val readAtSource: String = "Read at source"
+    override val bylinePrefix: String = "By"
+    override val articleLicenseLabel: String = "License"
     override val back: String = "Back"
     override val summaryDisclaimer: String =
         "AI-generated summary. Open the source for the full story."
@@ -511,6 +515,8 @@ object ArabicStrings : AppStrings {
     override val unknownError: String = "خطأ غير معروف"
     override val articleDetails: String = "المقال"
     override val readAtSource: String = "اقرأ من المصدر"
+    override val bylinePrefix: String = "بقلم"
+    override val articleLicenseLabel: String = "الرخصة"
     override val back: String = "رجوع"
     override val summaryDisclaimer: String =
         "ملخص مُولَّد بالذكاء الاصطناعي. افتح المصدر لقراءة الخبر كاملاً."

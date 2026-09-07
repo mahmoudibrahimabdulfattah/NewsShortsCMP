@@ -43,7 +43,13 @@ data class ArticleDto(
      * this and stores one category per cached feed.
      */
     @SerialName("category")
-    val category: String? = null
+    val category: String? = null,
+    @SerialName("licenseName")
+    val licenseName: String? = null,
+    @SerialName("licenseUrl")
+    val licenseUrl: String? = null,
+    @SerialName("textAttribution")
+    val textAttribution: String? = null,
 )
 
 @Serializable
@@ -53,4 +59,3 @@ data class SourceDto(
     @SerialName("name")
     val name: String
 )
-

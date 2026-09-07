@@ -9,6 +9,8 @@ import com.mk.newsshorts.server.feed.FeedPageNames
 import com.mk.newsshorts.server.feed.repaginate
 import com.mk.newsshorts.server.ingest.IngestionPipeline
 import com.mk.newsshorts.server.ingest.RssFetcher
+import com.mk.newsshorts.server.model.SourceLicense
+import com.mk.newsshorts.server.model.licensesBySourceName
 import com.mk.newsshorts.server.model.publishableSourceNames
 import com.mk.newsshorts.server.model.summarySourceNames
 import com.mk.newsshorts.server.push.BreakingNewsPusher
@@ -116,6 +118,7 @@ object StaticFeedGenerator {
         val store = ArticleStore(dbPath)
         val cycle = IngestionPipeline(store, RssFetcher(), buildSummarizer(), buildClassifier()).runCycle()
         val generatedAt = System.currentTimeMillis()
+        val sourceLicenses = FeedCatalog.sources.licensesBySourceName()
 
         val feedDir = File(outputDir, "v1/feed").apply { mkdirs() }
         var filesWritten = 0
@@ -125,7 +128,11 @@ object StaticFeedGenerator {
         val newestCategoryArticleAt = linkedMapOf<String, Long?>()
 
         FeedCatalog.languages.forEach { language ->
-            val languageFeed = write(feedDir, store, feedKey = language, language = language, category = null)
+            val languageFeed = write(
+                feedDir, store,
+                feedKey = language, language = language, category = null,
+                sourceLicenses = sourceLicenses,
+            )
             filesWritten += languageFeed.filesWritten
             feedArticles[language] = languageFeed.articles.size
             newestArticleAt[language] = newestPlausibleArticleAt(languageFeed.articles, generatedAt)
@@ -135,6 +142,7 @@ object StaticFeedGenerator {
                 val categoryFeed = write(
                     feedDir, store,
                     feedKey = feedKey, language = language, category = category,
+                    sourceLicenses = sourceLicenses,
                 )
                 filesWritten += categoryFeed.filesWritten
                 categoryFeedArticles[feedKey] = categoryFeed.articles.size
@@ -151,6 +159,7 @@ object StaticFeedGenerator {
                     feedDir, store,
                     feedKey = "country-$country-$language",
                     language = language, category = null, country = country,
+                    sourceLicenses = sourceLicenses,
                 ).filesWritten
             }
         }
@@ -163,6 +172,7 @@ object StaticFeedGenerator {
                 limit = SEARCH_INDEX_ARTICLES, offset = 0, country = null,
                 diversifyBySource = false,
                 publishableSourceNames = FeedCatalog.sources.publishableSourceNames(),
+                sourceLicenses = sourceLicenses,
             )
             filesWritten += writeSearchIndex(searchDir, language, articles, total)
             // The same read serves both: the search corpus is already the
@@ -177,6 +187,10 @@ object StaticFeedGenerator {
                     url = article.url,
                     imageUrl = article.imageUrl,
                     sourceName = article.sourceName,
+                    author = article.author,
+                    licenseName = article.licenseName,
+                    licenseUrl = article.licenseUrl,
+                    textAttribution = article.textAttribution,
                     category = article.category,
                     publishedAt = article.publishedAt,
                 )
@@ -511,6 +525,7 @@ object StaticFeedGenerator {
         language: String,
         category: String?,
         country: String? = null,
+        sourceLicenses: Map<String, SourceLicense>,
     ): FeedWriteResult {
         val (articles, total) = store.feed(
             language = language, category = category,
@@ -521,6 +536,7 @@ object StaticFeedGenerator {
             // category tab is neither side of that duplication.
             excludeCountryTagged = country == null && category == null,
             publishableSourceNames = FeedCatalog.sources.publishableSourceNames(),
+            sourceLicenses = sourceLicenses,
         )
 
         val layout = repaginate(

@@ -36,6 +36,24 @@ class ArticleDeepLinkTest {
     }
 
     @Test
+    fun `parses optional provenance fields`() {
+        val link = ArticleDeepLinks.parse(
+            validLink +
+                "&author=Jane%20Reporter" +
+                "&license=CC%20BY%204.0" +
+                "&licenseUrl=https%3A%2F%2Fcreativecommons.org%2Flicenses%2Fby%2F4.0%2F" +
+                "&textAttribution=AI-generated%20summary."
+        )!!
+        val article = link.toNewsArticle()!!
+
+        assertEquals("Jane Reporter", link.author)
+        assertEquals("CC BY 4.0", article.license?.name)
+        assertEquals("https://creativecommons.org/licenses/by/4.0/", article.license?.url)
+        assertEquals("AI-generated summary.", article.textAttribution)
+        assertEquals("Jane Reporter", article.author?.value)
+    }
+
+    @Test
     fun `rejects non-web article urls`() {
         listOf("javascript%3Aalert(1)", "file%3A%2F%2F%2Fetc%2Fpasswd", "intent%3A%23Intent%3B", "content%3A%2F%2Fx")
             .forEach { hostile ->

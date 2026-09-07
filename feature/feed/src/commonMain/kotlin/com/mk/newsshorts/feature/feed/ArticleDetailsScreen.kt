@@ -1,6 +1,7 @@
 package com.mk.newsshorts.feature.feed
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +41,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.mk.newsshorts.core.model.NewsArticle
@@ -69,6 +71,7 @@ fun ArticleDetailsScreen(
     onShare: () -> Unit,
     onToggleSaved: () -> Unit,
     onOpenSource: () -> Unit,
+    onOpenLicense: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = appStrings()
@@ -108,20 +111,19 @@ fun ArticleDetailsScreen(
                     strings.recently,
                 ),
             )
+            ArticleProvenance(
+                article = article,
+                fallbackTextAttribution = strings.summaryDisclaimer.takeIf {
+                    article.description.value.isNotBlank()
+                },
+                onOpenLicense = onOpenLicense,
+            )
             Spacer(modifier = Modifier.height(20.dp))
-            // The disclaimer belongs to the summary, so it goes when the summary
-            // does — otherwise the screen explains a summary that isn't there.
             if (article.description.value.isNotBlank()) {
                 Text(
                     text = article.description.value,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = strings.summaryDisclaimer,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                 )
             }
             Spacer(modifier = Modifier.height(28.dp))
@@ -139,6 +141,58 @@ fun ArticleDetailsScreen(
         }
     }
 }
+
+@Composable
+private fun ArticleProvenance(
+    article: NewsArticle,
+    fallbackTextAttribution: String?,
+    onOpenLicense: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val strings = appStrings()
+    val author = article.author?.value?.takeIf { it.isNotBlank() }
+    val textAttribution = article.textAttribution?.takeIf { it.isNotBlank() } ?: fallbackTextAttribution
+    val license = article.license?.takeIf { it.name.isNotBlank() }
+    if (author == null && textAttribution.isNullOrBlank() && license == null) return
+
+    Column(modifier = modifier.padding(top = 10.dp)) {
+        if (author != null) {
+            Text(
+                text = "${strings.bylinePrefix} ${isolateBidi(author)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.68f),
+            )
+        }
+        if (!textAttribution.isNullOrBlank()) {
+            Text(
+                text = textAttribution,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.56f),
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        if (license != null) {
+            val hasLicenseUrl = license.url.isWebUrl()
+            Text(
+                text = "${strings.articleLicenseLabel}: ${license.name}",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (hasLicenseUrl) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onBackground.copy(alpha = 0.56f)
+                },
+                textDecoration = if (hasLicenseUrl) TextDecoration.Underline else null,
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .then(if (hasLicenseUrl) Modifier.clickable(onClick = onOpenLicense) else Modifier),
+            )
+        }
+    }
+}
+
+private fun String?.isWebUrl(): Boolean =
+    this != null &&
+        (startsWith("http://", ignoreCase = true) || startsWith("https://", ignoreCase = true))
 
 @Composable
 private fun DetailsTopBar(

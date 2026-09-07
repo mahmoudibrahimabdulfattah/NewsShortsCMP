@@ -29,4 +29,8 @@ data class FeedArticleDto(
     val language: String,
     val category: String,
     val publishedAt: Long,
+    val author: String? = null,
+    val licenseName: String? = null,
+    val licenseUrl: String? = null,
+    val textAttribution: String? = null,
 )

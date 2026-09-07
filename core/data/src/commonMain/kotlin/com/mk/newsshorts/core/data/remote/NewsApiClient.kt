@@ -129,7 +129,7 @@ class NewsApiClient(
                         id = article.sourceName.lowercase().replace(" ", "-"),
                         name = article.sourceName,
                     ),
-                    author = article.sourceName,
+                    author = article.author,
                     title = article.title,
                     description = article.summary,
                     url = article.url,
@@ -137,6 +137,9 @@ class NewsApiClient(
                     publishedAt = epochMillisToIso8601(article.publishedAt),
                     content = article.summary,
                     category = article.category,
+                    licenseName = article.licenseName,
+                    licenseUrl = article.licenseUrl,
+                    textAttribution = article.textAttribution,
                 )
             },
         )

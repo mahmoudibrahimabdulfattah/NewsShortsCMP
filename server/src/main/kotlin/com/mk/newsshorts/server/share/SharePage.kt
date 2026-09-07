@@ -15,6 +15,10 @@ data class SharedArticle(
     val url: String,
     val imageUrl: String?,
     val sourceName: String,
+    val author: String? = null,
+    val licenseName: String? = null,
+    val licenseUrl: String? = null,
+    val textAttribution: String? = null,
     val category: String,
     val publishedAt: Long,
 )
@@ -54,6 +58,8 @@ object SharePage {
         val image = article.imageUrl?.takeIf { it.isWebUrl() }
         val source = article.url.takeIf { it.isWebUrl() }
         val published = Instant.ofEpochMilli(article.publishedAt)
+        val textAttribution = article.textAttribution
+            ?: copy.defaultSummaryAttribution.takeIf { article.summary.isNotBlank() }
 
         return buildString {
             append("<!DOCTYPE html>\n")
@@ -101,13 +107,16 @@ object SharePage {
             append("<div class=\"meta\">")
                 .append(metaLine(article, published, copy).escapeHtml())
                 .append("</div>\n")
+            appendProvenance(article, copy)
             if (image != null) {
                 append("<img class=\"hero\" src=\"").append(image.escapeHtml())
                     .append("\" alt=\"\" loading=\"lazy\">\n")
             }
             if (article.summary.isNotBlank()) {
                 append("<p class=\"summary\">").append(article.summary.trim().escapeHtml()).append("</p>\n")
-                append("<p class=\"note\">").append(copy.note.escapeHtml()).append("</p>\n")
+            }
+            if (!textAttribution.isNullOrBlank()) {
+                append("<p class=\"note\">").append(textAttribution.escapeHtml()).append("</p>\n")
             }
 
             // Hidden until the script below confirms Android. The scheme is
@@ -196,6 +205,10 @@ object SharePage {
             sourceName = article.sourceName,
             category = article.category,
             publishedAt = article.publishedAt,
+            author = article.author,
+            licenseName = article.licenseName,
+            licenseUrl = article.licenseUrl,
+            textAttribution = article.textAttribution,
             referrer = "share",
         )
 
@@ -205,6 +218,32 @@ object SharePage {
             published.takeIf { article.publishedAt > 0 }
                 ?.atZone(ZoneOffset.UTC)?.let { copy.dateFormat.format(it) },
         ).joinToString(" • ")
+
+    private fun StringBuilder.appendProvenance(article: SharedArticle, copy: Copy) {
+        val author = article.author?.trim()?.takeIf { it.isNotEmpty() }
+        val licenseName = article.licenseName?.trim()?.takeIf { it.isNotEmpty() }
+        if (author == null && licenseName == null) return
+
+        append("<div class=\"provenance\">\n")
+        if (author != null) {
+            append("<p>").append(copy.byline(author).escapeHtml()).append("</p>\n")
+        }
+        if (licenseName != null) {
+            append("<p>").append(copy.licenseLabel.escapeHtml()).append(": ")
+            val licenseUrl = article.licenseUrl?.takeIf { it.isWebUrl() }
+            if (licenseUrl != null) {
+                append("<a rel=\"noopener noreferrer\" href=\"")
+                    .append(licenseUrl.escapeHtml())
+                    .append("\">")
+                    .append(licenseName.escapeHtml())
+                    .append("</a>")
+            } else {
+                append(licenseName.escapeHtml())
+            }
+            append("</p>\n")
+        }
+        append("</div>\n")
+    }
 
     private fun StringBuilder.meta(name: String, content: String) {
         if (content.isBlank()) return
@@ -282,9 +321,13 @@ object SharePage {
         val open: String,
         val store: String,
         val source: String,
-        val note: String,
+        val defaultSummaryAttribution: String,
+        val bylinePrefix: String,
+        val licenseLabel: String,
         val dateFormat: DateTimeFormatter,
     ) {
+        fun byline(author: String): String = "$bylinePrefix $author"
+
         companion object {
             fun of(language: String): Copy =
                 if (language.equals("en", ignoreCase = true)) ENGLISH else ARABIC
@@ -295,7 +338,9 @@ object SharePage {
                 open = "فتح في التطبيق",
                 store = "تحميل التطبيق",
                 source = "اقرأ من المصدر",
-                note = "ملخص مُولَّد بالذكاء الاصطناعي. افتح المصدر لقراءة الخبر كاملاً.",
+                defaultSummaryAttribution = "ملخص مُولَّد بالذكاء الاصطناعي.",
+                bylinePrefix = "بقلم",
+                licenseLabel = "الرخصة",
                 // Latin digits, not Arabic-Indic: the rest of the app renders
                 // dates the same way, and a card mixing the two reads as a bug.
                 dateFormat = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.forLanguageTag("ar-u-nu-latn")),
@@ -307,7 +352,9 @@ object SharePage {
                 open = "Open in the app",
                 store = "Get the app",
                 source = "Read at source",
-                note = "AI-generated summary. Open the source for the full story.",
+                defaultSummaryAttribution = "AI-generated summary.",
+                bylinePrefix = "By",
+                licenseLabel = "License",
                 dateFormat = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.ENGLISH),
             )
         }
@@ -356,6 +403,11 @@ object SharePage {
         }
         h1 { font-size: 26px; line-height: 1.35; margin: 16px 0 12px; }
         .meta { font-size: 14px; opacity: .7; margin-bottom: 18px; }
+        .provenance {
+          font-size: 14px; opacity: .78; margin: -4px 0 18px;
+        }
+        .provenance p { margin: 0 0 4px; }
+        .provenance a { color: #8FE7E0; }
         img.hero { width: 100%; border-radius: 14px; margin-bottom: 18px; }
         p.summary { font-size: 17px; opacity: .9; }
         p.note { font-size: 13px; opacity: .5; margin: 18px 0 28px; }

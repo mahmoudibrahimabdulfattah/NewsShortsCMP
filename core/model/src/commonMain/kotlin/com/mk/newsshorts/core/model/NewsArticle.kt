@@ -7,12 +7,14 @@ data class NewsArticle(
     val title: ArticleTitle,
     val description: ArticleDescription,
     val content: ArticleContent,
-    val author: ArticleAuthor,
+    val author: ArticleAuthor?,
     val source: NewsSource,
     val imageUrl: ImageUrl?,
     val articleUrl: ArticleUrl,
     val publishedAt: PublishedTimestamp,
-    val category: NewsCategory
+    val category: NewsCategory,
+    val license: ArticleLicense? = null,
+    val textAttribution: String? = null,
 )
 
 @JvmInline
@@ -49,6 +51,11 @@ value class ArticleContent(val value: String)
 
 @JvmInline
 value class ArticleAuthor(val value: String)
+
+data class ArticleLicense(
+    val name: String,
+    val url: String?,
+)
 
 @JvmInline
 value class ImageUrl(val value: String) {

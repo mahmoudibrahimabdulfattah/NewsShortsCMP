@@ -16,6 +16,10 @@ class SharePageTest {
         imageUrl: String? = "https://example.com/a.jpg",
         language: String = "en",
         category: String = "general",
+        author: String? = null,
+        licenseName: String? = null,
+        licenseUrl: String? = null,
+        textAttribution: String? = null,
     ) = SharedArticle(
         slug = ShareSlug.of(url),
         language = language,
@@ -24,6 +28,10 @@ class SharePageTest {
         url = url,
         imageUrl = imageUrl,
         sourceName = "Example News",
+        author = author,
+        licenseName = licenseName,
+        licenseUrl = licenseUrl,
+        textAttribution = textAttribution,
         category = category,
         publishedAt = 1_700_000_000_000L,
     )
@@ -145,6 +153,38 @@ class SharePageTest {
         assertTrue(href.startsWith("newsshorts://article?"), href)
         assertContains(href, "src=share")
         assertContains(href, "url=https%3A%2F%2Fexample.com%2Fstory")
+    }
+
+    @Test
+    fun `renders provenance when present`() {
+        val html = render(
+            article(
+                author = "Jane Reporter",
+                licenseName = "CC BY 4.0",
+                licenseUrl = "https://creativecommons.org/licenses/by/4.0/",
+                textAttribution = "AI-generated and translated summary.",
+            )
+        )
+
+        assertContains(html, "By Jane Reporter")
+        assertContains(html, "AI-generated and translated summary.")
+        assertContains(html, "License: ")
+        assertContains(html, """href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>""")
+
+        val href = Regex("""id="open" hidden href="([^"]*)"""").find(html)!!.groupValues[1]
+        assertContains(href, "author=Jane%20Reporter")
+        assertContains(href, "license=CC%20BY%204.0")
+        assertContains(href, "textAttribution=AI-generated%20and%20translated%20summary.")
+    }
+
+    @Test
+    fun `omits absent provenance cleanly`() {
+        val html = render(article(summary = "", author = null, licenseName = null, textAttribution = null))
+
+        assertFalse(html.contains("""class="provenance""""))
+        assertFalse(html.contains("""class="note""""))
+        assertFalse(html.contains("By "))
+        assertFalse(html.contains("License:"))
     }
 
     @Test

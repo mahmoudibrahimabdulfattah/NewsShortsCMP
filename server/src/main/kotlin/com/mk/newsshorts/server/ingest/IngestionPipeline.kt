@@ -112,6 +112,8 @@ class IngestionPipeline(
                         country = source.country,
                         publishedAt = article.publishedAtMillis,
                         publishedAtIsPublication = article.publishedAtIsPublication,
+                        author = article.author,
+                        rightsNotice = article.rightsNotice,
                     )
                     if (id != null) {
                         articleInserted = true

@@ -40,7 +40,10 @@ data class CachedArticle(
     val url: String,
     val urlToImage: String?,
     val publishedAt: String,
-    val content: String?
+    val content: String?,
+    val licenseName: String? = null,
+    val licenseUrl: String? = null,
+    val textAttribution: String? = null,
 )
 
 @Serializable
@@ -131,7 +134,10 @@ class NewsLocalDataSource(
                 url = article.url,
                 urlToImage = article.urlToImage,
                 publishedAt = article.publishedAt,
-                content = article.content
+                content = article.content,
+                licenseName = article.licenseName,
+                licenseUrl = article.licenseUrl,
+                textAttribution = article.textAttribution,
             )
         }
         val currentTime: Long = currentTimeMillis()
@@ -251,7 +257,10 @@ class NewsLocalDataSource(
                 url = cached.url,
                 urlToImage = cached.urlToImage,
                 publishedAt = cached.publishedAt,
-                content = cached.content
+                content = cached.content,
+                licenseName = cached.licenseName,
+                licenseUrl = cached.licenseUrl,
+                textAttribution = cached.textAttribution,
             )
         }
         return NewsApiResponse(

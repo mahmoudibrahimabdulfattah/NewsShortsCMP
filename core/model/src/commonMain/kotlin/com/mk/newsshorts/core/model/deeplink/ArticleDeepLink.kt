@@ -6,6 +6,7 @@ import com.mk.newsshorts.core.model.ArticleAuthor
 import com.mk.newsshorts.core.model.ArticleContent
 import com.mk.newsshorts.core.model.ArticleDescription
 import com.mk.newsshorts.core.model.ArticleId
+import com.mk.newsshorts.core.model.ArticleLicense
 import com.mk.newsshorts.core.model.ArticleTitle
 import com.mk.newsshorts.core.model.ArticleUrl
 import com.mk.newsshorts.core.model.ImageUrl
@@ -23,6 +24,10 @@ data class ArticleDeepLink(
     val summary: String?,
     val imageUrl: String?,
     val sourceName: String?,
+    val author: String?,
+    val licenseName: String?,
+    val licenseUrl: String?,
+    val textAttribution: String?,
     val category: String?,
     val publishedAtMillis: Long?,
     /** `share` when the landing page handed this over, absent for a push. */
@@ -68,6 +73,10 @@ object ArticleDeepLinks {
             summary = parameters["summary"].clean(MAX_SUMMARY),
             imageUrl = parameters["image"].clean(MAX_URL)?.takeIf { it.isWebUrl() },
             sourceName = parameters["source"].clean(MAX_TITLE),
+            author = parameters["author"].clean(MAX_TITLE),
+            licenseName = parameters["license"].clean(MAX_TITLE),
+            licenseUrl = parameters["licenseUrl"].clean(MAX_URL)?.takeIf { it.isWebUrl() },
+            textAttribution = parameters["textAttribution"].clean(MAX_TITLE),
             category = parameters["category"].clean(MAX_TITLE),
             publishedAtMillis = parameters["published"]?.toLongOrNull()?.takeIf { it > 0 },
             referrer = parameters["src"].clean(MAX_TITLE),
@@ -157,7 +166,7 @@ fun ArticleDeepLink.toNewsArticle(): NewsArticle? {
             description = ArticleDescription(summary.orEmpty()),
             // Mirrors NewsApiClient: the app never holds more than the summary.
             content = ArticleContent(summary.orEmpty()),
-            author = ArticleAuthor(source),
+            author = author?.let { ArticleAuthor(it) },
             source = NewsSource(
                 id = SourceId(source.lowercase().replace(" ", "-")),
                 name = SourceName(source),
@@ -166,6 +175,8 @@ fun ArticleDeepLink.toNewsArticle(): NewsArticle? {
             articleUrl = ArticleUrl(url),
             publishedAt = PublishedTimestamp(publishedAtMillis ?: 0L),
             category = NewsCategory.fromApiValue(category.orEmpty()),
+            license = licenseName?.let { ArticleLicense(name = it, url = licenseUrl) },
+            textAttribution = textAttribution,
         )
     }.getOrNull()
 }

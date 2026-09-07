@@ -7,6 +7,7 @@ import com.mk.newsshorts.server.feed.FeedPageNames
 import com.mk.newsshorts.server.feed.repaginate
 import com.mk.newsshorts.server.ingest.IngestionPipeline
 import com.mk.newsshorts.server.ingest.RssFetcher
+import com.mk.newsshorts.server.model.licensesBySourceName
 import com.mk.newsshorts.server.model.publishableSourceNames
 import com.mk.newsshorts.server.store.ArticleStore
 import com.mk.newsshorts.server.summarize.buildClassifier
@@ -50,6 +51,7 @@ private val PAGE_SUFFIX = Regex("-p(\\d+)$")
 fun Application.module() {
     val store = ArticleStore(System.getenv("DB_PATH") ?: "news.db")
     val pipeline = IngestionPipeline(store, RssFetcher(), buildSummarizer(), buildClassifier())
+    val sourceLicenses = FeedCatalog.sources.licensesBySourceName()
     pipeline.start(this)
 
     install(ContentNegotiation) { json(Json { encodeDefaults = true }) }
@@ -93,6 +95,7 @@ fun Application.module() {
                     country,
                     diversifyBySource = true,
                     publishableSourceNames = FeedCatalog.sources.publishableSourceNames(),
+                    sourceLicenses = sourceLicenses,
                 )
             call.respond(FeedResponse(articles = articles, total = total))
         }
@@ -112,6 +115,7 @@ fun Application.module() {
                         language, null, StaticFeedGenerator.MAX_FEED_ARTICLES, 0,
                         country = country, diversifyBySource = true,
                         publishableSourceNames = FeedCatalog.sources.publishableSourceNames(),
+                        sourceLicenses = sourceLicenses,
                     )
                 }
                 "-" in feedKey -> {
@@ -120,11 +124,13 @@ fun Application.module() {
                         language, category, StaticFeedGenerator.MAX_FEED_ARTICLES, 0,
                         diversifyBySource = true,
                         publishableSourceNames = FeedCatalog.sources.publishableSourceNames(),
+                        sourceLicenses = sourceLicenses,
                     )
                 }
                 else -> store.feed(
                     feedKey, null, StaticFeedGenerator.MAX_FEED_ARTICLES, 0, diversifyBySource = true,
                     publishableSourceNames = FeedCatalog.sources.publishableSourceNames(),
+                    sourceLicenses = sourceLicenses,
                 )
             }
 

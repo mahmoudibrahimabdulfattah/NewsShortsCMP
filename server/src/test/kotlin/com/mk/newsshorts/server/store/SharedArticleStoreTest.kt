@@ -38,7 +38,12 @@ class SharedArticleStoreTest {
     @Test
     fun `stores every field a page renders`() {
         val store = store()
-        val subject = article("abc")
+        val subject = article("abc").copy(
+            author = "Jane Reporter",
+            licenseName = "CC BY 4.0",
+            licenseUrl = "https://creativecommons.org/licenses/by/4.0/",
+            textAttribution = "AI-generated summary.",
+        )
 
         store.archiveShared(listOf(subject))
 

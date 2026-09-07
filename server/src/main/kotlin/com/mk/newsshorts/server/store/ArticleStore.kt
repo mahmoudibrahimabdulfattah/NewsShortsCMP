@@ -6,6 +6,7 @@ import com.mk.newsshorts.core.contract.feed.NewsCategories
 import com.mk.newsshorts.core.contract.notifications.SentNotification
 import com.mk.newsshorts.server.feed.FeedLayout
 import com.mk.newsshorts.server.feed.FeedPage
+import com.mk.newsshorts.server.model.SourceLicense
 import com.mk.newsshorts.server.share.SharedArticle
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.JoinType
@@ -37,6 +38,8 @@ object Articles : Table("articles") {
     val description = text("description").nullable()
     val summary = text("summary").nullable()
     val imageUrl = text("image_url").nullable()
+    val author = text("author").nullable()
+    val rightsNotice = text("rights_notice").nullable()
     val sourceName = text("source_name")
     val language = varchar("language", 8).index()
     val category = varchar("category", 32).index()
@@ -233,6 +236,10 @@ object SharedArticles : Table("shared_articles") {
     val url = text("url")
     val imageUrl = text("image_url").nullable()
     val sourceName = text("source_name")
+    val author = text("author").nullable()
+    val licenseName = text("license_name").nullable()
+    val licenseUrl = text("license_url").nullable()
+    val textAttribution = text("text_attribution").nullable()
     val category = varchar("category", 32)
     val publishedAt = long("published_at").index()
 
@@ -517,12 +524,16 @@ class ArticleStore(dbPath: String) {
         country: String?,
         publishedAt: Long,
         publishedAtIsPublication: Boolean = true,
+        author: String? = null,
+        rightsNotice: String? = null,
     ): Long? = transaction {
         val result = Articles.insertIgnore {
             it[Articles.title] = title
             it[Articles.url] = url
             it[Articles.description] = description
             it[Articles.imageUrl] = imageUrl
+            it[Articles.author] = author.clean()
+            it[Articles.rightsNotice] = rightsNotice.clean()
             it[Articles.sourceName] = sourceName
             it[Articles.language] = language
             it[Articles.category] = category
@@ -584,6 +595,10 @@ class ArticleStore(dbPath: String) {
                     it[url] = article.url
                     it[imageUrl] = article.imageUrl
                     it[sourceName] = article.sourceName
+                    it[author] = article.author
+                    it[licenseName] = article.licenseName
+                    it[licenseUrl] = article.licenseUrl
+                    it[textAttribution] = article.textAttribution
                     it[category] = article.category
                     it[publishedAt] = article.publishedAt
                 }
@@ -612,6 +627,10 @@ class ArticleStore(dbPath: String) {
                     url = it[SharedArticles.url],
                     imageUrl = it[SharedArticles.imageUrl],
                     sourceName = it[SharedArticles.sourceName],
+                    author = it[SharedArticles.author],
+                    licenseName = it[SharedArticles.licenseName],
+                    licenseUrl = it[SharedArticles.licenseUrl],
+                    textAttribution = it[SharedArticles.textAttribution],
                     category = it[SharedArticles.category],
                     publishedAt = it[SharedArticles.publishedAt],
                 )
@@ -1059,6 +1078,7 @@ class ArticleStore(dbPath: String) {
         diversifyBySource: Boolean = false,
         excludeCountryTagged: Boolean = false,
         publishableSourceNames: Set<String>? = null,
+        sourceLicenses: Map<String, SourceLicense> = emptyMap(),
     ): Pair<List<FeedArticleDto>, Long> =
         transaction {
             if (publishableSourceNames != null && publishableSourceNames.isEmpty()) {
@@ -1104,6 +1124,7 @@ class ArticleStore(dbPath: String) {
                 .orderBy(Articles.publishedAt, SortOrder.DESC)
                 .limit(readAhead.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
                 .map {
+                    val sourceLicense = sourceLicenses[it[Articles.sourceName]]
                     FeedArticleDto(
                         id = it[Articles.id],
                         title = it[ArticleTexts.title],
@@ -1117,6 +1138,14 @@ class ArticleStore(dbPath: String) {
                             ?.firstOrNull()
                             ?: NewsCategories.GENERAL,
                         publishedAt = it[Articles.publishedAt],
+                        author = it[Articles.author],
+                        licenseName = sourceLicense?.name,
+                        licenseUrl = sourceLicense?.url,
+                        textAttribution = textAttributionFor(
+                            source = it[ArticleTexts.textSource],
+                            sourceLanguage = it[Articles.language],
+                            textLanguage = it[ArticleTexts.language],
+                        ),
                     )
                 }
 
@@ -1134,6 +1163,37 @@ class ArticleStore(dbPath: String) {
         const val MAX_TEXT_ATTEMPTS = 3
         const val MAX_CLASSIFICATION_ATTEMPTS = 3
         val SUPPORTED_CATEGORIES = NewsCategories.all
+    }
+}
+
+private fun String?.clean(): String? =
+    this?.trim()?.takeIf { it.isNotEmpty() }
+
+internal fun textAttributionFor(
+    source: TextSource,
+    sourceLanguage: String,
+    textLanguage: String,
+): String? {
+    val translated = !sourceLanguage.equals(textLanguage, ignoreCase = true)
+    val arabic = textLanguage.equals("ar", ignoreCase = true)
+    return when (source) {
+        TextSource.AI -> when {
+            arabic && translated -> "ملخص مُولَّد ومترجم بالذكاء الاصطناعي."
+            arabic -> "ملخص مُولَّد بالذكاء الاصطناعي."
+            translated -> "AI-generated and translated summary."
+            else -> "AI-generated summary."
+        }
+        TextSource.FALLBACK -> if (arabic) {
+            "مقتطف محرر من وصف المصدر."
+        } else {
+            "Edited excerpt from the source description."
+        }
+        TextSource.HEADLINE -> if (arabic) {
+            "عنوان من المصدر فقط."
+        } else {
+            "Publisher headline only."
+        }
+        TextSource.UNSERVED -> null
     }
 }
 

@@ -6,6 +6,7 @@ import com.mk.newsshorts.core.model.ArticleAuthor
 import com.mk.newsshorts.core.model.ArticleContent
 import com.mk.newsshorts.core.model.ArticleDescription
 import com.mk.newsshorts.core.model.ArticleId
+import com.mk.newsshorts.core.model.ArticleLicense
 import com.mk.newsshorts.core.model.ArticleTitle
 import com.mk.newsshorts.core.model.ArticleUrl
 import com.mk.newsshorts.core.model.ImageUrl
@@ -30,6 +31,10 @@ private data class SavedArticleDto(
     val url: String,
     val imageUrl: String? = null,
     val sourceName: String = "",
+    val author: String? = null,
+    val licenseName: String? = null,
+    val licenseUrl: String? = null,
+    val textAttribution: String? = null,
     val category: String = "general",
     val publishedAt: Long = 0L,
 )
@@ -82,6 +87,10 @@ class SavedArticlesStore(
         url = articleUrl.value,
         imageUrl = imageUrl?.value,
         sourceName = source.name.value,
+        author = author?.value,
+        licenseName = license?.name,
+        licenseUrl = license?.url,
+        textAttribution = textAttribution,
         category = category.apiValue,
         publishedAt = publishedAt.epochMillis,
     )
@@ -93,7 +102,7 @@ class SavedArticlesStore(
             title = ArticleTitle(title),
             description = ArticleDescription(summary),
             content = ArticleContent(summary),
-            author = ArticleAuthor(sourceName),
+            author = author.clean()?.let { ArticleAuthor(it) },
             source = NewsSource(
                 id = SourceId(sourceName.lowercase().replace(" ", "-")),
                 name = SourceName(sourceName),
@@ -102,6 +111,10 @@ class SavedArticlesStore(
             articleUrl = ArticleUrl(url),
             publishedAt = PublishedTimestamp(publishedAt),
             category = NewsCategory.fromApiValue(category),
+            license = licenseName.clean()?.let { name ->
+                ArticleLicense(name = name, url = licenseUrl.clean())
+            },
+            textAttribution = textAttribution.clean(),
         )
     }.getOrNull()
 
@@ -109,6 +122,9 @@ class SavedArticlesStore(
         const val KEY_SAVED_ARTICLES: String = "saved_articles"
     }
 }
+
+private fun String?.clean(): String? =
+    this?.trim()?.takeIf { it.isNotEmpty() }
 
 /**
  * Observable saved-article storage cap, shared by the real store and fakes so

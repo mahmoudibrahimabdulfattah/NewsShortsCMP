@@ -2,6 +2,7 @@ package com.mk.newsshorts.server.push
 
 import com.mk.newsshorts.core.contract.feed.FeedArticleDto
 import com.mk.newsshorts.server.config.FeedCatalog
+import com.mk.newsshorts.server.model.licensesBySourceName
 import com.mk.newsshorts.server.model.publishableSourceNames
 import com.mk.newsshorts.server.store.ArticleStore
 import org.slf4j.LoggerFactory
@@ -114,6 +115,7 @@ class BreakingNewsPusher(
             limit = alreadySent.size + 1,
             offset = 0,
             publishableSourceNames = FeedCatalog.sources.publishableSourceNames(),
+            sourceLicenses = FeedCatalog.sources.licensesBySourceName(),
         ).first.firstOrNull { it.url !in alreadySent }
 
     private fun FeedArticleDto.toMessage(tier: PushTier) = PushMessage(

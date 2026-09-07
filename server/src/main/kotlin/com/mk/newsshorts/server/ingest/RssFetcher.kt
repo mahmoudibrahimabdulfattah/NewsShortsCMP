@@ -1,6 +1,9 @@
 package com.mk.newsshorts.server.ingest
 
+import com.rometools.rome.feed.module.DCModule
+import com.rometools.rome.feed.rss.Item
 import com.rometools.rome.feed.synd.SyndEntry
+import com.rometools.rome.feed.synd.SyndPerson
 import com.rometools.rome.io.SyndFeedInput
 import com.rometools.rome.io.XmlReader
 import kotlinx.coroutines.Dispatchers
@@ -56,7 +59,11 @@ class RssFetcher : FeedFetcher {
     override suspend fun fetch(source: FeedSource): SourceSnapshot = withContext(Dispatchers.IO) {
         try {
             val opened = open(source.url)
-            val feed = opened.stream.use { SyndFeedInput().build(XmlReader(it)) }
+            val feed = opened.stream.use {
+                SyndFeedInput()
+                    .apply { setPreserveWireFeed(true) }
+                    .build(XmlReader(it))
+            }
             toSnapshot(source, feed.entries, opened.effectiveUrl)
         } catch (e: Exception) {
             log.warn("Fetch failed for ${source.name}: ${e.message}")
@@ -124,7 +131,29 @@ class RssFetcher : FeedFetcher {
             publishedAtIsPublication = publishedDate != null,
             source = source,
             candidateCategories = inferArticleCategories(categories.map { it.name }, link),
+            author = extractAuthor(),
+            rightsNotice = extractRightsNotice(),
         )
+    }
+
+    private fun SyndEntry.extractAuthor(): String? {
+        // ROME appends RSS <author> after dc:creator; the preserved wire item
+        // keeps the native author distinguishable when both are present.
+        (wireEntry as? Item)?.author.clean()?.let { return it }
+        author.clean()?.let { return it }
+        authors.firstNotNullOfOrNull { it.displayName() }?.let { return it }
+        val dc = getModule(DCModule.URI) as? DCModule
+        return dc?.creator.clean()
+            ?: dc?.creators?.firstNotNullOfOrNull { it.clean() }
+    }
+
+    private fun SyndPerson.displayName(): String? =
+        name.clean() ?: email.clean() ?: uri.clean()
+
+    private fun SyndEntry.extractRightsNotice(): String? {
+        val dc = getModule(DCModule.URI) as? DCModule
+        return dc?.rights.clean()
+            ?: dc?.rightsList?.firstNotNullOfOrNull { it.clean() }
     }
 
     private fun SyndEntry.extractImage(descriptionHtml: String?): String? {
@@ -139,6 +168,9 @@ class RssFetcher : FeedFetcher {
 
     private fun String.stripHtml(): String =
         replace(TAG_REGEX, " ").replace(WHITESPACE_REGEX, " ").trim()
+
+    private fun String?.clean(): String? =
+        this?.trim()?.takeIf { it.isNotEmpty() }
 
     companion object {
         private val IMG_SRC_REGEX = Regex("""<img[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE)

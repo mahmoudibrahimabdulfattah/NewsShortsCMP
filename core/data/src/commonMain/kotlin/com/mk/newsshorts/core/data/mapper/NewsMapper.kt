@@ -7,6 +7,7 @@ import com.mk.newsshorts.core.model.ArticleAuthor
 import com.mk.newsshorts.core.model.ArticleContent
 import com.mk.newsshorts.core.model.ArticleDescription
 import com.mk.newsshorts.core.model.ArticleId
+import com.mk.newsshorts.core.model.ArticleLicense
 import com.mk.newsshorts.core.model.ArticleTitle
 import com.mk.newsshorts.core.model.ArticleUrl
 import com.mk.newsshorts.core.model.ImageUrl
@@ -43,7 +44,7 @@ object NewsMapper {
             title = ArticleTitle(dto.title),
             description = ArticleDescription(dto.description ?: ""),
             content = ArticleContent(dto.content ?: dto.description ?: ""),
-            author = ArticleAuthor(dto.author ?: "Unknown"),
+            author = dto.author.clean()?.let { ArticleAuthor(it) },
             source = NewsSource(
                 id = SourceId(dto.source.id ?: "unknown"),
                 name = SourceName(dto.source.name)
@@ -54,7 +55,11 @@ object NewsMapper {
             // The article's own category when it has one; the caller's feed
             // otherwise. The search corpus spans every category at once, so
             // taking the caller's word there would label all of it "general".
-            category = dto.category?.let { NewsCategory.fromApiValue(it) } ?: category
+            category = dto.category?.let { NewsCategory.fromApiValue(it) } ?: category,
+            license = dto.licenseName.clean()?.let { name ->
+                ArticleLicense(name = name, url = dto.licenseUrl.clean())
+            },
+            textAttribution = dto.textAttribution.clean(),
         )
     }
 
@@ -111,4 +116,7 @@ object NewsMapper {
     private fun isLeapYear(year: Int): Boolean {
         return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
     }
+
+    private fun String?.clean(): String? =
+        this?.trim()?.takeIf { it.isNotEmpty() }
 }
