@@ -31,7 +31,7 @@ class ClassifyCycleTest {
             url = url,
             description = "Description",
             imageUrl = null,
-            sourceName = "Source",
+            sourceName = "BBC News",
             language = "en",
             category = category,
             country = null,

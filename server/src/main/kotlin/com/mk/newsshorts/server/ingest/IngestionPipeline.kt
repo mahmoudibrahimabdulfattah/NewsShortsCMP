@@ -5,6 +5,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.mk.newsshorts.server.config.FeedCatalog
 import com.mk.newsshorts.core.contract.feed.NewsCategories
+import com.mk.newsshorts.server.model.FeedSource
+import com.mk.newsshorts.server.model.SourceMode
+import com.mk.newsshorts.server.model.isFetchable
+import com.mk.newsshorts.server.model.summarySourceNames
 import com.mk.newsshorts.server.store.ArticleStore
 import com.mk.newsshorts.server.summarize.ClassifyInput
 import com.mk.newsshorts.server.summarize.Classifier
@@ -43,6 +47,7 @@ class IngestionPipeline(
     // deployment without a Gemini key gets: every article stays in General
     // rather than being filed by whichever feed happened to carry it.
     private val classifier: Classifier = NoClassifier,
+    private val sources: List<FeedSource> = FeedCatalog.sources,
     private val refreshMinutes: Int = (System.getenv("REFRESH_MINUTES") ?: "20").toInt(),
     private val maxSummariesPerCycle: Int = (System.getenv("MAX_SUMMARIES_PER_CYCLE") ?: "60").toInt(),
     private val maxClassificationsPerCycle: Int =
@@ -52,6 +57,8 @@ class IngestionPipeline(
 ) {
 
     private val log = LoggerFactory.getLogger(IngestionPipeline::class.java)
+    private val summarySourceNames: Set<String>
+        get() = sources.summarySourceNames()
 
     fun start(scope: CoroutineScope) {
         scope.launch {
@@ -69,7 +76,8 @@ class IngestionPipeline(
     suspend fun runCycle(): CycleReport {
         var inserted = 0
         val emptySources = mutableListOf<String>()
-        val snapshots = FeedCatalog.sources.map { source -> fetcher.fetch(source) }
+        val fetchableSources = sources.filter { it.isFetchable }
+        val snapshots = fetchableSources.map { source -> fetcher.fetch(source) }
         val undatedSources = snapshots.filter { it.undatedArticlesRejected > 0 }
         val audit = auditSources(snapshots)
         val rejectedSections = audit.rejected.mapTo(mutableSetOf()) { it.sourceName }
@@ -89,12 +97,15 @@ class IngestionPipeline(
                     .filterTo(linkedSetOf(), NewsCategories.all::contains)
                     .ifEmpty { linkedSetOf(NewsCategories.GENERAL) }
                 var articleInserted = false
+                var insertedId: Long? = null
                 candidates.forEach { category ->
                     val id = store.insertIfNew(
                         title = article.title,
                         url = article.url,
-                        description = article.description,
-                        imageUrl = article.imageUrl,
+                        description = article.description.takeIf { source.mode != SourceMode.HEADLINE },
+                        imageUrl = article.imageUrl.takeIf {
+                            source.mode != SourceMode.HEADLINE && source.allowsPublisherImages
+                        },
                         sourceName = source.name,
                         language = source.language,
                         category = category,
@@ -102,12 +113,19 @@ class IngestionPipeline(
                         publishedAt = article.publishedAtMillis,
                         publishedAtIsPublication = article.publishedAtIsPublication,
                     )
-                    if (id != null) articleInserted = true
+                    if (id != null) {
+                        articleInserted = true
+                        if (insertedId == null) insertedId = id
+                    }
+                }
+                if (insertedId != null && source.mode == SourceMode.HEADLINE) {
+                    store.replaceVerifiedCategories(insertedId, candidates)
+                    store.putHeadlineText(insertedId, source.language, article.title)
                 }
                 if (articleInserted) inserted++
             }
         }
-        log.info("Fetched ${FeedCatalog.sources.size} feeds, $inserted new articles")
+        log.info("Fetched ${fetchableSources.size} feeds, $inserted new articles")
         if (emptySources.isNotEmpty()) {
             log.warn("${emptySources.size} feeds returned nothing: ${emptySources.joinToString()}")
         }
@@ -130,7 +148,7 @@ class IngestionPipeline(
         val texts = summarizePending()
         val classified = classifyPending()
         return CycleReport(
-            sourcesTotal = FeedCatalog.sources.size,
+            sourcesTotal = sources.size,
             sourcesEmpty = emptySources.size,
             sourcesRejected = audit.rejected.map { it.sourceName },
             articlesInserted = inserted,
@@ -141,7 +159,11 @@ class IngestionPipeline(
     }
 
     internal suspend fun summarizePending(): TextRenderReport {
-        val pending = store.pendingTexts(maxSummariesPerCycle, FeedCatalog.countryLanguages)
+        val pending = store.pendingTexts(
+            maxSummariesPerCycle,
+            FeedCatalog.countryLanguages,
+            summarySourceNames = summarySourceNames,
+        )
         if (pending.isEmpty()) return TextRenderReport(rendered = 0, failed = 0)
         log.info("Rendering ${pending.size} article texts")
         var renderedCount = 0
@@ -197,8 +219,11 @@ class IngestionPipeline(
 
                                 TextWriteResult.INSERTED_AI,
                                 TextWriteResult.INSERTED_FALLBACK,
+                                TextWriteResult.INSERTED_HEADLINE,
                                 TextWriteResult.UPDATED_FALLBACK,
-                                TextWriteResult.UPGRADED_TO_AI -> failedCount++
+                                TextWriteResult.UPDATED_HEADLINE,
+                                TextWriteResult.UPGRADED_TO_AI,
+                                TextWriteResult.RETAINED_HEADLINE -> failedCount++
                             }
                             return@articleLoop
                         }
@@ -214,8 +239,11 @@ class IngestionPipeline(
                                 return@articleLoop
                             }
 
+                            TextWriteResult.INSERTED_HEADLINE,
+                            TextWriteResult.UPDATED_HEADLINE,
                             TextWriteResult.INSERTED_AI,
-                            TextWriteResult.RETAINED_AI -> Unit
+                            TextWriteResult.RETAINED_AI,
+                            TextWriteResult.RETAINED_HEADLINE -> Unit
                         }
                         // Classifying in the language the article was written
                         // in is the one that reads the original wording; the
@@ -247,7 +275,7 @@ class IngestionPipeline(
      */
     internal suspend fun classifyPending(): Int {
         if (classifier === NoClassifier) return 0
-        val pending = store.pendingClassifications(maxClassificationsPerCycle)
+        val pending = store.pendingClassifications(maxClassificationsPerCycle, summarySourceNames)
         if (pending.isEmpty()) return 0
         log.info("Classifying ${pending.size} already-rendered articles")
         var classified = 0

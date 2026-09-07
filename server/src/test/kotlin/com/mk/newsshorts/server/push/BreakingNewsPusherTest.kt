@@ -50,7 +50,7 @@ class BreakingNewsPusherTest {
     ): Long {
         val id = store.insertIfNew(
             title = "Headline", url = url, description = "Body", imageUrl = null,
-            sourceName = "Source", language = language, category = "general",
+            sourceName = "BBC News", language = language, category = "general",
             country = null, publishedAt = publishedAt,
             publishedAtIsPublication = publishedAtIsPublication,
         ) ?: error("article already existed: $url")

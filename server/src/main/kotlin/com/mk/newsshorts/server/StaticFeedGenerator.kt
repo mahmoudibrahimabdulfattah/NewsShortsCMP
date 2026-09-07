@@ -9,6 +9,8 @@ import com.mk.newsshorts.server.feed.FeedPageNames
 import com.mk.newsshorts.server.feed.repaginate
 import com.mk.newsshorts.server.ingest.IngestionPipeline
 import com.mk.newsshorts.server.ingest.RssFetcher
+import com.mk.newsshorts.server.model.publishableSourceNames
+import com.mk.newsshorts.server.model.summarySourceNames
 import com.mk.newsshorts.server.push.BreakingNewsPusher
 import com.mk.newsshorts.server.push.PushNotifier
 import com.mk.newsshorts.server.share.SharePage
@@ -160,6 +162,7 @@ object StaticFeedGenerator {
                 language = language, category = null,
                 limit = SEARCH_INDEX_ARTICLES, offset = 0, country = null,
                 diversifyBySource = false,
+                publishableSourceNames = FeedCatalog.sources.publishableSourceNames(),
             )
             filesWritten += writeSearchIndex(searchDir, language, articles, total)
             // The same read serves both: the search corpus is already the
@@ -225,7 +228,9 @@ object StaticFeedGenerator {
                 newestArticleAt = newestArticleAt,
                 sourcesRejected = cycle.sourcesRejected,
                 articlesClassified = cycle.articlesClassified,
-                articlesPendingClassification = store.countPendingClassifications(),
+                articlesPendingClassification = store.countPendingClassifications(
+                    FeedCatalog.sources.summarySourceNames()
+                ),
                 categoryFeedArticles = categoryFeedArticles,
                 newestCategoryArticleAt = newestCategoryArticleAt,
                 categoryGuardsReady = categoryGuardsReady,
@@ -515,6 +520,7 @@ object StaticFeedGenerator {
             // there and in Countries made the tabs duplicate each other. A
             // category tab is neither side of that duplication.
             excludeCountryTagged = country == null && category == null,
+            publishableSourceNames = FeedCatalog.sources.publishableSourceNames(),
         )
 
         val layout = repaginate(

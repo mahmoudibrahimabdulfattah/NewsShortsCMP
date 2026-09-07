@@ -7,6 +7,7 @@ import com.mk.newsshorts.server.feed.FeedPageNames
 import com.mk.newsshorts.server.feed.repaginate
 import com.mk.newsshorts.server.ingest.IngestionPipeline
 import com.mk.newsshorts.server.ingest.RssFetcher
+import com.mk.newsshorts.server.model.publishableSourceNames
 import com.mk.newsshorts.server.store.ArticleStore
 import com.mk.newsshorts.server.summarize.buildClassifier
 import com.mk.newsshorts.server.summarize.buildSummarizer
@@ -84,7 +85,15 @@ fun Application.module() {
             // Same mix the published files get, so local development sees the
             // feed the app will actually be served.
             val (articles, total) =
-                store.feed(language, category, limit, offset, country, diversifyBySource = true)
+                store.feed(
+                    language,
+                    category,
+                    limit,
+                    offset,
+                    country,
+                    diversifyBySource = true,
+                    publishableSourceNames = FeedCatalog.sources.publishableSourceNames(),
+                )
             call.respond(FeedResponse(articles = articles, total = total))
         }
 
@@ -102,6 +111,7 @@ fun Application.module() {
                     store.feed(
                         language, null, StaticFeedGenerator.MAX_FEED_ARTICLES, 0,
                         country = country, diversifyBySource = true,
+                        publishableSourceNames = FeedCatalog.sources.publishableSourceNames(),
                     )
                 }
                 "-" in feedKey -> {
@@ -109,10 +119,12 @@ fun Application.module() {
                     store.feed(
                         language, category, StaticFeedGenerator.MAX_FEED_ARTICLES, 0,
                         diversifyBySource = true,
+                        publishableSourceNames = FeedCatalog.sources.publishableSourceNames(),
                     )
                 }
                 else -> store.feed(
                     feedKey, null, StaticFeedGenerator.MAX_FEED_ARTICLES, 0, diversifyBySource = true,
+                    publishableSourceNames = FeedCatalog.sources.publishableSourceNames(),
                 )
             }
 

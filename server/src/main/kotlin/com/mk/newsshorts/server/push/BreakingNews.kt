@@ -2,6 +2,7 @@ package com.mk.newsshorts.server.push
 
 import com.mk.newsshorts.core.contract.feed.FeedArticleDto
 import com.mk.newsshorts.server.config.FeedCatalog
+import com.mk.newsshorts.server.model.publishableSourceNames
 import com.mk.newsshorts.server.store.ArticleStore
 import org.slf4j.LoggerFactory
 import kotlin.time.Duration.Companion.days
@@ -112,6 +113,7 @@ class BreakingNewsPusher(
             category = "general",
             limit = alreadySent.size + 1,
             offset = 0,
+            publishableSourceNames = FeedCatalog.sources.publishableSourceNames(),
         ).first.firstOrNull { it.url !in alreadySent }
 
     private fun FeedArticleDto.toMessage(tier: PushTier) = PushMessage(

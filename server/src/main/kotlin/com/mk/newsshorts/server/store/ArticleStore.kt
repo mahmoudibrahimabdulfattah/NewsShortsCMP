@@ -124,14 +124,20 @@ object ArticleTexts : Table("article_texts") {
     override val primaryKey = PrimaryKey(articleId, language)
 }
 
-enum class TextSource { AI, FALLBACK, UNSERVED }
+enum class TextSource { AI, FALLBACK, UNSERVED, HEADLINE }
+
+private val TextSource.isRetryable: Boolean
+    get() = this == TextSource.FALLBACK || this == TextSource.UNSERVED
 
 enum class TextWriteResult {
     INSERTED_AI,
     INSERTED_FALLBACK,
+    INSERTED_HEADLINE,
     UPDATED_FALLBACK,
+    UPDATED_HEADLINE,
     UPGRADED_TO_AI,
     RETAINED_AI,
+    RETAINED_HEADLINE,
     RECORDED_UNSERVED,
 }
 
@@ -674,17 +680,22 @@ class ArticleStore(dbPath: String) {
                     it[ArticleTexts.title] = title
                     it[ArticleTexts.summary] = summary
                     it[ArticleTexts.textSource] = source
-                    it[ArticleTexts.attempts] = if (source == TextSource.AI) 0 else 1
+                    it[ArticleTexts.attempts] = if (source.isRetryable) 1 else 0
                 }
                 when (source) {
                     TextSource.AI -> TextWriteResult.INSERTED_AI
                     TextSource.FALLBACK -> TextWriteResult.INSERTED_FALLBACK
                     TextSource.UNSERVED -> TextWriteResult.RECORDED_UNSERVED
+                    TextSource.HEADLINE -> TextWriteResult.INSERTED_HEADLINE
                 }
             }
 
             existing[ArticleTexts.textSource] == TextSource.AI -> {
                 TextWriteResult.RETAINED_AI
+            }
+
+            existing[ArticleTexts.textSource] == TextSource.HEADLINE -> {
+                TextWriteResult.RETAINED_HEADLINE
             }
 
             else -> {
@@ -694,20 +705,20 @@ class ArticleStore(dbPath: String) {
                     it[ArticleTexts.title] = title
                     it[ArticleTexts.summary] = summary
                     it[ArticleTexts.textSource] = source
-                    it[ArticleTexts.attempts] = if (source == TextSource.AI) {
-                        0
-                    } else {
-                        existing[ArticleTexts.attempts] + 1
-                    }
+                    it[ArticleTexts.attempts] = if (source.isRetryable) existing[ArticleTexts.attempts] + 1 else 0
                 }
                 when (source) {
                     TextSource.AI -> TextWriteResult.UPGRADED_TO_AI
                     TextSource.FALLBACK -> TextWriteResult.UPDATED_FALLBACK
                     TextSource.UNSERVED -> TextWriteResult.RECORDED_UNSERVED
+                    TextSource.HEADLINE -> TextWriteResult.UPDATED_HEADLINE
                 }
             }
         }
     }
+
+    fun putHeadlineText(articleId: Long, language: String, title: String): TextWriteResult =
+        putText(articleId, language, title, "", TextSource.HEADLINE)
 
     fun recordUnservedTextAttempt(
         articleId: Long,
@@ -804,20 +815,29 @@ class ArticleStore(dbPath: String) {
      * re-summarized — regenerating text that reads perfectly well — purely to
      * find out what it is about.
      */
-    fun pendingClassifications(limit: Int): List<PendingClassification> = transaction {
+    fun pendingClassifications(
+        limit: Int,
+        summarySourceNames: Set<String>? = null,
+    ): List<PendingClassification> = transaction {
         if (limit <= 0) return@transaction emptyList()
+        if (summarySourceNames != null && summarySourceNames.isEmpty()) return@transaction emptyList()
         val progress = ArticleClassifications.selectAll().associate {
             it[ArticleClassifications.articleId] to
                 (it[ArticleClassifications.attempts] to it[ArticleClassifications.complete])
         }
         // Only text a reader can actually be served counts. An article whose
         // one row is UNSERVED reaches no feed, so classifying it would spend
-        // the budget on a story no tab can show either way.
+        // the budget on a story no tab can show either way. HEADLINE rows are
+        // terminal without AI classification.
         val rendered = ArticleTexts.selectAll()
             .andWhere { ArticleTexts.textSource neq TextSource.UNSERVED }
+            .andWhere { ArticleTexts.textSource neq TextSource.HEADLINE }
             .mapTo(HashSet()) { it[ArticleTexts.articleId] }
 
-        Articles.selectAll()
+        val articleQuery = Articles.selectAll()
+        summarySourceNames?.let { names -> articleQuery.andWhere { Articles.sourceName inList names } }
+
+        articleQuery
             .orderBy(Articles.publishedAt, SortOrder.DESC)
             .asSequence()
             .filter { it[Articles.id] in rendered }
@@ -837,16 +857,21 @@ class ArticleStore(dbPath: String) {
     }
 
     /** Counts the queue without pretending that an arbitrarily large limit is unbounded. */
-    fun countPendingClassifications(): Int = transaction {
+    fun countPendingClassifications(summarySourceNames: Set<String>? = null): Int = transaction {
+        if (summarySourceNames != null && summarySourceNames.isEmpty()) return@transaction 0
         val progress = ArticleClassifications.selectAll().associate {
             it[ArticleClassifications.articleId] to
                 (it[ArticleClassifications.attempts] to it[ArticleClassifications.complete])
         }
         val rendered = ArticleTexts.selectAll()
             .andWhere { ArticleTexts.textSource neq TextSource.UNSERVED }
+            .andWhere { ArticleTexts.textSource neq TextSource.HEADLINE }
             .mapTo(HashSet()) { it[ArticleTexts.articleId] }
 
-        Articles.selectAll().count {
+        val articleQuery = Articles.selectAll()
+        summarySourceNames?.let { names -> articleQuery.andWhere { Articles.sourceName inList names } }
+
+        articleQuery.count {
             val attempt = progress[it[Articles.id]]
             it[Articles.id] in rendered &&
                 (attempt == null || (!attempt.second && attempt.first < MAX_CLASSIFICATION_ATTEMPTS))
@@ -859,6 +884,22 @@ class ArticleStore(dbPath: String) {
             it[VerifiedArticleCategories.articleId] = articleId
             it[VerifiedArticleCategories.category] = category
         }
+    }
+
+    fun replaceVerifiedCategories(articleId: Long, categories: Set<String>): Set<String> = transaction {
+        val normalized = categories
+            .mapNotNullTo(linkedSetOf()) { category ->
+                category.trim().lowercase().takeIf(SUPPORTED_CATEGORIES::contains)
+            }
+            .ifEmpty { linkedSetOf(NewsCategories.GENERAL) }
+        VerifiedArticleCategories.deleteWhere { VerifiedArticleCategories.articleId eq articleId }
+        normalized.forEach { category ->
+            VerifiedArticleCategories.insert {
+                it[VerifiedArticleCategories.articleId] = articleId
+                it[VerifiedArticleCategories.category] = category
+            }
+        }
+        normalized
     }
 
     data class PendingText(
@@ -878,7 +919,14 @@ class ArticleStore(dbPath: String) {
      *
      * [countryLanguages] are the languages every country feed is offered in.
      */
-    fun pendingTexts(limit: Int, countryLanguages: Set<String>): List<PendingText> = transaction {
+    fun pendingTexts(
+        limit: Int,
+        countryLanguages: Set<String>,
+        summarySourceNames: Set<String>? = null,
+    ): List<PendingText> = transaction {
+        if (limit <= 0) return@transaction emptyList()
+        if (summarySourceNames != null && summarySourceNames.isEmpty()) return@transaction emptyList()
+
         val existing: Map<Pair<Long, String>, Pair<TextSource, Int>> = ArticleTexts.selectAll()
             .associate {
                 (it[ArticleTexts.articleId] to it[ArticleTexts.language]) to
@@ -901,7 +949,9 @@ class ArticleStore(dbPath: String) {
         // round-robin below. Taking the newest N up front instead would let a
         // high-volume general source fill the whole window, leaving the smaller
         // category feeds permanently unrendered.
-        val candidates = Articles.selectAll()
+        val articleQuery = Articles.selectAll()
+        summarySourceNames?.let { names -> articleQuery.andWhere { Articles.sourceName inList names } }
+        val candidates = articleQuery
             .orderBy(Articles.publishedAt, SortOrder.DESC)
             .flatMap { row ->
                 val id = row[Articles.id]
@@ -915,7 +965,7 @@ class ArticleStore(dbPath: String) {
                 targets.mapNotNull { target ->
                     val stored = existing[id to target]
                     val retryableIncomplete = stored?.let { (source, attempts) ->
-                        source != TextSource.AI && attempts < MAX_TEXT_ATTEMPTS
+                        source.isRetryable && attempts < MAX_TEXT_ATTEMPTS
                     } == true
                     if (stored != null && !retryableIncomplete) return@mapNotNull null
                     val pending = PendingText(
@@ -1008,8 +1058,12 @@ class ArticleStore(dbPath: String) {
         country: String? = null,
         diversifyBySource: Boolean = false,
         excludeCountryTagged: Boolean = false,
+        publishableSourceNames: Set<String>? = null,
     ): Pair<List<FeedArticleDto>, Long> =
         transaction {
+            if (publishableSourceNames != null && publishableSourceNames.isEmpty()) {
+                return@transaction emptyList<FeedArticleDto>() to 0L
+            }
             val verifiedByArticle = if (category == null) {
                 VerifiedArticleCategories.selectAll()
                     .map { it[VerifiedArticleCategories.articleId] to it[VerifiedArticleCategories.category] }
@@ -1034,6 +1088,7 @@ class ArticleStore(dbPath: String) {
                     category?.let { query.andWhere { VerifiedArticleCategories.category eq it } }
                     country?.let { query.andWhere { Articles.country eq it } }
                     if (excludeCountryTagged) query.andWhere { Articles.country.isNull() }
+                    publishableSourceNames?.let { names -> query.andWhere { Articles.sourceName inList names } }
                     query.andWhere { ArticleTexts.textSource neq TextSource.UNSERVED }
                 }
 
