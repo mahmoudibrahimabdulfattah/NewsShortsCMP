@@ -67,8 +67,9 @@ class GeminiSummarizer(
         val prompt = buildString {
             appendLine(
                 "You prepare news articles for a shorts-style news app. For EACH article below, " +
-                    "write its headline and a neutral, factual summary of 50-70 words, both in " +
-                    "$languageName. Translate them if the article is in another language. " +
+                    "write its headline and a neutral, factual summary, both in " +
+                    "$languageName. Use only the supplied evidence; write less when there is less, " +
+                    "and do not invent facts to reach a length. Translate them if the article is in another language. " +
                     "Keep the headline under 15 words. No opinions, no clickbait. " +
                     CATEGORY_INSTRUCTION + " " +
                     "Respond ONLY with a JSON array of objects: " +
