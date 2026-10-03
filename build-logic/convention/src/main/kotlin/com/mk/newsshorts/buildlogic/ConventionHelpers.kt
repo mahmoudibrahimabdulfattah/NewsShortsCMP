@@ -1,7 +1,6 @@
 package com.mk.newsshorts.buildlogic
 
-import com.android.build.api.dsl.LibraryExtension
-import org.gradle.api.JavaVersion
+import com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryTarget
 import org.gradle.api.Project
 import org.gradle.api.artifacts.VersionCatalog
 import org.gradle.api.artifacts.VersionCatalogsExtension
@@ -14,7 +13,6 @@ import org.gradle.api.tasks.TaskAction
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.register
-import org.jetbrains.compose.ComposeExtension
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
@@ -32,12 +30,6 @@ internal fun Project.configureNewsshortsKmpTargets(produceExecutables: Boolean =
     extensions.configure<KotlinMultiplatformExtension>("kotlin") {
         compilerOptions {
             freeCompilerArgs.add("-Xexpect-actual-classes")
-        }
-
-        androidTarget {
-            compilerOptions {
-                jvmTarget.set(JvmTarget.JVM_11)
-            }
         }
 
         iosArm64()
@@ -78,11 +70,6 @@ internal fun Project.configureNewsshortsContractTargets(targetMode: String) {
         if (targetMode == "jvm") {
             jvm()
         } else {
-            androidTarget {
-                compilerOptions {
-                    jvmTarget.set(JvmTarget.JVM_11)
-                }
-            }
             iosArm64()
             iosSimulatorArm64()
             jvm()
@@ -115,38 +102,54 @@ internal fun Project.configureNewsshortsContractTargets(targetMode: String) {
     }
 }
 
-internal fun Project.configureAndroidLibrary() {
+/**
+ * The Android target of a multiplatform module. AGP 9 gives such modules their own plugin
+ * (`com.android.kotlin.multiplatform.library`) with a single variant, configured inside `kotlin { android { } }`.
+ *
+ * [namespace] defaults to one derived from the module path; the app module keeps `com.mk.newsshorts` so its
+ * `R` class stays where the code already imports it from.
+ */
+internal fun Project.configureAndroidLibrary(
+    namespace: String = "com.mk.newsshorts" + path.replace(':', '.'),
+) {
     val libs = libsCatalog()
+    val androidNamespace = namespace
 
-    extensions.configure<LibraryExtension>("android") {
-        namespace = "com.mk.newsshorts" + path.replace(':', '.')
-        compileSdk = libs.requiredVersion("android-compileSdk").toInt()
-
-        defaultConfig {
+    extensions.configure<KotlinMultiplatformExtension>("kotlin") {
+        extensions.configure<KotlinMultiplatformAndroidLibraryTarget>("android") {
+            this.namespace = androidNamespace
+            compileSdk = libs.requiredVersion("android-compileSdk").toInt()
             minSdk = libs.requiredVersion("android-minSdk").toInt()
+            compilerOptions {
+                jvmTarget.set(JvmTarget.JVM_11)
+            }
+            withHostTest { }
         }
+    }
+}
 
-        compileOptions {
-            sourceCompatibility = JavaVersion.VERSION_11
-            targetCompatibility = JavaVersion.VERSION_11
+/** Android and Compose resources need resource processing, which the KMP Android target leaves off by default. */
+internal fun Project.enableAndroidResources() {
+    extensions.configure<KotlinMultiplatformExtension>("kotlin") {
+        extensions.configure<KotlinMultiplatformAndroidLibraryTarget>("android") {
+            androidResources { enable = true }
         }
     }
 }
 
 internal fun Project.configureNewsshortsComposeDependencies() {
     val libs = libsCatalog()
-    val compose = extensions.getByType<ComposeExtension>().dependencies
 
     extensions.configure<KotlinMultiplatformExtension>("kotlin") {
         sourceSets.named("commonMain") {
             dependencies {
-                implementation(compose.runtime)
-                implementation(compose.foundation)
-                implementation(compose.material3)
-                implementation(compose.materialIconsExtended)
-                implementation(compose.ui)
-                implementation(compose.components.resources)
-                implementation(compose.components.uiToolingPreview)
+                implementation(libs.requiredLibrary("compose-runtime"))
+                implementation(libs.requiredLibrary("compose-foundation"))
+                implementation(libs.requiredLibrary("compose-material3"))
+                implementation(libs.requiredLibrary("compose-material-icons-extended"))
+                implementation(libs.requiredLibrary("compose-ui"))
+                implementation(libs.requiredLibrary("compose-components-resources"))
+                implementation(libs.requiredLibrary("compose-ui-tooling-preview"))
                 // Arrives transitively through material3, but declared so a future
                 // Compose bump cannot silently remove it.
                 implementation(libs.requiredLibrary("compose-ui-backhandler"))

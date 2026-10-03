@@ -47,7 +47,7 @@ import com.mk.newsshorts.presentation.ui.theme.LocalTextScale
 import com.mk.newsshorts.presentation.ui.theme.NewsShortsTheme
 import com.mk.newsshorts.presentation.ui.theme.SystemBarAppearance
 import com.mk.newsshorts.presentation.ui.theme.appLogoPainter
-import org.jetbrains.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.Preview
 import org.koin.mp.KoinPlatform
 
 private const val CROSSFADE_DURATION_MS: Int = 150

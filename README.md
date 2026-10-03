@@ -216,7 +216,7 @@ repository it would let anyone point a build at the project and spend its
 free-tier quota.
 
 To enable reporting, download the config for your own Firebase project and put
-it at `composeApp/google-services.json`. The Gradle plugins are applied only
+it at `androidApp/google-services.json`. The Gradle plugins are applied only
 when that file exists, so a clone without it still builds and runs — reporting
 is simply off (`NoOpAnalyticsReporter`).
 
@@ -249,7 +249,7 @@ whether ranking is working and whether the feed needs pagination.
 ### Android
 
 ```bash
-./gradlew :composeApp:installDebug
+./gradlew :androidApp:installDebug
 # Or run directly from Android Studio
 ```
 

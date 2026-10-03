@@ -8,7 +8,7 @@ plugins {
 
 val targetMode = providers.gradleProperty("newsshorts.contract.targets").orElse("all").get()
 if (targetMode != "jvm") {
-    apply(plugin = "com.android.library")
+    apply(plugin = "com.android.kotlin.multiplatform.library")
 }
 
 configureNewsshortsContractTargets(targetMode)

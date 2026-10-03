@@ -18,7 +18,7 @@ re-proposed.
 ## The verification command
 
 ```bash
-./gradlew check :composeApp:assembleDebug -x lintDebug
+./gradlew check :androidApp:assembleDebug -x lintDebug
 ```
 
 At thirteen modules a full `check` is slow enough that a failure late in it
@@ -26,7 +26,7 @@ costs half an hour. Verify in stages instead, most important first — Android,
 then iOS, then the rest — so a break shows up in minutes:
 
 ```bash
-./gradlew :composeApp:assembleDebug testDebugUnitTest lintDebug
+./gradlew :androidApp:assembleDebug testAndroidHostTest :androidApp:lintDebug
 ```
 
 ```bash

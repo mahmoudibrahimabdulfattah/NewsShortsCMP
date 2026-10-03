@@ -22,6 +22,7 @@ import com.mk.newsshorts.di.androidPlatformModule
 import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
 import com.mk.newsshorts.config.BuildConfig
+import com.mk.newsshorts.core.data.AndroidBuildType
 import com.mk.newsshorts.core.model.deeplink.ArticleDeepLinks
 import com.mk.newsshorts.navigation.DeepLinkBus
 import com.mk.newsshorts.navigation.SignInLinkBus
@@ -29,10 +30,20 @@ import com.mk.newsshorts.notifications.NewsMessagingService
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.android.inject
 
-class NewsShortsApplication : Application() {
+/**
+ * The Android application, minus what only the app module knows: its build type and signing
+ * certificate come from :androidApp's generated BuildConfig, which this library cannot see.
+ */
+abstract class NewsShortsApplication : Application() {
+    protected abstract val isDebugBuild: Boolean
+
+    /** SHA-256 of the release signing certificate; empty disables the tamper check. */
+    protected abstract val expectedSigningSha256: String
+
     override fun onCreate() {
         super.onCreate()
-        initializeKoin(platformModules = listOf(androidPlatformModule)) {
+        AndroidBuildType.isDebug = isDebugBuild
+        initializeKoin(platformModules = listOf(androidPlatformModule(expectedSigningSha256, isDebugBuild))) {
             androidContext(this@NewsShortsApplication)
         }
     }

@@ -34,6 +34,7 @@ plugins {
 }
 
 include(":composeApp")
+include(":androidApp")
 include(":core:config")
 include(":core:contract")
 include(":core:data")
