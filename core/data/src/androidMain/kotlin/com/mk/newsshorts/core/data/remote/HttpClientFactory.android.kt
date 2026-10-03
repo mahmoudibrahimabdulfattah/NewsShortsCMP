@@ -8,5 +8,5 @@ actual fun createPlatformHttpClient(): HttpClient {
 }
 
 
-/** The build type, from the generated BuildConfig — not from the device. */
-actual fun isDebugBuild(): Boolean = com.mk.newsshorts.core.data.BuildConfig.DEBUG
+/** The build type the app shell recorded from its own BuildConfig — not from the device. */
+actual fun isDebugBuild(): Boolean = com.mk.newsshorts.core.data.AndroidBuildType.isDebug

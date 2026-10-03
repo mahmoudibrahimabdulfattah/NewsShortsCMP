@@ -1,6 +1,5 @@
 package com.mk.newsshorts.di
 
-import com.mk.newsshorts.BuildConfig
 import com.mk.newsshorts.core.domain.analytics.AnalyticsReporter
 import com.mk.newsshorts.analytics.createAnalyticsReporter
 import com.mk.newsshorts.core.domain.auth.AuthClient
@@ -16,15 +15,15 @@ import com.mk.newsshorts.core.data.sync.createRemoteSyncClient
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 
-val androidPlatformModule = module {
+fun androidPlatformModule(expectedSigningSha256: String, isDebug: Boolean) = module {
     single<SettingsStorage> { AndroidSettingsStorage(context = androidContext()) }
     single<AnalyticsReporter> { createAnalyticsReporter(androidContext()) }
     single<PushSubscriber> { FirebasePushSubscriber(androidContext()) }
     single<DeviceIntegrityInspector> {
         AndroidDeviceIntegrityInspector(
             context = androidContext(),
-            expectedSigningSha256 = BuildConfig.EXPECTED_SIGNING_SHA256,
-            isDebug = BuildConfig.DEBUG,
+            expectedSigningSha256 = expectedSigningSha256,
+            isDebug = isDebug,
         )
     }
     single<AuthClient> { createAuthClient(androidContext()) }

@@ -53,12 +53,3 @@ kotlin {
         }
     }
 }
-
-android {
-    buildFeatures {
-        // isDebugBuild() reads AGP's per-module DEBUG flag here. The app's
-        // release build consumes the library's release variant, so this is
-        // false in shipped builds and does not skip the device-integrity check.
-        buildConfig = true
-    }
-}
